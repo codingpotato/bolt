@@ -1,11 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
+import type { readFileSync as ReadFileSyncFn } from 'node:fs';
 import { resolveConfig, ConfigError } from './config';
 
 vi.mock('node:fs');
 
 describe('resolveConfig', () => {
   const originalEnv = process.env;
-  let readFileSync: ReturnType<typeof vi.fn>;
+  // #4: Typed as a proper MockInstance so mockReturnValue is type-checked.
+  let readFileSync: MockInstance<typeof ReadFileSyncFn>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -103,9 +105,18 @@ describe('resolveConfig', () => {
       mockConfigFile({ mmodel: 'typo', model: 'claude-opus-4-6' });
 
       expect(() => resolveConfig()).not.toThrow();
-      expect(stderrSpy).toHaveBeenCalledWith(
-        expect.stringContaining('"mmodel"')
-      );
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('"mmodel"'));
+
+      stderrSpy.mockRestore();
+    });
+
+    it('strips unknown top-level keys from the returned config', () => {
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      mockConfigFile({ mmodel: 'typo', model: 'claude-opus-4-6' });
+
+      const config = resolveConfig() as unknown as Record<string, unknown>;
+
+      expect(config['mmodel']).toBeUndefined();
 
       stderrSpy.mockRestore();
     });
@@ -167,7 +178,7 @@ describe('resolveConfig', () => {
       expect(config.local.endpoint).toBe('http://localhost:8080');
     });
 
-    it('mutating returned config does not affect nested objects', () => {
+    it('mutating returned config does not affect subsequent calls', () => {
       const config = resolveConfig();
       config.memory.compactThreshold = 0.99;
       config.tools.allowedTools.push('bash');

@@ -79,16 +79,16 @@ const CREDENTIAL_FIELDS = [
   'BOLT_LOCAL_API_KEY',
 ] as const;
 
-// Top-level keys recognized in .bolt/config.json
-const KNOWN_TOP_LEVEL_KEYS = new Set([
-  'model',
-  'local',
-  'memory',
-  'tasks',
-  'tools',
-  'codeWorkflows',
-  'channels',
-]);
+// #3: Typed against Config so the compiler catches removed or misspelled keys.
+// ReadonlySet<string> lets .has() accept any string at the call site.
+const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(
+  ['model', 'local', 'memory', 'tasks', 'tools', 'codeWorkflows', 'channels'] satisfies (keyof Config)[]
+);
+
+// Validation constants — defined once, not recreated on every call.
+const VALID_LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
+const VALID_SEARCH_BACKENDS = ['keyword', 'embedding'] as const;
+const VALID_WEB_MODES = ['http', 'websocket'] as const;
 
 function deepMerge(
   base: Record<string, unknown>,
@@ -134,9 +134,7 @@ function loadConfigFile(dataDir: string): Record<string, unknown> {
   try {
     parsed = JSON.parse(raw) as Record<string, unknown>;
   } catch {
-    throw new ConfigError(
-      `Failed to parse ${filePath}: invalid JSON`
-    );
+    throw new ConfigError(`Failed to parse ${filePath}: invalid JSON`);
   }
 
   for (const field of CREDENTIAL_FIELDS) {
@@ -147,18 +145,23 @@ function loadConfigFile(dataDir: string): Record<string, unknown> {
     }
   }
 
+  // #1: Warn about unknown keys and strip them so they never reach the merged Config.
+  const filtered: Record<string, unknown> = {};
   for (const key of Object.keys(parsed)) {
-    if (!KNOWN_TOP_LEVEL_KEYS.has(key)) {
+    if (KNOWN_TOP_LEVEL_KEYS.has(key)) {
+      filtered[key] = parsed[key];
+    } else {
       process.stderr.write(
         `Warning: unknown config key "${key}" in ${filePath} will be ignored\n`
       );
     }
   }
 
-  return parsed;
+  return filtered;
 }
 
 function applyEnvOverrides(config: Config): Config {
+  // #2: All nested objects are explicitly spread to avoid aliasing.
   const result: Config = {
     ...config,
     local: { ...config.local },
@@ -172,9 +175,6 @@ function applyEnvOverrides(config: Config): Config {
   if (process.env['BOLT_MODEL']) {
     result.model = process.env['BOLT_MODEL'];
   }
-  if (process.env['BOLT_DATA_DIR']) {
-    result.dataDir = process.env['BOLT_DATA_DIR'];
-  }
   if (process.env['BOLT_LOG_LEVEL']) {
     result.logLevel = process.env['BOLT_LOG_LEVEL'] as Config['logLevel'];
   }
@@ -187,9 +187,7 @@ function applyEnvOverrides(config: Config): Config {
 
 function validatePositiveInteger(value: number, field: string): void {
   if (!Number.isInteger(value) || value < 1) {
-    throw new ConfigError(
-      `${field} must be a positive integer, got: ${value}`
-    );
+    throw new ConfigError(`${field} must be a positive integer, got: ${value}`);
   }
 }
 
@@ -206,24 +204,21 @@ function validate(config: Config): void {
   validatePositiveInteger(config.tasks.maxRetries, 'config.tasks.maxRetries');
   validatePositiveInteger(config.codeWorkflows.testFixRetries, 'config.codeWorkflows.testFixRetries');
 
-  const validLogLevels = ['debug', 'info', 'warn', 'error'];
-  if (!validLogLevels.includes(config.logLevel)) {
+  if (!(VALID_LOG_LEVELS as readonly string[]).includes(config.logLevel)) {
     throw new ConfigError(
-      `config.logLevel must be one of ${validLogLevels.join(', ')}, got: ${config.logLevel}`
+      `config.logLevel must be one of ${VALID_LOG_LEVELS.join(', ')}, got: ${config.logLevel}`
     );
   }
 
-  const validSearchBackends = ['keyword', 'embedding'];
-  if (!validSearchBackends.includes(config.memory.searchBackend)) {
+  if (!(VALID_SEARCH_BACKENDS as readonly string[]).includes(config.memory.searchBackend)) {
     throw new ConfigError(
-      `config.memory.searchBackend must be one of ${validSearchBackends.join(', ')}, got: ${config.memory.searchBackend}`
+      `config.memory.searchBackend must be one of ${VALID_SEARCH_BACKENDS.join(', ')}, got: ${config.memory.searchBackend}`
     );
   }
 
-  const validWebModes = ['http', 'websocket'];
-  if (!validWebModes.includes(config.channels.web.mode)) {
+  if (!(VALID_WEB_MODES as readonly string[]).includes(config.channels.web.mode)) {
     throw new ConfigError(
-      `config.channels.web.mode must be one of ${validWebModes.join(', ')}, got: ${config.channels.web.mode}`
+      `config.channels.web.mode must be one of ${VALID_WEB_MODES.join(', ')}, got: ${config.channels.web.mode}`
     );
   }
 
@@ -242,13 +237,15 @@ function validate(config: Config): void {
 }
 
 export function resolveConfig(): Config {
-  // #1: Resolve dataDir from env first so config file is read from the right place
+  // #5: dataDir resolved once here — used for both file loading and the returned value.
   const dataDir = process.env['BOLT_DATA_DIR'] ?? '.bolt';
   const fileConfig = loadConfigFile(dataDir);
   const merged = deepMerge(
     DEFAULTS as unknown as Record<string, unknown>,
     fileConfig
   ) as unknown as Config;
+  // Stamp the resolved dataDir directly; applyEnvOverrides does not re-read BOLT_DATA_DIR.
+  merged.dataDir = dataDir;
   const withEnv = applyEnvOverrides(merged);
   validate(withEnv);
   return withEnv;

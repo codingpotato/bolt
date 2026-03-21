@@ -46,7 +46,7 @@ bolt supports three auth modes — set exactly one:
 |---|---|---|
 | `ANTHROPIC_API_KEY` | API key | Standard Anthropic API |
 | `ANTHROPIC_SESSION_TOKEN` | Subscription | Claude.ai account, no key needed |
-| `BOLT_LOCAL_ENDPOINT` | Local | llama.cpp / Ollama / any OpenAI-compatible server, no key needed |
+| `BOLT_LOCAL_ENDPOINT` | Local | Custom base URL for the Anthropic SDK (any Anthropic-compatible server); no key needed |
 
 Precedence when multiple are set: API Key > Subscription > Local. If none is set, bolt exits with a clear error.
 

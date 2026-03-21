@@ -116,6 +116,76 @@ Three mechanisms enforce the test-first rule:
 | **Coverage gate** (`vitest.config.ts`) | On every `npm run test:coverage` | Per-module thresholds (90% tools, 85% memory/tasks, 70% agent) — fails the process if not met |
 | **PR template** (`.github/pull_request_template.md`) | On every PR opened | Checklist includes "Tests written before implementation" — reviewer verifies before approving |
 
+## PR Workflow
+
+### 1. Submit a PR
+
+```bash
+# Create a feature branch (use the story-id from plan.md)
+git checkout -b feat/s0-2-testing-infrastructure
+
+# Work through the TDD cycle: red → green → refactor
+# Commit tests and implementation together (pre-commit hook enforces co-location)
+git add src/tools/bash.ts src/tools/bash.test.ts
+git commit -m "feat(tools): add bash tool with stdout/stderr/exitCode"
+
+# Push and open a PR against main
+git push -u origin feat/s0-2-testing-infrastructure
+gh pr create --title "S0-2: Testing infrastructure" --body "$(cat .github/pull_request_template.md)"
+```
+
+Rules:
+- One branch per story; branch name must include the story ID
+- All acceptance criteria from the user story must be checked before requesting review
+- Complete the PR checklist in the description before marking the PR ready
+
+### 2. Code Review
+
+The reviewer must verify every item in the PR checklist before approving. Key things to look for:
+
+| Area | What to check |
+|------|---------------|
+| **TDD** | Tests were committed before (or alongside) the implementation — check git history |
+| **Coverage** | `npm run test:coverage` passes; per-module thresholds not regressed |
+| **Types** | No `any`; `npm run typecheck` passes |
+| **Lint** | `npm run lint` passes with no suppressions |
+| **Design** | New code follows existing `Tool` / `Channel` / `Memory` interfaces |
+| **Isolation** | No shared state between agent scopes |
+| **Docs** | Design docs updated if interface or behavior changed |
+| **Secrets** | No API keys, tokens, or PII in code, tests, or comments |
+
+Leaving a review:
+- **Approve** — all checklist items pass; PR is ready to merge
+- **Request changes** — leave specific, actionable comments; do not approve until resolved
+- **Comment** — for questions or non-blocking suggestions (does not block merge)
+
+### 3. Merge into Main
+
+Conditions before merging:
+- [ ] At least one approving review
+- [ ] CI is fully green (typecheck → lint → test:coverage → build)
+- [ ] All reviewer comments resolved or explicitly marked won't-fix with justification
+- [ ] Branch is up to date with `main` (rebase or merge before squashing)
+
+How to merge:
+```bash
+# Squash-merge so main history stays one-commit-per-story
+gh pr merge <PR-number> --squash --delete-branch
+```
+
+The squash commit message should be: `<type>(<scope>): <story-id> <short description>`
+
+Examples:
+```
+feat(tools): S2-4 bash tool
+fix(memory): S5-1 compaction threshold off-by-one
+chore(ci): S0-7 CI pipeline
+```
+
+After merge, close the corresponding issue or mark the story complete in `docs/planning/plan.md`.
+
+---
+
 ## CI Pipeline
 
 On every PR:

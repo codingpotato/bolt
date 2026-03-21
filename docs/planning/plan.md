@@ -32,10 +32,10 @@ I want a compiling TypeScript project with strict mode enforced,
 so that I can start building features without configuration debt.
 
 Acceptance Criteria:
-- [ ] npm install, npm run build, npm run dev all work
-- [ ] tsconfig.json has "strict": true
-- [ ] No `any` types in the codebase
-- [ ] src/ directory layout matches docs/workflow/development.md project structure
+- [x] npm install, npm run build, npm run dev all work
+- [x] tsconfig.json has "strict": true
+- [x] No `any` types in the codebase
+- [x] src/ directory layout matches docs/workflow/development.md project structure
 ```
 
 **S0-2: Testing infrastructure**
@@ -45,10 +45,10 @@ I want Vitest configured with per-module coverage thresholds,
 so that CI can enforce TDD without manual checks.
 
 Acceptance Criteria:
-- [ ] npm test runs all *.test.ts files
-- [ ] npm run test:watch reruns on file change
-- [ ] npm run test:coverage produces a report and exits non-zero if thresholds are not met
-- [ ] vitest.config.ts thresholds match docs/testing/unit-testing.md
+- [x] npm test runs all *.test.ts files
+- [x] npm run test:watch reruns on file change
+- [x] npm run test:coverage produces a report and exits non-zero if thresholds are not met
+- [x] vitest.config.ts thresholds match docs/testing/unit-testing.md
 ```
 
 **S0-3: Linting and formatting**
@@ -58,9 +58,9 @@ I want ESLint and Prettier configured,
 so that code style is enforced automatically.
 
 Acceptance Criteria:
-- [ ] npm run lint passes on a clean repo
-- [ ] npm run format reformats files without errors
-- [ ] CI runs lint before tests
+- [x] npm run lint passes on a clean repo
+- [x] npm run format reformats files without errors
+- [x] CI runs lint before tests
 ```
 
 **S0-4: Pre-commit TDD hook**
@@ -70,10 +70,10 @@ I want the pre-commit hook installed and working,
 so that I cannot accidentally commit source files without tests.
 
 Acceptance Criteria:
-- [ ] scripts/pre-commit exists and is executable
-- [ ] Committing a new src/*.ts without a co-located *.test.ts is rejected with a clear message
-- [ ] Committing an existing file without a test file is allowed
-- [ ] Committing both a .ts and its .test.ts together is allowed
+- [x] scripts/pre-commit exists and is executable
+- [x] Committing a new src/*.ts without a co-located *.test.ts is rejected with a clear message
+- [x] Committing an existing file without a test file is allowed
+- [x] Committing both a .ts and its .test.ts together is allowed
 ```
 
 **S0-5: Configuration system**
@@ -645,10 +645,10 @@ I want clear setup instructions in the README,
 so that I can get bolt running in under 5 minutes.
 
 Acceptance Criteria:
-- [ ] README covers: prerequisites, install, auth setup, first run
+- [x] README covers: prerequisites, install, auth setup, first run
 - [ ] Includes example of running a skill from the CLI
 - [ ] Includes example of connecting to Discord
-- [ ] Links to docs/ for deeper reference
+- [x] Links to docs/ for deeper reference
 ```
 
 ---

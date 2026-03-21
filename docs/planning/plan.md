@@ -111,9 +111,9 @@ I want a CI pipeline that enforces all quality gates on every PR,
 so that regressions are caught before merging.
 
 Acceptance Criteria:
-- [ ] CI runs: typecheck → lint → test:coverage → build in order
-- [ ] Any failing step fails the whole pipeline
-- [ ] PR template is auto-loaded by GitHub from .github/pull_request_template.md
+- [x] CI runs: typecheck → lint → test:coverage → build in order
+- [x] Any failing step fails the whole pipeline
+- [x] PR template is auto-loaded by GitHub from .github/pull_request_template.md
 ```
 
 ---

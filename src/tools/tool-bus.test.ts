@@ -41,7 +41,7 @@ describe('ToolBus', () => {
   beforeEach(() => {
     bus = new ToolBus();
     mockLogger = { log: vi.fn().mockResolvedValue(undefined) };
-    ctx = { cwd: '/tmp', log: mockLogger };
+    ctx = { cwd: '/tmp', log: mockLogger, logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } };
   });
 
   // ── register / list / unregister ──────────────────────────────────────────

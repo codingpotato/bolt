@@ -1,4 +1,5 @@
 import type { ToolLogger } from '../audit/audit-logger';
+import type { Logger } from '../logger';
 
 export type { ToolLogger };
 
@@ -20,8 +21,10 @@ export interface JSONSchema {
 export interface ToolContext {
   /** Absolute working directory for the current session. */
   cwd: string;
-  /** Audit logger — every call is recorded here. */
+  /** Audit logger — every tool call is recorded here. */
   log: ToolLogger;
+  /** Structured logger — for operational and debug output. */
+  logger: Logger;
   /**
    * Names of tools the current agent scope may use.
    * undefined means all registered tools are permitted.

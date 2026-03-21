@@ -13,8 +13,9 @@ import { bashTool } from '../tools/bash';
 import { fileReadTool, fileWriteTool, fileEditTool } from '../tools/file';
 import { webFetchTool } from '../tools/web-fetch';
 import { createAuditLogger } from '../audit/audit-logger';
+import { createLogger } from '../logger';
 import { AgentCore } from '../agent/agent';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 
 async function main(): Promise<void> {
   const config = resolveConfig();
@@ -25,9 +26,9 @@ async function main(): Promise<void> {
   // Resolve dataDir to an absolute path so audit logger and future components
   // are not sensitive to cwd changes after startup.
   const dataDir = resolve(cwd, config.dataDir);
-  // config.logLevel is resolved but a structured logger is not yet wired up;
-  // it will be connected when the logging subsystem is introduced.
+
   const log = createAuditLogger(dataDir);
+  const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
 
   const toolBus = new ToolBus();
   toolBus.register(bashTool);
@@ -36,9 +37,11 @@ async function main(): Promise<void> {
   toolBus.register(fileEditTool);
   toolBus.register(webFetchTool);
 
-  const ctx = { cwd, log };
+  const ctx = { cwd, log, logger };
   const channel = new CliChannel();
-  const agent = new AgentCore(client, channel, toolBus, ctx, config);
+  const agent = new AgentCore(client, channel, toolBus, ctx, config, undefined, logger);
+
+  logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });
 
   process.stderr.write(`bolt ready (model: ${config.model}, auth: ${auth.mode})\n`);
   process.stderr.write('Type a message and press Enter. Ctrl+D to exit.\n\n');

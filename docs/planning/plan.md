@@ -276,10 +276,10 @@ I want to GET a URL and receive the response body,
 so that I can research topics and fetch external content.
 
 Acceptance Criteria:
-- [ ] web_fetch({ url }) returns { body, statusCode, contentType }
-- [ ] HTTP 4xx/5xx responses return a ToolError with the status code
-- [ ] Network errors return a retryable ToolError
-- [ ] Unit tests mock the HTTP client
+- [x] web_fetch({ url }) returns { body, statusCode, contentType }
+- [x] HTTP 4xx/5xx responses return a ToolError with the status code
+- [x] Network errors return a retryable ToolError
+- [x] Unit tests mock the HTTP client
 ```
 
 ---

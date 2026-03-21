@@ -131,10 +131,10 @@ I want to authenticate with an ANTHROPIC_API_KEY environment variable,
 so that I can use the Anthropic API without a subscription.
 
 Acceptance Criteria:
-- [ ] resolveAuth() returns AuthConfig with mode="api-key" when ANTHROPIC_API_KEY is set
-- [ ] The Anthropic SDK client is constructed with the API key
-- [ ] The key is never logged or written to disk
-- [ ] Unit tests mock the environment variable
+- [x] resolveAuth() returns AuthConfig with mode="api-key" when ANTHROPIC_API_KEY is set
+- [x] The Anthropic SDK client is constructed with the API key
+- [x] The key is never logged or written to disk
+- [x] Unit tests mock the environment variable
 ```
 
 **S1-2: Authentication — subscription mode**
@@ -144,10 +144,10 @@ I want to authenticate with ANTHROPIC_SESSION_TOKEN,
 so that I can use bolt without managing an API key.
 
 Acceptance Criteria:
-- [ ] resolveAuth() returns AuthConfig with mode="subscription" when ANTHROPIC_SESSION_TOKEN is set
-- [ ] API key mode takes precedence when both env vars are set, with a warning logged
-- [ ] bolt exits with a clear error when neither credential is set
-- [ ] Sub-agents receive auth config by value at spawn time, not via process.env
+- [x] resolveAuth() returns AuthConfig with mode="subscription" when ANTHROPIC_SESSION_TOKEN is set
+- [x] API key mode takes precedence when both env vars are set, with a warning logged
+- [x] bolt exits with a clear error when neither credential is set
+- [x] Sub-agents receive auth config by value at spawn time, not via process.env
 ```
 
 **S1-2b: Authentication — local mode**
@@ -157,13 +157,13 @@ I want to point bolt at a local Anthropic-compatible server via BOLT_LOCAL_ENDPO
 so that I can run bolt without any Anthropic API key or subscription.
 
 Acceptance Criteria:
-- [ ] resolveAuth() returns AuthConfig with mode="local" and localEndpoint set when BOLT_LOCAL_ENDPOINT is set
-- [ ] The Anthropic SDK client is constructed with baseURL set to localEndpoint
-- [ ] BOLT_LOCAL_API_KEY is passed as the API key if set; a placeholder is used otherwise (some SDK versions require a non-empty value)
-- [ ] Local mode is lowest precedence: API Key > Subscription > Local
-- [ ] bolt exits with a clear error when none of the three env vars is set
-- [ ] Sub-agents receive localEndpoint by value at spawn time, not via process.env
-- [ ] Unit tests mock the Anthropic SDK — no real network calls
+- [x] resolveAuth() returns AuthConfig with mode="local" and localEndpoint set when BOLT_LOCAL_ENDPOINT is set
+- [x] The Anthropic SDK client is constructed with baseURL set to localEndpoint
+- [x] BOLT_LOCAL_API_KEY is passed as the API key if set; a placeholder is used otherwise (some SDK versions require a non-empty value)
+- [x] Local mode is lowest precedence: API Key > Subscription > Local
+- [x] bolt exits with a clear error when none of the three env vars is set
+- [x] Sub-agents receive localEndpoint by value at spawn time, not via process.env
+- [x] Unit tests mock the Anthropic SDK — no real network calls
 ```
 
 **S1-3: Channel interface and UserTurn type**

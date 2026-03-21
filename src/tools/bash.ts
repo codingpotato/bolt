@@ -5,13 +5,7 @@ export interface BashInput {
   command: string;
 }
 
-export interface BashOutput {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-}
-
-export const bashTool: Tool<BashInput, BashOutput> = {
+export const bashTool: Tool<BashInput, string> = {
   name: 'bash',
   description: 'Run a shell command and return stdout, stderr, and the exit code.',
   inputSchema: {
@@ -22,7 +16,7 @@ export const bashTool: Tool<BashInput, BashOutput> = {
     required: ['command'],
   },
 
-  execute(input: BashInput, ctx: ToolContext): Promise<BashOutput> {
+  execute(input: BashInput, ctx: ToolContext): Promise<string> {
     return new Promise((resolve, reject) => {
       const proc = spawn('sh', ['-c', input.command], { cwd: ctx.cwd });
 
@@ -38,16 +32,20 @@ export const bashTool: Tool<BashInput, BashOutput> = {
         stderr += String(chunk);
       });
 
-      // Register 'error' before 'close' so that if both fire (e.g. ENOENT
-      // spawning an invalid executable), the rejection wins and the subsequent
-      // 'close' call to resolve is a no-op.
       proc.on('error', (err: Error) => {
         settled = true;
         reject(err);
       });
 
       proc.on('close', (code: number | null) => {
-        if (!settled) resolve({ stdout, stderr, exitCode: code ?? 1 });
+        if (!settled) {
+          const exitCode = code ?? 1;
+          const parts: string[] = [];
+          if (stdout) parts.push(stdout);
+          if (stderr) parts.push(stderr);
+          if (exitCode !== 0) parts.push(`Exit code: ${exitCode}`);
+          resolve(parts.join('\n') || '(no output)');
+        }
       });
     });
   },

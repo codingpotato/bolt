@@ -7,6 +7,9 @@ import type { Config } from '../config/config';
 /** Maximum tokens to request per API call. */
 const MAX_TOKENS = 8096;
 
+/** System prompt sent on every API call. */
+const SYSTEM = 'You are bolt, an autonomous CLI agent. You have access to tools to execute shell commands, read and write files, and fetch web content. Use them to complete the user\'s request.';
+
 /**
  * AgentCore drives the main agentic loop.
  *
@@ -51,6 +54,7 @@ export class AgentCore {
     while (true) {
       const response = await this.client.messages.create({
         model: this.config.model,
+        system: SYSTEM,
         max_tokens: MAX_TOKENS,
         tools,
         messages,
@@ -72,14 +76,15 @@ export class AgentCore {
         // Append the assistant turn (which contains the tool_use blocks)
         messages.push({ role: 'assistant', content: response.content });
 
-        // Append all tool results as a single user turn
+        // Append all tool results as a single user turn.
+        // Only include is_error when true — some proxy servers reject is_error: false.
         messages.push({
           role: 'user',
           content: toolResults.map((result) => ({
             type: 'tool_result' as const,
             tool_use_id: result.id,
             content: result.content,
-            is_error: result.is_error,
+            ...(result.is_error ? { is_error: true } : {}),
           })),
         });
       } else {

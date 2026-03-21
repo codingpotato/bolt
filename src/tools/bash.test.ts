@@ -27,25 +27,23 @@ describe('bashTool', () => {
     expect(bashTool.inputSchema.required).toContain('command');
   });
 
-  it('returns stdout, stderr, and exitCode on success', async () => {
+  it('returns stdout on success', async () => {
     vi.mocked(childProcess.spawn).mockReturnValue(
       makeMockProcess({ stdout: 'hello\n', stderr: '', exitCode: 0 }),
     );
 
     const result = await bashTool.execute({ command: 'echo hello' }, ctx);
-    expect(result.stdout).toBe('hello\n');
-    expect(result.stderr).toBe('');
-    expect(result.exitCode).toBe(0);
+    expect(result).toBe('hello\n');
   });
 
-  it('returns non-zero exitCode without throwing', async () => {
+  it('returns stderr and exit code info on failure', async () => {
     vi.mocked(childProcess.spawn).mockReturnValue(
       makeMockProcess({ stdout: '', stderr: 'error\n', exitCode: 1 }),
     );
 
     const result = await bashTool.execute({ command: 'false' }, ctx);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toBe('error\n');
+    expect(result).toContain('error\n');
+    expect(result).toContain('Exit code: 1');
   });
 
   it('executes in the configured cwd', async () => {
@@ -68,17 +66,17 @@ describe('bashTool', () => {
     );
 
     const result = await bashTool.execute({ command: 'cmd' }, ctx);
-    expect(result.stdout).toBe('out\n');
-    expect(result.stderr).toBe('err\n');
+    expect(result).toContain('out\n');
+    expect(result).toContain('err\n');
   });
 
-  it('treats null exit code as exitCode 1', async () => {
+  it('treats null exit code as exit code 1', async () => {
     vi.mocked(childProcess.spawn).mockReturnValue(
       makeMockProcess({ stdout: '', stderr: '', exitCode: null }),
     );
 
     const result = await bashTool.execute({ command: 'killed' }, ctx);
-    expect(result.exitCode).toBe(1);
+    expect(result).toContain('Exit code: 1');
   });
 
   it('rejects when the child process emits an error', async () => {

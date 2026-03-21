@@ -79,6 +79,7 @@ function makeTextResponse(text: string): Anthropic.Message {
     stop_reason: 'end_turn',
     stop_sequence: null,
     usage: FAKE_USAGE,
+    container: null,
   };
 }
 
@@ -100,6 +101,7 @@ function makeToolUseResponse(
     stop_reason: 'tool_use',
     stop_sequence: null,
     usage: FAKE_USAGE,
+    container: null,
   };
 }
 

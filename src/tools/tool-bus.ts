@@ -117,7 +117,8 @@ export class ToolBus {
     }
 
     await ctx.log.log(call.name, call.input, result);
-    return { id: call.id, content: JSON.stringify(result) };
+    const content = typeof result === 'string' ? result : JSON.stringify(result);
+    return { id: call.id, content };
   }
 
   /**

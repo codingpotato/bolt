@@ -24,13 +24,11 @@ export const bashTool: Tool<BashInput, BashOutput> = {
 
   execute(input: BashInput, ctx: ToolContext): Promise<BashOutput> {
     return new Promise((resolve, reject) => {
-      const proc = spawn('sh', ['-c', input.command], {
-        cwd: ctx.cwd,
-        env: process.env,
-      });
+      const proc = spawn('sh', ['-c', input.command], { cwd: ctx.cwd });
 
       let stdout = '';
       let stderr = '';
+      let settled = false;
 
       proc.stdout.on('data', (chunk: Buffer | string) => {
         stdout += String(chunk);
@@ -40,12 +38,16 @@ export const bashTool: Tool<BashInput, BashOutput> = {
         stderr += String(chunk);
       });
 
-      proc.on('close', (code: number | null) => {
-        resolve({ stdout, stderr, exitCode: code ?? 1 });
+      // Register 'error' before 'close' so that if both fire (e.g. ENOENT
+      // spawning an invalid executable), the rejection wins and the subsequent
+      // 'close' call to resolve is a no-op.
+      proc.on('error', (err: Error) => {
+        settled = true;
+        reject(err);
       });
 
-      proc.on('error', (err: Error) => {
-        reject(err);
+      proc.on('close', (code: number | null) => {
+        if (!settled) resolve({ stdout, stderr, exitCode: code ?? 1 });
       });
     });
   },

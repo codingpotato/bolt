@@ -85,6 +85,13 @@ describe('bashTool', () => {
     vi.mocked(childProcess.spawn).mockReturnValue(makeMockErrorProcess(new Error('ENOENT')));
     await expect(bashTool.execute({ command: 'bad' }, ctx)).rejects.toThrow('ENOENT');
   });
+
+  it('rejects with the error and ignores subsequent close when both events fire', async () => {
+    vi.mocked(childProcess.spawn).mockReturnValue(
+      makeMockErrorThenCloseProcess(new Error('ENOENT')),
+    );
+    await expect(bashTool.execute({ command: 'bad' }, ctx)).rejects.toThrow('ENOENT');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -128,7 +135,9 @@ function makeMockProcess(opts: MockOptions) {
     },
   };
 
-  // Emit data + close after listeners are registered
+  // Emit data + close after listeners are registered.
+  // Guard on truthiness mirrors real behaviour: a process with no output
+  // never fires the 'data' event on its stdout/stderr streams.
   Promise.resolve().then(() => {
     if (opts.stdout) {
       for (const cb of stdoutListeners['data'] ?? []) cb(opts.stdout);
@@ -157,6 +166,28 @@ function makeMockErrorProcess(err: Error) {
 
   Promise.resolve().then(() => {
     for (const cb of procListeners['error'] ?? []) cb(err);
+  });
+
+  return proc as unknown as ReturnType<typeof childProcess.spawn>;
+}
+
+/** Simulates the real Node behaviour where 'error' is followed by 'close' with null. */
+function makeMockErrorThenCloseProcess(err: Error) {
+  const procListeners: Record<string, ((arg: unknown) => void)[]> = {};
+  const noop = { on: () => noop };
+  const proc = {
+    stdout: noop,
+    stderr: noop,
+    on(event: string, cb: (arg: unknown) => void) {
+      procListeners[event] ??= [];
+      procListeners[event]!.push(cb);
+      return proc;
+    },
+  };
+
+  Promise.resolve().then(() => {
+    for (const cb of procListeners['error'] ?? []) cb(err);
+    for (const cb of procListeners['close'] ?? []) cb(null);
   });
 
   return proc as unknown as ReturnType<typeof childProcess.spawn>;

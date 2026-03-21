@@ -261,12 +261,12 @@ I want to read, write, and edit files on disk,
 so that I can modify codebases and persist output.
 
 Acceptance Criteria:
-- [ ] file_read({ path }) returns { content } or ToolError if file not found
-- [ ] file_write({ path, content }) writes/overwrites the file; returns { path }
-- [ ] file_edit({ path, oldString, newString }) replaces first occurrence; returns { path, changed }
-- [ ] file_edit returns changed: false (not an error) if oldString is not found
-- [ ] All paths are resolved relative to ToolContext.cwd
-- [ ] Unit tests use in-memory filesystem mock (no real disk I/O)
+- [x] file_read({ path }) returns { content } or ToolError if file not found
+- [x] file_write({ path, content }) writes/overwrites the file; returns { path }
+- [x] file_edit({ path, oldString, newString }) replaces first occurrence; returns { path, changed }
+- [x] file_edit returns changed: false (not an error) if oldString is not found
+- [x] All paths are resolved relative to ToolContext.cwd
+- [x] Unit tests use in-memory filesystem mock (no real disk I/O)
 ```
 
 **S2-6: web_fetch tool**

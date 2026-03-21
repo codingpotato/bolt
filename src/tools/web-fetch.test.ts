@@ -1,0 +1,101 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ToolContext } from './tool';
+import { webFetchTool } from './web-fetch';
+
+// Mock the global fetch
+const fetchMock = vi.fn();
+vi.stubGlobal('fetch', fetchMock);
+
+describe('webFetchTool', () => {
+  let mockLogger: { log: ReturnType<typeof vi.fn> };
+  let ctx: ToolContext;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLogger = { log: vi.fn().mockResolvedValue(undefined) };
+    ctx = { cwd: '/workspace', log: mockLogger };
+  });
+
+  it('has the name "web_fetch"', () => {
+    expect(webFetchTool.name).toBe('web_fetch');
+  });
+
+  it('has inputSchema with required url field', () => {
+    expect(webFetchTool.inputSchema.required).toContain('url');
+  });
+
+  it('returns body, statusCode, and contentType on a 200 response', async () => {
+    fetchMock.mockResolvedValue(
+      makeMockResponse(200, 'text/html', '<html>hello</html>'),
+    );
+
+    const result = await webFetchTool.execute({ url: 'https://example.com' }, ctx);
+    expect(result.body).toBe('<html>hello</html>');
+    expect(result.statusCode).toBe(200);
+    expect(result.contentType).toBe('text/html');
+  });
+
+  it('throws ToolError on HTTP 4xx responses', async () => {
+    fetchMock.mockResolvedValue(makeMockResponse(404, 'text/plain', 'Not Found'));
+
+    const { ToolError } = await import('./tool');
+    await expect(webFetchTool.execute({ url: 'https://example.com/missing' }, ctx)).rejects.toBeInstanceOf(ToolError);
+  });
+
+  it('throws ToolError on HTTP 5xx responses', async () => {
+    fetchMock.mockResolvedValue(makeMockResponse(500, 'text/plain', 'Server Error'));
+
+    const { ToolError } = await import('./tool');
+    await expect(webFetchTool.execute({ url: 'https://example.com' }, ctx)).rejects.toBeInstanceOf(ToolError);
+  });
+
+  it('includes the status code in the 4xx ToolError message', async () => {
+    fetchMock.mockResolvedValue(makeMockResponse(403, 'text/plain', 'Forbidden'));
+
+    const { ToolError } = await import('./tool');
+    await expect(webFetchTool.execute({ url: 'https://example.com' }, ctx)).rejects.toSatisfy(
+      (err) => err instanceof ToolError && err.message.includes('403'),
+    );
+  });
+
+  it('throws a retryable ToolError on network errors', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const { ToolError } = await import('./tool');
+    await expect(webFetchTool.execute({ url: 'https://example.com' }, ctx)).rejects.toSatisfy(
+      (err) => err instanceof ToolError && err.retryable === true,
+    );
+  });
+
+  it('handles missing content-type header gracefully', async () => {
+    fetchMock.mockResolvedValue(makeMockResponse(200, null, 'raw body'));
+
+    const result = await webFetchTool.execute({ url: 'https://example.com' }, ctx);
+    expect(result.contentType).toBe('');
+  });
+
+  it('calls fetch with the provided URL', async () => {
+    fetchMock.mockResolvedValue(makeMockResponse(200, 'application/json', '{}'));
+
+    await webFetchTool.execute({ url: 'https://api.example.com/data' }, ctx);
+    expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/data');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makeMockResponse(status: number, contentType: string | null, body: string) {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    headers: {
+      get(name: string): string | null {
+        if (name === 'content-type') return contentType;
+        return null;
+      },
+    },
+    text: () => Promise.resolve(body),
+  };
+}

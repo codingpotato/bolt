@@ -34,13 +34,27 @@ export const webFetchTool: Tool<WebFetchInput, WebFetchOutput> = {
     }
 
     if (!response.ok) {
+      let errorBody = '';
+      try {
+        errorBody = await response.text();
+      } catch {
+        // ignore read failure for error body
+      }
       throw new ToolError(
-        `HTTP ${response.status} fetching ${input.url}`,
+        `HTTP ${response.status} fetching ${input.url}: ${errorBody}`,
         false,
       );
     }
 
-    const body = await response.text();
+    let body: string;
+    try {
+      body = await response.text();
+    } catch (err) {
+      throw new ToolError(
+        `failed to read response body from ${input.url}: ${err instanceof Error ? err.message : String(err)}`,
+        true,
+      );
+    }
     const contentType = response.headers.get('content-type') ?? '';
     return { body, statusCode: response.status, contentType };
   },

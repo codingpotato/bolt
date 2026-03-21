@@ -313,10 +313,10 @@ I want the Agent Core to retry on transient API failures,
 so that network blips do not abort long-running sessions.
 
 Acceptance Criteria:
-- [ ] 5xx and network errors are retried up to 3 times with exponential backoff
-- [ ] 4xx errors (auth failure, bad request) fail immediately with a clear error
-- [ ] Each retry attempt is logged at warn level
-- [ ] After 3 failed retries, the error is surfaced to the user via channel.send()
+- [x] 5xx and network errors are retried up to 3 times with exponential backoff
+- [x] 4xx errors (auth failure, bad request) fail immediately with a clear error
+- [x] Each retry attempt is logged at warn level
+- [x] After 3 failed retries, the error is surfaced to the user via channel.send()
 ```
 
 **S3-3: Context overflow handling**

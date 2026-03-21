@@ -61,16 +61,18 @@ bolt is an autonomous AI CLI agent built with TypeScript and the Anthropic SDK. 
 
 ### Authentication
 
-bolt must support two mutually exclusive authentication modes for the Anthropic API:
+bolt must support three mutually exclusive authentication modes:
 
 | Mode | Description |
 |------|-------------|
-| **API Key** | User provides an `ANTHROPIC_API_KEY` environment variable or config value; requests are authenticated via the standard Anthropic API |
+| **API Key** | User provides an `ANTHROPIC_API_KEY` environment variable; requests are authenticated via the standard Anthropic API |
 | **Anthropic Subscription** | User is authenticated via an Anthropic account session (e.g. Claude.ai subscription); no API key required |
+| **Local** | User points bolt at a local OpenAI-compatible inference server (llama.cpp, Ollama, etc.) via `BOLT_LOCAL_ENDPOINT`; no API key required |
 
 - The active mode must be configurable at startup (env var, config file, or CLI flag)
-- If neither is configured, bolt must fail fast with a clear error message indicating how to set up authentication
+- If none is configured, bolt must fail fast with a clear error message indicating how to set up authentication
 - Credentials must never be logged or written to the audit log
+- In local mode, no credential is required; the endpoint URL is the only required value
 
 ## Non-Functional Requirements
 

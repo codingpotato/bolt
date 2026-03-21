@@ -150,6 +150,22 @@ Acceptance Criteria:
 - [ ] Sub-agents receive auth config by value at spawn time, not via process.env
 ```
 
+**S1-2b: Authentication — local mode**
+```
+As a local user,
+I want to point bolt at a local Anthropic-compatible server via BOLT_LOCAL_ENDPOINT,
+so that I can run bolt without any Anthropic API key or subscription.
+
+Acceptance Criteria:
+- [ ] resolveAuth() returns AuthConfig with mode="local" and localEndpoint set when BOLT_LOCAL_ENDPOINT is set
+- [ ] The Anthropic SDK client is constructed with baseURL set to localEndpoint
+- [ ] BOLT_LOCAL_API_KEY is passed as the API key if set; a placeholder is used otherwise (some SDK versions require a non-empty value)
+- [ ] Local mode is lowest precedence: API Key > Subscription > Local
+- [ ] bolt exits with a clear error when none of the three env vars is set
+- [ ] Sub-agents receive localEndpoint by value at spawn time, not via process.env
+- [ ] Unit tests mock the Anthropic SDK — no real network calls
+```
+
 **S1-3: Channel interface and UserTurn type**
 ```
 As a developer,

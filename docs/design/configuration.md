@@ -16,13 +16,15 @@ Configuration is resolved from three sources, in order of precedence (highest fi
 |----------|----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | Conditional¹ | — | Anthropic API key (API key auth mode) |
 | `ANTHROPIC_SESSION_TOKEN` | Conditional¹ | — | Anthropic account session token (subscription auth mode) |
+| `BOLT_LOCAL_ENDPOINT` | Conditional¹ | — | Base URL passed to the Anthropic SDK as `baseURL`, e.g. `http://localhost:8080` (local auth mode) |
+| `BOLT_LOCAL_API_KEY` | No | — | API key for the local server if it requires one |
 | `DISCORD_BOT_TOKEN` | No | — | Discord bot token (required if Discord channel is used) |
 | `DISCORD_CHANNEL_ID` | No | — | Discord channel ID to monitor |
-| `BOLT_MODEL` | No | `claude-opus-4-6` | Anthropic model ID |
+| `BOLT_MODEL` | No | `claude-opus-4-6` | Model ID sent in every API request (applies to all three auth modes) |
 | `BOLT_DATA_DIR` | No | `.bolt` | Runtime data directory |
 | `BOLT_LOG_LEVEL` | No | `info` | Log verbosity: `debug` \| `info` \| `warn` \| `error` |
 
-¹ Exactly one of `ANTHROPIC_API_KEY` or `ANTHROPIC_SESSION_TOKEN` must be set.
+¹ Exactly one of `ANTHROPIC_API_KEY`, `ANTHROPIC_SESSION_TOKEN`, or `BOLT_LOCAL_ENDPOINT` must be set. Precedence when multiple are set: API Key > Subscription > Local.
 
 ## `.bolt/config.json` Schema
 
@@ -30,13 +32,20 @@ Configuration is resolved from three sources, in order of precedence (highest fi
 {
   // Authentication
   "auth": {
-    // "api-key" | "subscription"
+    // "api-key" | "subscription" | "local"
     // If omitted, resolved from env vars automatically
     "mode": "api-key"
   },
 
-  // Model selection
+  // Model ID sent in every API request (all auth modes)
   "model": "claude-opus-4-6",
+
+  // Local inference server (only used when auth.mode is "local")
+  "local": {
+    // Base URL passed to the Anthropic SDK as baseURL
+    // Overridden by BOLT_LOCAL_ENDPOINT env var
+    "endpoint": "http://localhost:8080"
+  },
 
   // Memory system
   "memory": {
@@ -100,4 +109,6 @@ Error: config.memory.compactThreshold must be between 0.0 and 1.0, got: 1.5
 
 ## Sensitive Values
 
-Credentials (`ANTHROPIC_API_KEY`, `ANTHROPIC_SESSION_TOKEN`, `DISCORD_BOT_TOKEN`) must only be set via environment variables — never written to `.bolt/config.json`. bolt rejects config files that contain credential fields.
+Credentials (`ANTHROPIC_API_KEY`, `ANTHROPIC_SESSION_TOKEN`, `DISCORD_BOT_TOKEN`, `BOLT_LOCAL_API_KEY`) must only be set via environment variables — never written to `.bolt/config.json`. bolt rejects config files that contain credential fields.
+
+`BOLT_LOCAL_ENDPOINT` is not a credential and may be set in `.bolt/config.json` under `local.endpoint`.

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Pre-commit hook: enforce TDD — every new .ts src file must have a co-located .test.ts
+
+set -euo pipefail
+
+MISSING=()
+
+# Find all new (Added) .ts files in src/ that are not test files themselves
+while IFS= read -r file; do
+  # Skip type declaration files and test files themselves
+  [[ "$file" == *.d.ts ]] && continue
+  [[ "$file" == *.test.ts ]] && continue
+
+  test_file="${file%.ts}.test.ts"
+
+  if [[ ! -f "$test_file" ]]; then
+    MISSING+=("$file  →  missing: $test_file")
+  fi
+done < <(git diff --cached --name-only --diff-filter=A -- 'src/**/*.ts')
+
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+  echo ""
+  echo "❌ TDD violation: new source files must have a co-located test file."
+  echo ""
+  for entry in "${MISSING[@]}"; do
+    echo "   $entry"
+  done
+  echo ""
+  echo "Write the tests first (red → green → refactor), then commit both together."
+  echo "See docs/testing/unit-testing.md for guidance."
+  echo ""
+  exit 1
+fi
+
+exit 0

@@ -344,10 +344,10 @@ I want the agent loop to trigger compaction when the context window is nearly fu
 so that long sessions do not crash with a context overflow error.
 
 Acceptance Criteria:
-- [ ] Agent Core monitors token usage in each API response
-- [ ] When usage exceeds memory.compactThreshold, compaction is triggered before the next call
-- [ ] After compaction, the API call is retried with the compacted context
-- [ ] A context overflow that cannot be resolved by compaction fails with a clear error
+- [x] Agent Core monitors token usage in each API response
+- [x] When usage exceeds memory.compactThreshold, compaction is triggered before the next call
+- [x] After compaction, the API call is retried with the compacted context
+- [x] A context overflow that cannot be resolved by compaction fails with a clear error
 ```
 
 ---

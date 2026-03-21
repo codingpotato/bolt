@@ -12,6 +12,9 @@ export interface Config {
   model: string;
   dataDir: string;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
+  auth: {
+    mode?: 'api-key' | 'subscription' | 'local';
+  };
   local: {
     endpoint?: string;
   };
@@ -45,6 +48,7 @@ const DEFAULTS: Config = {
   model: 'claude-opus-4-6',
   dataDir: '.bolt',
   logLevel: 'info',
+  auth: {},
   local: {},
   memory: {
     compactThreshold: 0.8,
@@ -81,12 +85,15 @@ const CREDENTIAL_FIELDS = [
 
 // #3: Typed against Config so the compiler catches removed or misspelled keys.
 // ReadonlySet<string> lets .has() accept any string at the call site.
+// Intentionally excludes `logLevel` (env-var only: BOLT_LOG_LEVEL) and
+// `dataDir` (computed from BOLT_DATA_DIR, used to locate the file itself).
 const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(
-  ['model', 'local', 'memory', 'tasks', 'tools', 'codeWorkflows', 'channels'] satisfies (keyof Config)[]
+  ['model', 'auth', 'local', 'memory', 'tasks', 'tools', 'codeWorkflows', 'channels'] satisfies (keyof Config)[]
 );
 
 // Validation constants — defined once, not recreated on every call.
 const VALID_LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
+const VALID_AUTH_MODES = ['api-key', 'subscription', 'local'] as const;
 const VALID_SEARCH_BACKENDS = ['keyword', 'embedding'] as const;
 const VALID_WEB_MODES = ['http', 'websocket'] as const;
 
@@ -164,6 +171,7 @@ function applyEnvOverrides(config: Config): Config {
   // #2: All nested objects are explicitly spread to avoid aliasing.
   const result: Config = {
     ...config,
+    auth: { ...config.auth },
     local: { ...config.local },
     memory: { ...config.memory },
     tasks: { ...config.tasks },
@@ -207,6 +215,12 @@ function validate(config: Config): void {
   if (!(VALID_LOG_LEVELS as readonly string[]).includes(config.logLevel)) {
     throw new ConfigError(
       `config.logLevel must be one of ${VALID_LOG_LEVELS.join(', ')}, got: ${config.logLevel}`
+    );
+  }
+
+  if (config.auth.mode !== undefined && !(VALID_AUTH_MODES as readonly string[]).includes(config.auth.mode)) {
+    throw new ConfigError(
+      `config.auth.mode must be one of ${VALID_AUTH_MODES.join(', ')}, got: ${config.auth.mode}`
     );
   }
 

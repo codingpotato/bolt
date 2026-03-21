@@ -56,6 +56,7 @@ describe('resolveConfig', () => {
       expect(config.channels.web.enabled).toBe(false);
       expect(config.channels.web.port).toBe(3000);
       expect(config.channels.web.mode).toBe('websocket');
+      expect(config.auth.mode).toBeUndefined();
     });
   });
 
@@ -119,6 +120,14 @@ describe('resolveConfig', () => {
       expect(config['mmodel']).toBeUndefined();
 
       stderrSpy.mockRestore();
+    });
+
+    it('sets auth.mode from config file', () => {
+      mockConfigFile({ auth: { mode: 'subscription' } });
+
+      const config = resolveConfig();
+
+      expect(config.auth.mode).toBe('subscription');
     });
 
     it('does not warn for known top-level keys', () => {
@@ -248,7 +257,7 @@ describe('resolveConfig', () => {
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
-    it('throws ConfigError for non-integer maxRetries', () => {
+    it('throws ConfigError for non-positive maxRetries', () => {
       mockConfigFile({ tasks: { maxRetries: -1 } });
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
@@ -256,6 +265,16 @@ describe('resolveConfig', () => {
     it('throws ConfigError for non-integer testFixRetries', () => {
       mockConfigFile({ codeWorkflows: { testFixRetries: 0 } });
       expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
+    it('throws ConfigError for invalid auth.mode', () => {
+      mockConfigFile({ auth: { mode: 'oauth' } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
+    it('does not throw for omitted auth.mode', () => {
+      mockConfigFile({ auth: {} });
+      expect(() => resolveConfig()).not.toThrow();
     });
   });
 });

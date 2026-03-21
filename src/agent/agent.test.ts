@@ -140,6 +140,27 @@ function makeClient(responses: Array<Anthropic.Message | Error>) {
   };
 }
 
+/**
+ * Build a Usage object with a specific input_tokens count.
+ * Used to simulate context window pressure in overflow tests.
+ */
+function makeUsage(inputTokens: number): Anthropic.Usage {
+  return {
+    input_tokens: inputTokens,
+    output_tokens: 5,
+    cache_creation_input_tokens: null,
+    cache_read_input_tokens: null,
+  } as unknown as Anthropic.Usage;
+}
+
+/** Build a tool_use response with explicit token usage. */
+function makeToolUseResponseWithTokens(
+  tools: Array<{ id: string; name: string; input: unknown }>,
+  inputTokens: number,
+): Anthropic.Message {
+  return { ...makeToolUseResponse(tools), usage: makeUsage(inputTokens) } as unknown as Anthropic.Message;
+}
+
 /** Build a 5xx API error (retryable). */
 function make5xxError(status = 500): APIError {
   return APIError.generate(status, undefined, `HTTP ${status}`, new Headers()) as APIError;
@@ -641,6 +662,149 @@ describe('AgentCore', () => {
       expect(createSpy).toHaveBeenCalledTimes(3);
       expect(sendSpy).toHaveBeenNthCalledWith(1, 'turn 1 done');
       expect(sendSpy).toHaveBeenNthCalledWith(2, 'turn 2 done');
+    });
+  });
+
+  // ── context overflow handling ─────────────────────────────────────────────
+
+  describe('context overflow handling', () => {
+    // Config with a small keepRecentMessages to make compaction easy to trigger.
+    // compactThreshold: 0.8 × 200_000 = 160_000 tokens.
+    function makeOverflowConfig() {
+      return { ...makeConfig(), memory: { ...makeConfig().memory, keepRecentMessages: 2 } };
+    }
+
+    const TOOL_CALL = { id: 'tu_1', name: 'bash', input: { command: 'ls' } };
+    const TOOL_RESULT = { id: 'tu_1', content: '{"stdout":"ok","exitCode":0}' };
+
+    it('does not compact when token usage is below threshold', async () => {
+      // 10 tokens / 200_000 = 0.00005 — well below 0.8 threshold
+      const toolUse = makeToolUseResponseWithTokens([TOOL_CALL], 10);
+      const final = makeTextResponse('done');
+
+      const { client, createSpy } = makeClient([toolUse, final]);
+      const { channel } = makeChannel(['go']);
+      const toolBus = makeToolBus([TOOL_RESULT]);
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), noopSleep);
+      await agent.run();
+
+      // Second call should have the full un-compacted message history:
+      // [user, assistant(tool_use), user(tool_result)]
+      const secondCallArg = createSpy.mock.calls[1]?.[0] as { messages: Anthropic.MessageParam[] };
+      expect(secondCallArg.messages).toHaveLength(3);
+    });
+
+    it('compacts messages when token usage exceeds threshold', async () => {
+      // 170_000 tokens / 200_000 = 0.85 — above 0.8 threshold
+      const toolUse = makeToolUseResponseWithTokens([TOOL_CALL], 170_000);
+      const final = makeTextResponse('done');
+
+      const { client, createSpy } = makeClient([toolUse, final]);
+      const { channel } = makeChannel(['go']);
+      const toolBus = makeToolBus([TOOL_RESULT]);
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), noopSleep);
+      await agent.run();
+
+      // After compaction (keepRecentMessages=2), messages shrink:
+      // [stub, assistant(tool_use), user(tool_result)] — 3 items (stub + 2 recent)
+      const secondCallArg = createSpy.mock.calls[1]?.[0] as { messages: Anthropic.MessageParam[] };
+      expect(secondCallArg.messages).toHaveLength(3);
+    });
+
+    it('inserts a compaction stub as the first message after compaction', async () => {
+      const toolUse = makeToolUseResponseWithTokens([TOOL_CALL], 170_000);
+      const final = makeTextResponse('done');
+
+      const { client, createSpy } = makeClient([toolUse, final]);
+      const { channel } = makeChannel(['go']);
+      const toolBus = makeToolBus([TOOL_RESULT]);
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), noopSleep);
+      await agent.run();
+
+      const secondCallArg = createSpy.mock.calls[1]?.[0] as { messages: Anthropic.MessageParam[] };
+      const firstMsg = secondCallArg.messages[0] as { role: string; content: string };
+      expect(firstMsg.role).toBe('user');
+      expect(firstMsg.content).toContain('compacted');
+    });
+
+    it('retains the keepRecentMessages most recent messages after compaction', async () => {
+      // With keepRecentMessages=2, the 2 most recent messages should be preserved.
+      // After the first tool round-trip, messages = [user, assistant, user(tool_result)].
+      // Compaction keeps last 2: [assistant, user(tool_result)].
+      const toolUse = makeToolUseResponseWithTokens([TOOL_CALL], 170_000);
+      const final = makeTextResponse('done');
+
+      const { client, createSpy } = makeClient([toolUse, final]);
+      const { channel } = makeChannel(['go']);
+      const toolBus = makeToolBus([TOOL_RESULT]);
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), noopSleep);
+      await agent.run();
+
+      const secondCallArg = createSpy.mock.calls[1]?.[0] as { messages: Anthropic.MessageParam[] };
+      // [stub, assistant(tool_use), user(tool_result)]
+      expect(secondCallArg.messages[1]).toMatchObject({ role: 'assistant' });
+      expect(secondCallArg.messages[2]).toMatchObject({ role: 'user' });
+    });
+
+    it('continues the agent loop after compaction and delivers the final response', async () => {
+      const toolUse = makeToolUseResponseWithTokens([TOOL_CALL], 170_000);
+      const final = makeTextResponse('all done');
+
+      const { client } = makeClient([toolUse, final]);
+      const { channel, sendSpy } = makeChannel(['go']);
+      const toolBus = makeToolBus([TOOL_RESULT]);
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), noopSleep);
+      await agent.run();
+
+      expect(sendSpy).toHaveBeenCalledWith('all done');
+    });
+
+    it('surfaces an error via channel.send() when messages cannot be compacted further', async () => {
+      // With keepRecentMessages=2 and only 2 messages total after tool round-trip
+      // (we force this with keepRecentMessages=3 so messages.length <= keep),
+      // compaction returns null and an error is thrown.
+      const overflowConfig = {
+        ...makeConfig(),
+        memory: { ...makeConfig().memory, keepRecentMessages: 10 },
+      };
+      // After one tool round-trip: [user, assistant, user(tool_result)] = 3 messages.
+      // keepRecentMessages=10 > 3, so compactMessages returns null.
+      const toolUse = makeToolUseResponseWithTokens([TOOL_CALL], 170_000);
+
+      const { client, createSpy } = makeClient([toolUse]);
+      const { channel, sendSpy } = makeChannel(['go']);
+      const toolBus = makeToolBus([TOOL_RESULT]);
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, overflowConfig, noopSleep);
+      await agent.run();
+
+      // The API should only be called once (no retry after unresolvable overflow)
+      expect(createSpy).toHaveBeenCalledOnce();
+      expect(sendSpy).toHaveBeenCalledOnce();
+      expect(sendSpy.mock.calls[0]?.[0]).toMatch(/Context window exceeded/);
+    });
+
+    it('includes token counts in the unresolvable overflow error message', async () => {
+      const overflowConfig = {
+        ...makeConfig(),
+        memory: { ...makeConfig().memory, keepRecentMessages: 10 },
+      };
+      const toolUse = makeToolUseResponseWithTokens([TOOL_CALL], 170_000);
+
+      const { client } = makeClient([toolUse]);
+      const { channel, sendSpy } = makeChannel(['go']);
+      const toolBus = makeToolBus([TOOL_RESULT]);
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, overflowConfig, noopSleep);
+      await agent.run();
+
+      expect(sendSpy.mock.calls[0]?.[0]).toContain('170,000');
+      expect(sendSpy.mock.calls[0]?.[0]).toContain('200,000');
     });
   });
 });

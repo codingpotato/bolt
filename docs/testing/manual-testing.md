@@ -54,7 +54,7 @@ The audit log is written to `.bolt/tool-audit.jsonl` after each tool call.
 What is the capital of France?
 ```
 
-**Expected:** A direct text response. No tool calls. Verify only one API round-trip occurs (no `.bolt/tool-audit.jsonl` entry).
+**Expected:** A direct text response. No tool calls. `.bolt/tool-audit.jsonl` should either not exist yet or contain no new entries after the response — the audit log is only written on tool calls.
 
 ---
 
@@ -100,7 +100,7 @@ Write a file called hello.txt containing the text "Hello, bolt!" then read it ba
 Edit the file hello.txt and replace "Hello, bolt!" with "Hello, world!"
 ```
 
-*(Requires test case 4 to have been run first.)*
+*(Requires test case 4 to have been run first. If you ran test case 4 in a previous session, `hello.txt` may already contain `Hello, world!` from a prior edit — in that case re-run test case 4 first to reset the file.)*
 
 **Expected:** Claude calls `file_edit` with the old and new strings. It reports `changed: true`.
 **Verify:** `hello.txt` now contains `Hello, world!`.
@@ -150,6 +150,8 @@ Write a short Python script to print numbers 1-5 to a file called numbers.py, th
 ```
 
 **Expected:** Multiple rounds — `file_write`, then `bash({ command: "python3 numbers.py" })`, then a text summary. Verify the agent loops correctly through both rounds before responding.
+
+> **Note:** Requires `python3` in PATH. If unavailable, substitute with a Node.js equivalent: *"Write a script called numbers.js that prints 1-5, then run it with `node numbers.js`."*
 
 ---
 

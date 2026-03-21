@@ -21,8 +21,13 @@ async function main(): Promise<void> {
   const auth = resolveAuth();
   const client = createAnthropicClient(auth);
 
-  const cwd = resolve(process.cwd());
-  const log = createAuditLogger(config.dataDir);
+  const cwd = process.cwd();
+  // Resolve dataDir to an absolute path so audit logger and future components
+  // are not sensitive to cwd changes after startup.
+  const dataDir = resolve(cwd, config.dataDir);
+  // config.logLevel is resolved but a structured logger is not yet wired up;
+  // it will be connected when the logging subsystem is introduced.
+  const log = createAuditLogger(dataDir);
 
   const toolBus = new ToolBus();
   toolBus.register(bashTool);

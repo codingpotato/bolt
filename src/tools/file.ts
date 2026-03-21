@@ -16,6 +16,12 @@ function isEnoent(err: unknown): boolean {
   );
 }
 
+/** Wraps any filesystem error as a ToolError so it is returned to the model rather than crashing the agent loop. */
+function fsError(operation: string, path: string, err: unknown): ToolError {
+  const detail = err instanceof Error ? err.message : String(err);
+  return new ToolError(`${operation} "${path}": ${detail}`);
+}
+
 // ── file_read ─────────────────────────────────────────────────────────────────
 
 export interface FileReadInput {
@@ -43,10 +49,8 @@ export const fileReadTool: Tool<FileReadInput, FileReadOutput> = {
       const content = await readFile(abs, 'utf-8');
       return { content };
     } catch (err) {
-      if (isEnoent(err)) {
-        throw new ToolError(`file not found: ${input.path}`);
-      }
-      throw err;
+      if (isEnoent(err)) throw new ToolError(`file not found: ${input.path}`);
+      throw fsError('could not read', input.path, err);
     }
   },
 };
@@ -76,8 +80,12 @@ export const fileWriteTool: Tool<FileWriteInput, FileWriteOutput> = {
 
   async execute(input: FileWriteInput, ctx: ToolContext): Promise<FileWriteOutput> {
     const abs = resolvePath(ctx.cwd, input.path);
-    await mkdir(dirname(abs), { recursive: true });
-    await writeFile(abs, input.content, 'utf-8');
+    try {
+      await mkdir(dirname(abs), { recursive: true });
+      await writeFile(abs, input.content, 'utf-8');
+    } catch (err) {
+      throw fsError('could not write', input.path, err);
+    }
     return { path: abs };
   },
 };
@@ -116,10 +124,8 @@ export const fileEditTool: Tool<FileEditInput, FileEditOutput> = {
     try {
       content = await readFile(abs, 'utf-8');
     } catch (err) {
-      if (isEnoent(err)) {
-        throw new ToolError(`file not found: ${input.path}`);
-      }
-      throw err;
+      if (isEnoent(err)) throw new ToolError(`file not found: ${input.path}`);
+      throw fsError('could not read', input.path, err);
     }
 
     const idx = content.indexOf(input.oldString);

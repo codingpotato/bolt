@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsx watch --env-file=.env.local src/cli/index.ts",
+    "dev": "tsx watch --env-file=.env src/cli/index.ts",
     "start": "node dist/cli/index.js",
     "test": "vitest run",
     "test:watch": "vitest",

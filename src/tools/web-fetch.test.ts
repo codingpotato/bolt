@@ -67,6 +67,38 @@ describe('webFetchTool', () => {
     );
   });
 
+  it('throws a retryable ToolError when response.text() fails', async () => {
+    fetchMock.mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: { get: () => 'text/html' },
+      text: () => Promise.reject(new Error('connection reset')),
+    });
+
+    const { ToolError } = await import('./tool');
+    await expect(webFetchTool.execute({ url: 'https://example.com' }, ctx)).rejects.toSatisfy(
+      (err) => err instanceof ToolError && err.retryable === true,
+    );
+  });
+
+  it('5xx ToolError is not retryable', async () => {
+    fetchMock.mockResolvedValue(makeMockResponse(503, 'text/plain', 'Service Unavailable'));
+
+    const { ToolError } = await import('./tool');
+    await expect(webFetchTool.execute({ url: 'https://example.com' }, ctx)).rejects.toSatisfy(
+      (err) => err instanceof ToolError && err.retryable === false,
+    );
+  });
+
+  it('includes the response body in the HTTP error message', async () => {
+    fetchMock.mockResolvedValue(makeMockResponse(422, 'application/json', '{"error":"invalid"}'));
+
+    const { ToolError } = await import('./tool');
+    await expect(webFetchTool.execute({ url: 'https://example.com' }, ctx)).rejects.toSatisfy(
+      (err) => err instanceof ToolError && err.message.includes('{"error":"invalid"}'),
+    );
+  });
+
   it('handles missing content-type header gracefully', async () => {
     fetchMock.mockResolvedValue(makeMockResponse(200, null, 'raw body'));
 

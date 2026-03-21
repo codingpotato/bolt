@@ -248,10 +248,10 @@ I want to run shell commands and get stdout/stderr/exitCode back,
 so that I can interact with the host system.
 
 Acceptance Criteria:
-- [ ] bash({ command }) returns { stdout, stderr, exitCode }
-- [ ] Non-zero exit code does not throw — exitCode is returned in result
-- [ ] Execution happens in the configured cwd
-- [ ] Unit tests mock child_process and do not execute real shell commands
+- [x] bash({ command }) returns { stdout, stderr, exitCode }
+- [x] Non-zero exit code does not throw — exitCode is returned in result
+- [x] Execution happens in the configured cwd
+- [x] Unit tests mock child_process and do not execute real shell commands
 ```
 
 **S2-5: file_read, file_write, file_edit tools**

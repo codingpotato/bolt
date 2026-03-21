@@ -83,12 +83,12 @@ I want a configuration resolver that merges env vars, .bolt/config.json, and def
 so that all components get their config from one source of truth.
 
 Acceptance Criteria:
-- [ ] resolveConfig() returns a typed Config object
-- [ ] Environment variables override config file values
-- [ ] Config file values override defaults
-- [ ] Missing config file is not an error (defaults apply)
-- [ ] Invalid config values cause a startup error with a descriptive message
-- [ ] Config schema matches docs/design/configuration.md
+- [x] resolveConfig() returns a typed Config object
+- [x] Environment variables override config file values
+- [x] Config file values override defaults
+- [x] Missing config file is not an error (defaults apply)
+- [x] Invalid config values cause a startup error with a descriptive message
+- [x] Config schema matches docs/design/configuration.md
 ```
 
 **S0-6: Audit logger**

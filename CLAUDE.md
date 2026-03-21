@@ -50,6 +50,17 @@ Read these docs before making decisions in the relevant area:
 - **Test runner:** Vitest
 - **Runtime data:** `.bolt/` directory (gitignored)
 
+## PR and Code Review Process
+
+- **Never commit directly to `main`** — always work on a `feat/<story-id>-<name>` or `fix/<name>` branch
+- **Never push to `main`** — a hook will block it; open a PR via `gh pr create` instead
+- **Before committing:** run `npm run typecheck && npm run lint && npm test`
+- **Commit message format:** `<type>(<scope>): <story-id> <description>`
+  - Types: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`
+  - Example: `feat(tools): S2-4 bash tool`
+- **Each story gets one branch** — branch name must include the story ID (e.g. `feat/s0-5-config-system`)
+- **After merge:** mark the story complete in `docs/planning/plan.md` and delete the branch
+
 ## Key Constraints
 
 - Sub-agents must not share state with the parent agent — enforce full context isolation

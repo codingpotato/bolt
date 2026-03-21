@@ -4,6 +4,8 @@ import type { Channel, UserTurn } from '../channels';
 import type { ToolBus } from '../tools/tool-bus';
 import type { ToolContext } from '../tools/tool';
 import type { Config } from '../config/config';
+import type { Logger } from '../logger';
+import { createNoopLogger } from '../logger';
 import type Anthropic from '@anthropic-ai/sdk';
 import { APIConnectionError, APIError } from '@anthropic-ai/sdk';
 
@@ -51,7 +53,17 @@ function makeToolBus(dispatchAllResult: Awaited<ReturnType<ToolBus['dispatchAll'
 
 /** Build a minimal ToolContext. */
 function makeCtx(): ToolContext {
-  return { cwd: '/tmp', log: { log: vi.fn().mockResolvedValue(undefined) } };
+  return { cwd: '/tmp', log: { log: vi.fn().mockResolvedValue(undefined) }, logger: createNoopLogger() };
+}
+
+/** Build a mock Logger whose methods can be asserted on. */
+function makeLogger(): Logger {
+  return {
+    debug: vi.fn(),
+    info:  vi.fn(),
+    warn:  vi.fn(),
+    error: vi.fn(),
+  };
 }
 
 /** No-op sleep for tests — avoids real delays. */
@@ -564,27 +576,23 @@ describe('AgentCore', () => {
       expect(noopSleep).toHaveBeenCalledTimes(3);
     });
 
-    it('logs a warning on each retry attempt', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      try {
-        const { client } = makeClient([
-          make5xxError(500),
-          make5xxError(500),
-          makeTextResponse('ok'),
-        ]);
-        const { channel } = makeChannel(['hi']);
-        const toolBus = makeToolBus();
+    it('logs a warning via logger on each retry attempt', async () => {
+      const { client } = makeClient([
+        make5xxError(500),
+        make5xxError(500),
+        makeTextResponse('ok'),
+      ]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+      const mockLogger = makeLogger();
 
-        const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
-        await agent.run();
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep, mockLogger);
+      await agent.run();
 
-        expect(warnSpy).toHaveBeenCalledTimes(2);
-        expect(warnSpy.mock.calls[0]?.[0]).toContain('[bolt]');
-        expect(warnSpy.mock.calls[0]?.[0]).toContain('attempt 1/4');
-        expect(warnSpy.mock.calls[1]?.[0]).toContain('attempt 2/4');
-      } finally {
-        warnSpy.mockRestore();
-      }
+      expect(mockLogger.warn).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(mockLogger.warn).mock.calls[0]?.[0]).toBe('API call failed, retrying');
+      expect(vi.mocked(mockLogger.warn).mock.calls[0]?.[1]).toMatchObject({ attempt: 1, total: 4 });
+      expect(vi.mocked(mockLogger.warn).mock.calls[1]?.[1]).toMatchObject({ attempt: 2, total: 4 });
     });
 
     it('uses exponential backoff: delays are 1000ms, 2000ms, 4000ms', async () => {

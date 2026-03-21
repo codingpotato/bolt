@@ -22,6 +22,7 @@ Read these docs before making decisions in the relevant area:
 | Code Workflows | `docs/design/code-workflows.md` | Writing code, running tests, code review |
 | Content Generation | `docs/design/content-generation.md` | Articles, image prompts, social posts, video scripts |
 | Configuration | `docs/design/configuration.md` | All config keys, env vars, `.bolt/config.json` schema |
+| Logging | `docs/design/logging.md` | Structured logger, log levels, `.bolt/bolt.log` format, LLM request logging |
 | Unit Testing | `docs/testing/unit-testing.md` | TDD cycle, test conventions, coverage requirements |
 | Dev Workflow | `docs/workflow/development.md` | Setup, branching, adding tools, CI pipeline |
 | Agile Process | `docs/workflow/agile.md` | User stories, definition of done, PR checklist, sprint workflow |

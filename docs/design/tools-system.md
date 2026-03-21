@@ -29,8 +29,10 @@ interface Tool<TInput = unknown, TOutput = unknown> {
 interface ToolContext {
   /** Absolute working directory for the current session */
   cwd: string;
-  /** Logger for audit trail */
+  /** Audit logger — every tool call is recorded to .bolt/tool-audit.jsonl */
   log: ToolLogger;
+  /** Structured logger — operational/debug output written to .bolt/bolt.log */
+  logger: Logger;
   /** Allowlisted tool names for the current agent scope (undefined = all allowed) */
   allowedTools?: string[];
 }

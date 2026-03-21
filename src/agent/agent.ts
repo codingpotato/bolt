@@ -3,6 +3,8 @@ import type { Channel } from '../channels';
 import type { ToolBus } from '../tools/tool-bus';
 import type { ToolContext } from '../tools/tool';
 import type { Config } from '../config/config';
+import type { Logger } from '../logger';
+import { createNoopLogger } from '../logger';
 
 /** Maximum tokens to request per API call. */
 const MAX_TOKENS = 8096;
@@ -52,6 +54,7 @@ export class AgentCore {
     private readonly config: Config,
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise<void>((resolve) => setTimeout(resolve, ms)),
+    private readonly logger: Logger = createNoopLogger(),
   ) {}
 
   /** Run the agent loop until the channel closes. */
@@ -81,12 +84,24 @@ export class AgentCore {
 
     try {
       while (true) {
+        this.logger.debug('Sending request to LLM', {
+          model: this.config.model,
+          messageCount: messages.length,
+        });
+
         const response = await this.callApi({
           model: this.config.model,
           system: SYSTEM,
           max_tokens: MAX_TOKENS,
           tools,
           messages,
+        });
+
+        this.logger.debug('Received response from LLM', {
+          model: response.model,
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          stopReason: response.stop_reason,
         });
 
         if (response.stop_reason === 'tool_use') {
@@ -153,9 +168,12 @@ export class AgentCore {
           throw err;
         }
         const delayMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-        console.warn(
-          `[bolt] API call failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${getErrorMessage(err)}. Retrying in ${delayMs}ms...`,
-        );
+        this.logger.warn('API call failed, retrying', {
+          attempt: attempt + 1,
+          total: MAX_RETRIES + 1,
+          error: getErrorMessage(err),
+          retryMs: delayMs,
+        });
         await this.sleep(delayMs);
       }
     }

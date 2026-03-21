@@ -22,7 +22,7 @@ Configuration is resolved from three sources, in order of precedence (highest fi
 | `DISCORD_CHANNEL_ID` | No | — | Discord channel ID to monitor |
 | `BOLT_MODEL` | No | `claude-opus-4-6` | Model ID sent in every API request (applies to all three auth modes) |
 | `BOLT_DATA_DIR` | No | `.bolt` | Runtime data directory |
-| `BOLT_LOG_LEVEL` | No | `info` | Log verbosity: `debug` \| `info` \| `warn` \| `error` |
+| `BOLT_LOG_LEVEL` | No | `info` | Log verbosity for `.bolt/bolt.log`: `debug` \| `info` \| `warn` \| `error`. Entries below this level are dropped. `error`-level entries are also written to stderr. See `docs/design/logging.md`. |
 
 ¹ Exactly one of `ANTHROPIC_API_KEY`, `ANTHROPIC_SESSION_TOKEN`, or `BOLT_LOCAL_ENDPOINT` must be set. Precedence when multiple are set: API Key > Subscription > Local.
 

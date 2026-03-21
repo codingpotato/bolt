@@ -13,7 +13,7 @@ describe('webFetchTool', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogger = { log: vi.fn().mockResolvedValue(undefined) };
-    ctx = { cwd: '/workspace', log: mockLogger };
+    ctx = { cwd: '/workspace', log: mockLogger, logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } };
   });
 
   it('has the name "web_fetch"', () => {

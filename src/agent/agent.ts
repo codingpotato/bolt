@@ -15,6 +15,12 @@ const MAX_RETRIES = 3;
 /** Initial backoff duration in ms; doubles on each subsequent attempt. */
 const INITIAL_BACKOFF_MS = 1000;
 
+/**
+ * Context window size for the supported Claude model family.
+ * All Claude 3+ models (including claude-opus-4-6) have a 200k token context window.
+ */
+const MODEL_CONTEXT_WINDOW = 200_000;
+
 /** System prompt sent on every API call. */
 const SYSTEM = 'You are bolt, an autonomous CLI agent. You have access to tools to execute shell commands, read and write files, and fetch web content. Use them to complete the user\'s request.';
 
@@ -44,6 +50,9 @@ function getErrorMessage(err: unknown): string {
  * Transient API failures (network errors, 5xx) are retried up to MAX_RETRIES
  * times with exponential backoff. Non-retryable failures (4xx) and exhausted
  * retries are surfaced to the user via channel.send().
+ *
+ * When token usage exceeds memory.compactThreshold, older messages are
+ * compacted before the next API call to stay within the context window.
  */
 export class AgentCore {
   constructor(
@@ -71,6 +80,8 @@ export class AgentCore {
    *
    * If the API call fails irrecoverably (4xx or exhausted retries) the error
    * message is delivered to the user via channel.send() rather than throwing.
+   * Context overflow that cannot be resolved by compaction is also surfaced
+   * this way.
    */
   async handleTurn(userMessage: string): Promise<void> {
     // Each user turn starts with a fresh message history. Cross-turn memory
@@ -131,11 +142,25 @@ export class AgentCore {
               ...(result.is_error ? { is_error: true } : {}),
             })),
           });
+
+          // Check if token usage is approaching the context window limit.
+          // We check here (after appending tool results) so the assessment
+          // includes the full cost of the current round-trip. If over the
+          // threshold, compact before the next API call.
+          const tokenFraction = response.usage.input_tokens / MODEL_CONTEXT_WINDOW;
+          if (tokenFraction > this.config.memory.compactThreshold) {
+            const compacted = this.compactMessages(messages);
+            if (compacted === null) {
+              throw new Error(
+                `Context window exceeded and cannot be compacted further ` +
+                `(${response.usage.input_tokens.toLocaleString()}/${MODEL_CONTEXT_WINDOW.toLocaleString()} tokens used).`,
+              );
+            }
+            messages.splice(0, messages.length, ...compacted);
+          }
         } else {
           // Covers 'end_turn', 'max_tokens', 'stop_sequence', and null.
           // In all cases we deliver whatever text the model produced so far.
-          // Context-overflow recovery (max_tokens → compaction → retry) is
-          // added in S3-3.
           const textBlock = response.content.find(
             (block): block is Anthropic.TextBlock => block.type === 'text',
           );
@@ -179,5 +204,34 @@ export class AgentCore {
     }
     // Unreachable: the loop always exits via return or throw.
     throw new Error('unreachable');
+  }
+
+  /**
+   * Compacts the message history to reduce token usage.
+   *
+   * Keeps the `memory.keepRecentMessages` most recent messages and prepends a
+   * single stub message indicating that earlier context was omitted.
+   *
+   * Returns `null` when there are not enough messages to evict anything —
+   * the caller should treat this as an unresolvable context overflow.
+   *
+   * Full compaction (model-generated summary + Compact Store persistence) is
+   * implemented by the Memory Manager in Sprint 5. This is the minimal
+   * in-agent fallback that keeps the loop alive during long tool-use chains.
+   */
+  private compactMessages(
+    messages: Anthropic.MessageParam[],
+  ): Anthropic.MessageParam[] | null {
+    const keep = this.config.memory.keepRecentMessages;
+    if (messages.length <= keep) {
+      return null; // nothing left to evict
+    }
+    return [
+      {
+        role: 'user',
+        content: '[Earlier context has been compacted to stay within the context window.]',
+      },
+      ...messages.slice(-keep),
+    ];
   }
 }

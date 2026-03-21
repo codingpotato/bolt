@@ -297,13 +297,13 @@ I want the Agent Core to call the Anthropic API with the current context and too
 so that the model can respond with text and tool calls.
 
 Acceptance Criteria:
-- [ ] Agent Core accepts a Channel and ToolBus at construction
-- [ ] On each turn: builds message array, calls Anthropic API, processes response
-- [ ] Tool calls in the response are dispatched via ToolBus
-- [ ] Tool results are appended to messages and the API is called again
-- [ ] Loop terminates when the model returns a text response with no tool calls
-- [ ] Final response is delivered via channel.send()
-- [ ] Unit tests mock the Anthropic SDK — no real API calls
+- [x] Agent Core accepts a Channel and ToolBus at construction
+- [x] On each turn: builds message array, calls Anthropic API, processes response
+- [x] Tool calls in the response are dispatched via ToolBus
+- [x] Tool results are appended to messages and the API is called again
+- [x] Loop terminates when the model returns a text response with no tool calls
+- [x] Final response is delivered via channel.send()
+- [x] Unit tests mock the Anthropic SDK — no real API calls
 ```
 
 **S3-2: API error handling and retries**

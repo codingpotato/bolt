@@ -77,11 +77,18 @@ const CREDENTIAL_FIELDS = [
   'ANTHROPIC_SESSION_TOKEN',
   'DISCORD_BOT_TOKEN',
   'BOLT_LOCAL_API_KEY',
-];
+] as const;
 
-type DeepPartial<T> = T extends object
-  ? { [K in keyof T]?: DeepPartial<T[K]> }
-  : T;
+// Top-level keys recognized in .bolt/config.json
+const KNOWN_TOP_LEVEL_KEYS = new Set([
+  'model',
+  'local',
+  'memory',
+  'tasks',
+  'tools',
+  'codeWorkflows',
+  'channels',
+]);
 
 function deepMerge(
   base: Record<string, unknown>,
@@ -111,7 +118,7 @@ function deepMerge(
   return result;
 }
 
-function loadConfigFile(dataDir: string): DeepPartial<Config> {
+function loadConfigFile(dataDir: string): Record<string, unknown> {
   const filePath = join(dataDir, 'config.json');
   let raw: string;
   try {
@@ -128,23 +135,39 @@ function loadConfigFile(dataDir: string): DeepPartial<Config> {
     parsed = JSON.parse(raw) as Record<string, unknown>;
   } catch {
     throw new ConfigError(
-      `Failed to parse .bolt/config.json: invalid JSON`
+      `Failed to parse ${filePath}: invalid JSON`
     );
   }
 
   for (const field of CREDENTIAL_FIELDS) {
     if (Object.prototype.hasOwnProperty.call(parsed, field)) {
       throw new ConfigError(
-        `Credential field "${field}" must not be stored in .bolt/config.json — use environment variables instead`
+        `Credential field "${field}" must not be stored in ${filePath} — use environment variables instead`
       );
     }
   }
 
-  return parsed as DeepPartial<Config>;
+  for (const key of Object.keys(parsed)) {
+    if (!KNOWN_TOP_LEVEL_KEYS.has(key)) {
+      process.stderr.write(
+        `Warning: unknown config key "${key}" in ${filePath} will be ignored\n`
+      );
+    }
+  }
+
+  return parsed;
 }
 
 function applyEnvOverrides(config: Config): Config {
-  const result = { ...config, local: { ...config.local } };
+  const result: Config = {
+    ...config,
+    local: { ...config.local },
+    memory: { ...config.memory },
+    tasks: { ...config.tasks },
+    tools: { ...config.tools, allowedTools: [...config.tools.allowedTools] },
+    codeWorkflows: { ...config.codeWorkflows },
+    channels: { web: { ...config.channels.web } },
+  };
 
   if (process.env['BOLT_MODEL']) {
     result.model = process.env['BOLT_MODEL'];
@@ -162,6 +185,14 @@ function applyEnvOverrides(config: Config): Config {
   return result;
 }
 
+function validatePositiveInteger(value: number, field: string): void {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new ConfigError(
+      `${field} must be a positive integer, got: ${value}`
+    );
+  }
+}
+
 function validate(config: Config): void {
   const { compactThreshold } = config.memory;
   if (compactThreshold < 0 || compactThreshold > 1) {
@@ -169,6 +200,11 @@ function validate(config: Config): void {
       `config.memory.compactThreshold must be between 0.0 and 1.0, got: ${compactThreshold}`
     );
   }
+
+  validatePositiveInteger(config.memory.keepRecentMessages, 'config.memory.keepRecentMessages');
+  validatePositiveInteger(config.tasks.maxSubtaskDepth, 'config.tasks.maxSubtaskDepth');
+  validatePositiveInteger(config.tasks.maxRetries, 'config.tasks.maxRetries');
+  validatePositiveInteger(config.codeWorkflows.testFixRetries, 'config.codeWorkflows.testFixRetries');
 
   const validLogLevels = ['debug', 'info', 'warn', 'error'];
   if (!validLogLevels.includes(config.logLevel)) {
@@ -205,11 +241,13 @@ function validate(config: Config): void {
   }
 }
 
-export function resolveConfig(dataDir = '.bolt'): Config {
+export function resolveConfig(): Config {
+  // #1: Resolve dataDir from env first so config file is read from the right place
+  const dataDir = process.env['BOLT_DATA_DIR'] ?? '.bolt';
   const fileConfig = loadConfigFile(dataDir);
   const merged = deepMerge(
     DEFAULTS as unknown as Record<string, unknown>,
-    fileConfig as Record<string, unknown>
+    fileConfig
   ) as unknown as Config;
   const withEnv = applyEnvOverrides(merged);
   validate(withEnv);

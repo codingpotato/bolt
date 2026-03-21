@@ -5,8 +5,9 @@ vi.mock('node:fs');
 
 describe('resolveConfig', () => {
   const originalEnv = process.env;
+  let readFileSync: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     process.env = { ...originalEnv };
     // Remove all bolt-related env vars for a clean slate
@@ -17,19 +18,25 @@ describe('resolveConfig', () => {
     delete process.env['BOLT_LOCAL_API_KEY'];
     delete process.env['DISCORD_BOT_TOKEN'];
     delete process.env['DISCORD_CHANNEL_ID'];
+
+    // Default: no config file present
+    const fs = await import('node:fs');
+    readFileSync = vi.mocked(fs.readFileSync);
+    readFileSync.mockImplementation(() => {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    });
   });
 
   afterEach(() => {
     process.env = originalEnv;
   });
 
-  describe('defaults', () => {
-    it('returns defaults when no config file and no env vars', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockImplementation(() => {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      });
+  function mockConfigFile(contents: unknown): void {
+    readFileSync.mockReturnValue(JSON.stringify(contents));
+  }
 
+  describe('defaults', () => {
+    it('returns defaults when no config file and no env vars', () => {
       const config = resolveConfig();
 
       expect(config.model).toBe('claude-opus-4-6');
@@ -51,14 +58,11 @@ describe('resolveConfig', () => {
   });
 
   describe('config file merging', () => {
-    it('overrides defaults with config file values', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          memory: { compactThreshold: 0.9, keepRecentMessages: 20 },
-        })
-      );
+    it('overrides defaults with config file values', () => {
+      mockConfigFile({
+        model: 'claude-haiku-4-5-20251001',
+        memory: { compactThreshold: 0.9, keepRecentMessages: 20 },
+      });
 
       const config = resolveConfig();
 
@@ -70,58 +74,56 @@ describe('resolveConfig', () => {
       expect(config.tasks.maxRetries).toBe(3);
     });
 
-    it('missing config file is not an error', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockImplementation(() => {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      });
-
+    it('missing config file is not an error', () => {
       expect(() => resolveConfig()).not.toThrow();
     });
 
-    it('rejects config file that contains credential fields', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ ANTHROPIC_API_KEY: 'sk-test' })
-      );
-
+    it('rejects config file that contains ANTHROPIC_API_KEY', () => {
+      mockConfigFile({ ANTHROPIC_API_KEY: 'sk-test' });
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
-    it('rejects config file with ANTHROPIC_SESSION_TOKEN', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ ANTHROPIC_SESSION_TOKEN: 'tok' })
-      );
-
+    it('rejects config file with ANTHROPIC_SESSION_TOKEN', () => {
+      mockConfigFile({ ANTHROPIC_SESSION_TOKEN: 'tok' });
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
-    it('rejects config file with DISCORD_BOT_TOKEN', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ DISCORD_BOT_TOKEN: 'token' })
-      );
-
+    it('rejects config file with DISCORD_BOT_TOKEN', () => {
+      mockConfigFile({ DISCORD_BOT_TOKEN: 'token' });
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
-    it('rejects config file with BOLT_LOCAL_API_KEY', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ BOLT_LOCAL_API_KEY: 'key' })
+    it('rejects config file with BOLT_LOCAL_API_KEY', () => {
+      mockConfigFile({ BOLT_LOCAL_API_KEY: 'key' });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
+    it('warns about unknown top-level keys but does not throw', () => {
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      mockConfigFile({ mmodel: 'typo', model: 'claude-opus-4-6' });
+
+      expect(() => resolveConfig()).not.toThrow();
+      expect(stderrSpy).toHaveBeenCalledWith(
+        expect.stringContaining('"mmodel"')
       );
 
-      expect(() => resolveConfig()).toThrow(ConfigError);
+      stderrSpy.mockRestore();
+    });
+
+    it('does not warn for known top-level keys', () => {
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      mockConfigFile({ model: 'claude-opus-4-6', memory: { compactThreshold: 0.7 } });
+
+      resolveConfig();
+      expect(stderrSpy).not.toHaveBeenCalled();
+
+      stderrSpy.mockRestore();
     });
   });
 
   describe('environment variable overrides', () => {
-    it('BOLT_MODEL overrides config file model', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ model: 'claude-haiku-4-5-20251001' })
-      );
+    it('BOLT_MODEL overrides config file model', () => {
+      mockConfigFile({ model: 'claude-haiku-4-5-20251001' });
       process.env['BOLT_MODEL'] = 'claude-sonnet-4-6';
 
       const config = resolveConfig();
@@ -129,11 +131,18 @@ describe('resolveConfig', () => {
       expect(config.model).toBe('claude-sonnet-4-6');
     });
 
-    it('BOLT_DATA_DIR overrides default dataDir', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockImplementation(() => {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      });
+    it('BOLT_DATA_DIR determines which config file is read', () => {
+      process.env['BOLT_DATA_DIR'] = '/custom/dir';
+
+      resolveConfig();
+
+      expect(readFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('/custom/dir'),
+        'utf8'
+      );
+    });
+
+    it('BOLT_DATA_DIR is reflected in returned dataDir', () => {
       process.env['BOLT_DATA_DIR'] = '/tmp/mydata';
 
       const config = resolveConfig();
@@ -141,11 +150,7 @@ describe('resolveConfig', () => {
       expect(config.dataDir).toBe('/tmp/mydata');
     });
 
-    it('BOLT_LOG_LEVEL overrides default logLevel', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockImplementation(() => {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      });
+    it('BOLT_LOG_LEVEL overrides default logLevel', () => {
       process.env['BOLT_LOG_LEVEL'] = 'debug';
 
       const config = resolveConfig();
@@ -153,90 +158,92 @@ describe('resolveConfig', () => {
       expect(config.logLevel).toBe('debug');
     });
 
-    it('BOLT_LOCAL_ENDPOINT overrides local.endpoint', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ local: { endpoint: 'http://localhost:9000' } })
-      );
+    it('BOLT_LOCAL_ENDPOINT overrides local.endpoint from config file', () => {
+      mockConfigFile({ local: { endpoint: 'http://localhost:9000' } });
       process.env['BOLT_LOCAL_ENDPOINT'] = 'http://localhost:8080';
 
       const config = resolveConfig();
 
       expect(config.local.endpoint).toBe('http://localhost:8080');
     });
+
+    it('mutating returned config does not affect nested objects', () => {
+      const config = resolveConfig();
+      config.memory.compactThreshold = 0.99;
+      config.tools.allowedTools.push('bash');
+
+      const config2 = resolveConfig();
+      expect(config2.memory.compactThreshold).toBe(0.8);
+      expect(config2.tools.allowedTools).toEqual([]);
+    });
   });
 
   describe('validation', () => {
-    it('throws ConfigError with descriptive message for invalid compactThreshold', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ memory: { compactThreshold: 1.5 } })
-      );
+    it('throws ConfigError with descriptive message for invalid compactThreshold', () => {
+      mockConfigFile({ memory: { compactThreshold: 1.5 } });
 
       expect(() => resolveConfig()).toThrow(
         'config.memory.compactThreshold must be between 0.0 and 1.0, got: 1.5'
       );
     });
 
-    it('throws ConfigError for compactThreshold below 0', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ memory: { compactThreshold: -0.1 } })
-      );
-
+    it('throws ConfigError for compactThreshold below 0', () => {
+      mockConfigFile({ memory: { compactThreshold: -0.1 } });
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
-    it('throws ConfigError for invalid logLevel', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockImplementation(() => {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      });
+    it('throws ConfigError for invalid logLevel', () => {
       process.env['BOLT_LOG_LEVEL'] = 'verbose';
-
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
-    it('throws ConfigError for invalid searchBackend', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ memory: { searchBackend: 'neural' } })
-      );
-
+    it('throws ConfigError for invalid searchBackend', () => {
+      mockConfigFile({ memory: { searchBackend: 'neural' } });
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
-    it('throws ConfigError for invalid web channel mode', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ channels: { web: { mode: 'grpc' } } })
-      );
-
+    it('throws ConfigError for invalid web channel mode', () => {
+      mockConfigFile({ channels: { web: { mode: 'grpc' } } });
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
-    it('throws ConfigError for non-integer port', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ channels: { web: { port: 3.5 } } })
-      );
-
+    it('throws ConfigError for non-integer port', () => {
+      mockConfigFile({ channels: { web: { port: 3.5 } } });
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
-    it('throws ConfigError for negative timeoutMs', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue(
-        JSON.stringify({ tools: { timeoutMs: -1 } })
-      );
-
+    it('throws ConfigError for negative timeoutMs', () => {
+      mockConfigFile({ tools: { timeoutMs: -1 } });
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
-    it('throws ConfigError for invalid JSON in config file', async () => {
-      const { readFileSync } = await import('node:fs');
-      vi.mocked(readFileSync).mockReturnValue('{not valid json}');
+    it('throws ConfigError for invalid JSON in config file', () => {
+      readFileSync.mockReturnValue('{not valid json}');
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
 
+    it('throws ConfigError for non-integer keepRecentMessages', () => {
+      mockConfigFile({ memory: { keepRecentMessages: 5.5 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
+    it('throws ConfigError for zero keepRecentMessages', () => {
+      mockConfigFile({ memory: { keepRecentMessages: 0 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
+    it('throws ConfigError for non-integer maxSubtaskDepth', () => {
+      mockConfigFile({ tasks: { maxSubtaskDepth: 1.5 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
+    it('throws ConfigError for non-integer maxRetries', () => {
+      mockConfigFile({ tasks: { maxRetries: -1 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
+    it('throws ConfigError for non-integer testFixRetries', () => {
+      mockConfigFile({ codeWorkflows: { testFixRetries: 0 } });
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
   });

@@ -5,6 +5,7 @@ import type { ToolBus } from '../tools/tool-bus';
 import type { ToolContext } from '../tools/tool';
 import type { Config } from '../config/config';
 import type Anthropic from '@anthropic-ai/sdk';
+import { APIConnectionError, APIError } from '@anthropic-ai/sdk';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -53,6 +54,9 @@ function makeCtx(): ToolContext {
   return { cwd: '/tmp', log: { log: vi.fn().mockResolvedValue(undefined) } };
 }
 
+/** No-op sleep for tests — avoids real delays. */
+const noopSleep = vi.fn().mockResolvedValue(undefined);
+
 /** Minimal Usage shape satisfying the SDK type. */
 const FAKE_USAGE = {
   input_tokens: 10,
@@ -79,7 +83,7 @@ function makeTextResponse(text: string): Anthropic.Message {
     stop_reason: 'end_turn',
     stop_sequence: null,
     usage: FAKE_USAGE,
-  };
+  } as unknown as Anthropic.Message;
 }
 
 /** Build a fake Anthropic response with tool_use blocks. */
@@ -100,11 +104,11 @@ function makeToolUseResponse(
     stop_reason: 'tool_use',
     stop_sequence: null,
     usage: FAKE_USAGE,
-  };
+  } as unknown as Anthropic.Message;
 }
 
-/** Build a fake Anthropic client whose `messages.create` returns a sequence of responses. */
-function makeClient(responses: Anthropic.Message[]) {
+/** Build a fake Anthropic client whose `messages.create` returns a sequence of responses or throws errors. */
+function makeClient(responses: Array<Anthropic.Message | Error>) {
   let callCount = 0;
   const createSpy = vi.fn().mockImplementation(() => {
     const response = responses[callCount];
@@ -112,6 +116,9 @@ function makeClient(responses: Anthropic.Message[]) {
       throw new Error(`Unexpected extra API call (call #${callCount})`);
     }
     callCount++;
+    if (response instanceof Error) {
+      return Promise.reject(response);
+    }
     return Promise.resolve(response);
   });
 
@@ -119,6 +126,21 @@ function makeClient(responses: Anthropic.Message[]) {
     client: { messages: { create: createSpy } } as unknown as Anthropic,
     createSpy,
   };
+}
+
+/** Build a 5xx API error (retryable). */
+function make5xxError(status = 500): APIError {
+  return APIError.generate(status, undefined, `HTTP ${status}`, new Headers()) as APIError;
+}
+
+/** Build a 4xx API error (non-retryable). */
+function make4xxError(status = 401): APIError {
+  return APIError.generate(status, undefined, `HTTP ${status}`, new Headers()) as APIError;
+}
+
+/** Build a network/connection error (retryable). */
+function makeNetworkError(): APIConnectionError {
+  return new APIConnectionError({ message: 'ECONNREFUSED' });
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +152,7 @@ describe('AgentCore', () => {
 
   beforeEach(() => {
     ctx = makeCtx();
+    noopSleep.mockClear();
   });
 
   // ── basic text response ───────────────────────────────────────────────────
@@ -446,6 +469,170 @@ describe('AgentCore', () => {
       await agent.handleTurn('direct call');
 
       expect(sendSpy).toHaveBeenCalledWith('direct response');
+    });
+  });
+
+  // ── API error handling and retries ────────────────────────────────────────
+
+  describe('API error handling and retries', () => {
+    it('retries on a 5xx error and succeeds on the next attempt', async () => {
+      const { client, createSpy } = makeClient([make5xxError(500), makeTextResponse('ok')]);
+      const { channel, sendSpy } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledTimes(2);
+      expect(sendSpy).toHaveBeenCalledWith('ok');
+    });
+
+    it('retries on a network/connection error and succeeds on the next attempt', async () => {
+      const { client, createSpy } = makeClient([makeNetworkError(), makeTextResponse('ok')]);
+      const { channel, sendSpy } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledTimes(2);
+      expect(sendSpy).toHaveBeenCalledWith('ok');
+    });
+
+    it('surfaces error via channel.send() after exhausting all retries', async () => {
+      // 4 failures = initial attempt + 3 retries exhausted
+      const { client, createSpy } = makeClient([
+        make5xxError(503),
+        make5xxError(503),
+        make5xxError(503),
+        make5xxError(503),
+      ]);
+      const { channel, sendSpy } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledTimes(4);
+      expect(sendSpy).toHaveBeenCalledOnce();
+      expect(sendSpy.mock.calls[0]?.[0]).toMatch(/^Error:/);
+    });
+
+    it('does not retry on a 4xx error — fails immediately', async () => {
+      const { client, createSpy } = makeClient([make4xxError(401)]);
+      const { channel, sendSpy } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledOnce();
+      expect(noopSleep).not.toHaveBeenCalled();
+      expect(sendSpy).toHaveBeenCalledOnce();
+      expect(sendSpy.mock.calls[0]?.[0]).toMatch(/^Error:/);
+    });
+
+    it('does not retry on a 400 bad-request error', async () => {
+      const { client, createSpy } = makeClient([make4xxError(400)]);
+      const { channel, sendSpy } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledOnce();
+      expect(noopSleep).not.toHaveBeenCalled();
+      expect(sendSpy.mock.calls[0]?.[0]).toMatch(/^Error:/);
+    });
+
+    it('retries up to MAX_RETRIES (3) times before giving up', async () => {
+      // Exactly 3 retries (4 total calls) should be attempted before giving up.
+      const errors = [
+        makeNetworkError(),
+        makeNetworkError(),
+        makeNetworkError(),
+        makeNetworkError(), // 4th failure — no more retries
+      ];
+      const { client, createSpy } = makeClient(errors);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledTimes(4);
+      expect(noopSleep).toHaveBeenCalledTimes(3);
+    });
+
+    it('logs a warning on each retry attempt', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        const { client } = makeClient([
+          make5xxError(500),
+          make5xxError(500),
+          makeTextResponse('ok'),
+        ]);
+        const { channel } = makeChannel(['hi']);
+        const toolBus = makeToolBus();
+
+        const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+        await agent.run();
+
+        expect(warnSpy).toHaveBeenCalledTimes(2);
+        expect(warnSpy.mock.calls[0]?.[0]).toContain('[bolt]');
+        expect(warnSpy.mock.calls[0]?.[0]).toContain('attempt 1/4');
+        expect(warnSpy.mock.calls[1]?.[0]).toContain('attempt 2/4');
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it('uses exponential backoff: delays are 1000ms, 2000ms, 4000ms', async () => {
+      const { client } = makeClient([
+        makeNetworkError(),
+        makeNetworkError(),
+        makeNetworkError(),
+        makeTextResponse('ok'),
+      ]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      await agent.run();
+
+      expect(noopSleep).toHaveBeenCalledTimes(3);
+      expect(noopSleep).toHaveBeenNthCalledWith(1, 1000);
+      expect(noopSleep).toHaveBeenNthCalledWith(2, 2000);
+      expect(noopSleep).toHaveBeenNthCalledWith(3, 4000);
+    });
+
+    it('does not call sleep when no retry is needed', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      await agent.run();
+
+      expect(noopSleep).not.toHaveBeenCalled();
+    });
+
+    it('retries mid-conversation tool-call loop independently of prior turns', async () => {
+      // Turn 1: succeeds immediately. Turn 2: first API call fails then succeeds.
+      const { client, createSpy } = makeClient([
+        makeTextResponse('turn 1 done'),
+        make5xxError(502),
+        makeTextResponse('turn 2 done'),
+      ]);
+      const { channel, sendSpy } = makeChannel(['turn 1', 'turn 2']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledTimes(3);
+      expect(sendSpy).toHaveBeenNthCalledWith(1, 'turn 1 done');
+      expect(sendSpy).toHaveBeenNthCalledWith(2, 'turn 2 done');
     });
   });
 });

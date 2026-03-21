@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import Anthropic from '@anthropic-ai/sdk';
 import { resolveAuth, createAnthropicClient, AuthError } from './auth';
 
 vi.mock('@anthropic-ai/sdk');
@@ -49,15 +50,9 @@ describe('resolveAuth', () => {
       stderrSpy.mockRestore();
     });
 
-    it('exits with a clear error when neither api-key nor session token nor local endpoint is set', () => {
-      expect(() => resolveAuth()).toThrow(AuthError);
-      expect(() => resolveAuth()).toThrow('Authentication required');
-    });
-
     it('error message does not contain credential values', () => {
       process.env['ANTHROPIC_API_KEY'] = 'secret-key-value';
       process.env['ANTHROPIC_SESSION_TOKEN'] = 'secret-token-value';
-      // Both set — no error, but verify the warning doesn't leak credentials
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       resolveAuth();
       const warningOutput = stderrSpy.mock.calls.map(c => String(c[0])).join('');
@@ -84,18 +79,28 @@ describe('resolveAuth', () => {
       expect(auth.credential).toBe('local-api-key');
     });
 
-    it('api-key takes precedence over local', () => {
+    it('api-key takes precedence over local, with a warning', () => {
       process.env['ANTHROPIC_API_KEY'] = 'sk-test-key';
       process.env['BOLT_LOCAL_ENDPOINT'] = 'http://localhost:8080';
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const auth = resolveAuth();
       expect(auth.mode).toBe('api-key');
+      expect(stderrSpy).toHaveBeenCalledWith(
+        expect.stringContaining('BOLT_LOCAL_ENDPOINT')
+      );
+      stderrSpy.mockRestore();
     });
 
-    it('subscription takes precedence over local', () => {
+    it('subscription takes precedence over local, with a warning', () => {
       process.env['ANTHROPIC_SESSION_TOKEN'] = 'sess-token-123';
       process.env['BOLT_LOCAL_ENDPOINT'] = 'http://localhost:8080';
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const auth = resolveAuth();
       expect(auth.mode).toBe('subscription');
+      expect(stderrSpy).toHaveBeenCalledWith(
+        expect.stringContaining('BOLT_LOCAL_ENDPOINT')
+      );
+      stderrSpy.mockRestore();
     });
 
     it('localEndpoint is passed by value in returned AuthConfig', () => {
@@ -108,6 +113,11 @@ describe('resolveAuth', () => {
   });
 
   describe('no credentials', () => {
+    it('throws AuthError when no credentials are set', () => {
+      expect(() => resolveAuth()).toThrow(AuthError);
+      expect(() => resolveAuth()).toThrow('Authentication required');
+    });
+
     it('throws AuthError with message listing all three options', () => {
       let error: unknown;
       try {
@@ -125,75 +135,48 @@ describe('resolveAuth', () => {
 });
 
 describe('createAnthropicClient', () => {
-  it('constructs client with apiKey for api-key mode', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const MockAnthropicConstructor = vi.mocked(Anthropic);
-    MockAnthropicConstructor.mockClear();
+  beforeEach(() => {
+    vi.mocked(Anthropic).mockClear();
+  });
 
+  it('constructs client with apiKey for api-key mode', () => {
     createAnthropicClient({ mode: 'api-key', credential: 'sk-test-key' });
-
-    expect(MockAnthropicConstructor).toHaveBeenCalledWith(
+    expect(vi.mocked(Anthropic)).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: 'sk-test-key' })
     );
   });
 
-  it('constructs client with credential for subscription mode', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const MockAnthropicConstructor = vi.mocked(Anthropic);
-    MockAnthropicConstructor.mockClear();
-
+  it('constructs client with credential for subscription mode', () => {
     createAnthropicClient({ mode: 'subscription', credential: 'sess-token-123' });
-
-    expect(MockAnthropicConstructor).toHaveBeenCalledWith(
+    expect(vi.mocked(Anthropic)).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: 'sess-token-123' })
     );
   });
 
-  it('constructs client with baseURL for local mode', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const MockAnthropicConstructor = vi.mocked(Anthropic);
-    MockAnthropicConstructor.mockClear();
-
-    createAnthropicClient({
-      mode: 'local',
-      credential: '',
-      localEndpoint: 'http://localhost:8080',
-    });
-
-    expect(MockAnthropicConstructor).toHaveBeenCalledWith(
+  it('constructs client with baseURL for local mode', () => {
+    createAnthropicClient({ mode: 'local', credential: '', localEndpoint: 'http://localhost:8080' });
+    expect(vi.mocked(Anthropic)).toHaveBeenCalledWith(
       expect.objectContaining({ baseURL: 'http://localhost:8080' })
     );
   });
 
-  it('uses local credential as apiKey when set in local mode', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const MockAnthropicConstructor = vi.mocked(Anthropic);
-    MockAnthropicConstructor.mockClear();
-
-    createAnthropicClient({
-      mode: 'local',
-      credential: 'local-key',
-      localEndpoint: 'http://localhost:8080',
-    });
-
-    expect(MockAnthropicConstructor).toHaveBeenCalledWith(
+  it('uses local credential as apiKey when set in local mode', () => {
+    createAnthropicClient({ mode: 'local', credential: 'local-key', localEndpoint: 'http://localhost:8080' });
+    expect(vi.mocked(Anthropic)).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: 'local-key' })
     );
   });
 
-  it('uses placeholder apiKey when local mode credential is empty', async () => {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const MockAnthropicConstructor = vi.mocked(Anthropic);
-    MockAnthropicConstructor.mockClear();
-
-    createAnthropicClient({
-      mode: 'local',
-      credential: '',
-      localEndpoint: 'http://localhost:8080',
-    });
-
-    const callArg = MockAnthropicConstructor.mock.calls[0]?.[0] as Record<string, unknown>;
+  it('uses placeholder apiKey when local mode credential is empty', () => {
+    createAnthropicClient({ mode: 'local', credential: '', localEndpoint: 'http://localhost:8080' });
+    const callArg = vi.mocked(Anthropic).mock.calls[0]?.[0] as Record<string, unknown>;
     expect(typeof callArg?.['apiKey']).toBe('string');
     expect((callArg?.['apiKey'] as string).length).toBeGreaterThan(0);
+  });
+
+  it('throws AuthError when local mode is missing localEndpoint', () => {
+    expect(() =>
+      createAnthropicClient({ mode: 'local', credential: '' })
+    ).toThrow(AuthError);
   });
 });

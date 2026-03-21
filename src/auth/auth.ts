@@ -34,10 +34,20 @@ export function resolveAuth(): AuthConfig {
         'Warning: both ANTHROPIC_API_KEY and ANTHROPIC_SESSION_TOKEN are set; using ANTHROPIC_API_KEY\n'
       );
     }
+    if (localEndpoint) {
+      process.stderr.write(
+        'Warning: both ANTHROPIC_API_KEY and BOLT_LOCAL_ENDPOINT are set; using ANTHROPIC_API_KEY\n'
+      );
+    }
     return { mode: 'api-key', credential: apiKey };
   }
 
   if (sessionToken) {
+    if (localEndpoint) {
+      process.stderr.write(
+        'Warning: both ANTHROPIC_SESSION_TOKEN and BOLT_LOCAL_ENDPOINT are set; using ANTHROPIC_SESSION_TOKEN\n'
+      );
+    }
     return { mode: 'subscription', credential: sessionToken };
   }
 
@@ -58,6 +68,9 @@ export function resolveAuth(): AuthConfig {
  */
 export function createAnthropicClient(authConfig: AuthConfig): Anthropic {
   if (authConfig.mode === 'local') {
+    if (!authConfig.localEndpoint) {
+      throw new AuthError('Local mode requires localEndpoint to be set');
+    }
     return new Anthropic({
       baseURL: authConfig.localEndpoint,
       apiKey: authConfig.credential || 'local',

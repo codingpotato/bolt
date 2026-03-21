@@ -39,13 +39,20 @@ export class AgentCore {
    * then deliver the final response.
    */
   async handleTurn(userMessage: string): Promise<void> {
+    // Each user turn starts with a fresh message history. Cross-turn memory
+    // (persisting context across multiple turns in the same run() session) is
+    // handled by the Memory Manager introduced in Sprint 5.
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: userMessage }];
+
+    // Tool definitions are stable for the lifetime of a turn — hoist the call
+    // outside the loop to avoid redundant work on every round-trip.
+    const tools = this.toolBus.getAnthropicDefinitions() as Anthropic.Tool[];
 
     while (true) {
       const response = await this.client.messages.create({
         model: this.config.model,
         max_tokens: MAX_TOKENS,
-        tools: this.toolBus.getAnthropicDefinitions() as Anthropic.Tool[],
+        tools,
         messages,
       });
 
@@ -76,7 +83,10 @@ export class AgentCore {
           })),
         });
       } else {
-        // end_turn, max_tokens, stop_sequence — deliver whatever text we have
+        // Covers 'end_turn', 'max_tokens', 'stop_sequence', and null.
+        // In all cases we deliver whatever text the model produced so far.
+        // Context-overflow recovery (max_tokens → compaction → retry) is
+        // added in S3-3.
         const textBlock = response.content.find(
           (block): block is Anthropic.TextBlock => block.type === 'text',
         );

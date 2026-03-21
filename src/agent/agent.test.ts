@@ -61,7 +61,11 @@ const FAKE_USAGE = {
   cache_read_input_tokens: null,
 } as unknown as Anthropic.Usage;
 
-/** Build a fake Anthropic text response (no tool calls). */
+/**
+ * Build a fake Anthropic text response (no tool calls).
+ * Pass an empty string to produce a response with no content blocks at all,
+ * which exercises the "no text block" branch in AgentCore.
+ */
 function makeTextResponse(text: string): Anthropic.Message {
   const content = text
     ? ([{ type: 'text', text, citations: [] }] as unknown as Anthropic.ContentBlock[])
@@ -344,6 +348,35 @@ describe('AgentCore', () => {
       expect(sendSpy).toHaveBeenCalledWith('All done.');
     });
 
+    it('accumulates full message history across multiple tool call rounds', async () => {
+      const round1 = makeToolUseResponse([{ id: 'tu_1', name: 'bash', input: { command: 'ls' } }]);
+      const round2 = makeToolUseResponse([{ id: 'tu_2', name: 'bash', input: { command: 'pwd' } }]);
+      const final = makeTextResponse('Done.');
+
+      const { client, createSpy } = makeClient([round1, round2, final]);
+      const { channel } = makeChannel(['go']);
+
+      const toolBus = {
+        getAnthropicDefinitions: vi.fn().mockReturnValue([]),
+        dispatchAll: vi
+          .fn()
+          .mockResolvedValueOnce([{ id: 'tu_1', content: '{"stdout":"a"}' }])
+          .mockResolvedValueOnce([{ id: 'tu_2', content: '{"stdout":"/home"}' }]),
+      } as unknown as ToolBus;
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      // Third call should carry all five messages: user + (assistant + tool_result) × 2
+      const thirdCallArg = createSpy.mock.calls[2]?.[0] as { messages: Anthropic.MessageParam[] };
+      expect(thirdCallArg.messages).toHaveLength(5);
+      expect(thirdCallArg.messages[0]).toMatchObject({ role: 'user' });
+      expect(thirdCallArg.messages[1]).toMatchObject({ role: 'assistant' }); // round 1 tool_use
+      expect(thirdCallArg.messages[2]).toMatchObject({ role: 'user' });      // round 1 tool_result
+      expect(thirdCallArg.messages[3]).toMatchObject({ role: 'assistant' }); // round 2 tool_use
+      expect(thirdCallArg.messages[4]).toMatchObject({ role: 'user' });      // round 2 tool_result
+    });
+
     it('includes is_error flag in tool_result when tool failed', async () => {
       const toolUseResponse = makeToolUseResponse([
         { id: 'tu_1', name: 'bash', input: { command: 'fail' } },
@@ -364,6 +397,40 @@ describe('AgentCore', () => {
         content: Array<{ is_error: boolean }>;
       };
       expect(toolResultTurn.content[0]?.is_error).toBe(true);
+    });
+  });
+
+  // ── stop_reason edge cases ────────────────────────────────────────────────
+
+  describe('stop_reason edge cases', () => {
+    it('delivers text when stop_reason is null', async () => {
+      const nullStopResponse: Anthropic.Message = {
+        ...makeTextResponse('partial'),
+        stop_reason: null,
+      };
+      const { client } = makeClient([nullStopResponse]);
+      const { channel, sendSpy } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      expect(sendSpy).toHaveBeenCalledWith('partial');
+    });
+
+    it('delivers text when stop_reason is max_tokens', async () => {
+      const maxTokensResponse: Anthropic.Message = {
+        ...makeTextResponse('truncated'),
+        stop_reason: 'max_tokens',
+      };
+      const { client } = makeClient([maxTokensResponse]);
+      const { channel, sendSpy } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      expect(sendSpy).toHaveBeenCalledWith('truncated');
     });
   });
 

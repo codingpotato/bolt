@@ -22,7 +22,9 @@ function validateRequired(schema: JSONSchema, input: unknown): string | null {
   }
   const obj = input as Record<string, unknown>;
   for (const field of required) {
-    if (!(field in obj)) {
+    // Treat absent keys and null/undefined values as missing — a required
+    // field must carry a real value before it reaches execute().
+    if (!(field in obj) || obj[field] == null) {
       return `required field "${field}" is missing`;
     }
   }
@@ -121,43 +123,37 @@ export class ToolBus {
   /**
    * Dispatch multiple tool calls, respecting the `sequential` flag.
    *
-   * - Non-sequential calls are launched concurrently with Promise.all.
-   * - Sequential calls (tool.sequential === true) are awaited one at a time
-   *   in the order they appear in `calls`.
+   * - Non-sequential calls start immediately and run concurrently.
+   * - Sequential calls (tool.sequential === true) share a mutex: each waits
+   *   for the previous sequential call to complete before starting, but does
+   *   NOT block non-sequential calls running in parallel.
    *
    * Results are returned in the same order as `calls`.
    */
   async dispatchAll(calls: ToolCall[], ctx: ToolContext): Promise<ToolResult[]> {
-    const results: ToolResult[] = new Array(calls.length) as ToolResult[];
+    // The sequential mutex is a promise chain that only sequential tools join.
+    // Non-sequential tools bypass it entirely, so they are never delayed by it.
+    let sequentialTail: Promise<void> = Promise.resolve();
 
-    // Split calls into sequential and parallel groups, preserving indices.
-    const parallelBatch: Array<{ index: number; call: ToolCall }> = [];
-    const sequentialBatch: Array<{ index: number; call: ToolCall }> = [];
-
-    for (let i = 0; i < calls.length; i++) {
-      const call = calls[i];
-      if (call === undefined) continue;
+    const dispatches = calls.map((call) => {
       const tool = this.registry.get(call.name);
       if (tool?.sequential === true) {
-        sequentialBatch.push({ index: i, call });
-      } else {
-        parallelBatch.push({ index: i, call });
+        // Chain onto the tail so this call waits for the previous sequential
+        // call to finish.  Swallow errors on the tail so a failing sequential
+        // tool does not prevent later sequential tools from starting (the
+        // rejection still propagates through the individual dispatch promise).
+        const result = sequentialTail.then(() => this.dispatch(call, ctx));
+        sequentialTail = result.then(
+          () => undefined,
+          () => undefined,
+        );
+        return result;
       }
-    }
+      // Non-sequential: start immediately, run concurrently with everything.
+      return this.dispatch(call, ctx);
+    });
 
-    // Run parallel calls concurrently
-    await Promise.all(
-      parallelBatch.map(async ({ index, call }) => {
-        results[index] = await this.dispatch(call, ctx);
-      }),
-    );
-
-    // Run sequential calls one at a time
-    for (const { index, call } of sequentialBatch) {
-      results[index] = await this.dispatch(call, ctx);
-    }
-
-    return results;
+    return Promise.all(dispatches);
   }
 
   /**

@@ -213,6 +213,30 @@ describe('ToolBus', () => {
     });
   });
 
+  // ── input validation — null guard ─────────────────────────────────────────
+
+  describe('validateRequired — null guard', () => {
+    it('returns ToolError when a required field is null', async () => {
+      bus.register(makeTool('greet', async () => ({ ok: true })));
+      const result = await bus.dispatch(makeCall('greet', { value: null }), ctx);
+      expect(result.is_error).toBe(true);
+      expect(result.content).toMatch(/required/i);
+    });
+  });
+
+  // ── register — duplicate name ──────────────────────────────────────────────
+
+  describe('register — duplicate name', () => {
+    it('second registration with the same name overwrites the first', () => {
+      const toolV1 = makeTool('greet', async () => ({ version: 1 }));
+      const toolV2 = makeTool('greet', async () => ({ version: 2 }));
+      bus.register(toolV1);
+      bus.register(toolV2);
+      expect(bus.list()).toHaveLength(1);
+      expect(bus.list()[0]).toBe(toolV2);
+    });
+  });
+
   // ── dispatchAll (S2-3 concurrency) ────────────────────────────────────────
 
   describe('dispatchAll', () => {
@@ -297,6 +321,66 @@ describe('ToolBus', () => {
       );
       expect(results[0]?.id).toBe('1');
       expect(results[1]?.id).toBe('2');
+    });
+
+    it('sequential tool at index 0 starts before slow parallel tool at index 1 completes', async () => {
+      // Proves the sequential-mutex approach: seq's dispatch is scheduled as a
+      // microtask immediately (not gated behind all parallel calls completing).
+      // With the old batch-split impl, seq would only start after par finished.
+      const seqStarted: boolean[] = [];
+      let releasePar!: () => void;
+
+      const toolSeq = makeTool(
+        'seq',
+        async () => {
+          seqStarted.push(true);
+          return {};
+        },
+        true /* sequential */,
+      );
+
+      const toolPar = makeTool('par', async () => {
+        // par blocks until the test explicitly releases it.
+        await new Promise<void>((r) => {
+          releasePar = r;
+        });
+        return {};
+      });
+
+      bus.register(toolSeq);
+      bus.register(toolPar);
+
+      // Start but don't await — let microtasks run manually.
+      const dispatchPromise = bus.dispatchAll(
+        [makeCall('seq', { value: 'x' }, '1'), makeCall('par', { value: 'y' }, '2')],
+        ctx,
+      );
+
+      // One microtask turn: seq's chained dispatch should have started.
+      await Promise.resolve();
+
+      // seq must have started even though par is still blocked.
+      expect(seqStarted).toHaveLength(1);
+
+      // Unblock par so dispatchAll can settle.
+      releasePar();
+      await dispatchPromise;
+    });
+
+    it('propagates non-ToolError exceptions thrown inside any call', async () => {
+      bus.register(makeTool('ok', async () => ({ ok: true })));
+      bus.register(
+        makeTool('crash', async () => {
+          throw new TypeError('unexpected boom');
+        }),
+      );
+
+      await expect(
+        bus.dispatchAll(
+          [makeCall('ok', { value: 'x' }, '1'), makeCall('crash', { value: 'y' }, '2')],
+          ctx,
+        ),
+      ).rejects.toThrow('unexpected boom');
     });
   });
 

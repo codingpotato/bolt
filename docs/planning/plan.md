@@ -173,10 +173,10 @@ I want a Channel interface that abstracts all inbound/outbound communication,
 so that Agent Core is decoupled from transport details.
 
 Acceptance Criteria:
-- [ ] Channel interface matches docs/design/architecture.md exactly
-- [ ] UserTurn type has content: string and metadata?: Record<string, string>
-- [ ] Interface is exported from src/channels/index.ts
-- [ ] Unit tests verify the interface contract with a mock implementation
+- [x] Channel interface matches docs/design/architecture.md exactly
+- [x] UserTurn type has content: string and metadata?: Record<string, string>
+- [x] Interface is exported from src/channels/index.ts
+- [x] Unit tests verify the interface contract with a mock implementation
 ```
 
 **S1-4: CliChannel**
@@ -186,10 +186,10 @@ I want to interact with bolt by typing messages in the terminal,
 so that I can use bolt locally without any external services.
 
 Acceptance Criteria:
-- [ ] CliChannel.receive() yields UserTurns from stdin line by line
-- [ ] CliChannel.send() writes the response to stdout
-- [ ] EOF on stdin causes receive() to complete (clean shutdown)
-- [ ] CliChannel implements the Channel interface
+- [x] CliChannel.receive() yields UserTurns from stdin line by line
+- [x] CliChannel.send() writes the response to stdout
+- [x] EOF on stdin causes receive() to complete (clean shutdown)
+- [x] CliChannel implements the Channel interface
 ```
 
 ---

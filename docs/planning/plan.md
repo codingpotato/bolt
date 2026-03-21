@@ -98,10 +98,10 @@ I want a structured audit logger that writes to .bolt/tool-audit.jsonl,
 so that all tool calls can be traced after the fact.
 
 Acceptance Criteria:
-- [ ] log(tool, input, result) appends a JSON line to .bolt/tool-audit.jsonl
-- [ ] Each entry has ts, tool, input, result fields
-- [ ] Credentials are never written (scrubbed before logging)
-- [ ] .bolt/ directory is created if it does not exist
+- [x] log(tool, input, result) appends a JSON line to .bolt/tool-audit.jsonl
+- [x] Each entry has ts, tool, input, result fields
+- [x] Credentials are never written (scrubbed before logging)
+- [x] .bolt/ directory is created if it does not exist
 ```
 
 **S0-7: CI pipeline**

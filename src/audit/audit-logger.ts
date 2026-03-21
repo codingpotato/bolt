@@ -1,13 +1,16 @@
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Credential-like field name patterns — matched case-insensitively.
-// Covers common names for API keys, tokens, secrets, passwords, and auth headers.
+// The token pattern is intentionally narrow: only compound credential tokens
+// (session, bot, auth, access, refresh, bearer, id) and the bare key "token"
+// are redacted. Pagination fields like nextPageToken are preserved.
 const CREDENTIAL_PATTERNS = [
   /api[_-]?key/i,
   /secret/i,
   /password/i,
-  /token/i,
+  /(?:session|bot|auth|access|refresh|bearer|id)[_-]?token/i,
+  /^token$/i,
   /authorization/i,
   /credential/i,
 ];
@@ -44,9 +47,19 @@ export interface ToolLogger {
 export function createAuditLogger(dataDir: string): ToolLogger {
   const auditPath = join(dataDir, 'tool-audit.jsonl');
 
+  // Lazy init: create the directory once on the first log call.
+  // Shared promise ensures concurrent first calls don't race.
+  let initPromise: Promise<void> | null = null;
+  function ensureDir(): Promise<void> {
+    if (initPromise === null) {
+      initPromise = mkdir(dataDir, { recursive: true }).then(() => undefined);
+    }
+    return initPromise;
+  }
+
   return {
     async log(tool: string, input: unknown, result: unknown): Promise<void> {
-      mkdirSync(dataDir, { recursive: true });
+      await ensureDir();
 
       const entry: AuditEntry = {
         ts: new Date().toISOString(),
@@ -55,7 +68,7 @@ export function createAuditLogger(dataDir: string): ToolLogger {
         result: scrub(result),
       };
 
-      appendFileSync(auditPath, JSON.stringify(entry) + '\n');
+      await appendFile(auditPath, JSON.stringify(entry) + '\n');
     },
   };
 }

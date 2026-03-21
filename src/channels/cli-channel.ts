@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline';
-import type { Channel, UserTurn } from './index';
+import type { Channel, UserTurn } from './channel';
 
 /**
  * Channel implementation for CLI interaction.

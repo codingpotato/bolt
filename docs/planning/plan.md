@@ -207,12 +207,12 @@ I want a Tool Bus that registers and dispatches tool calls from the model,
 so that tools are decoupled from the agent loop.
 
 Acceptance Criteria:
-- [ ] Tool interface matches docs/design/tools-system.md (name, description, inputSchema, sequential?, execute)
-- [ ] ToolBus.register() adds a tool; ToolBus.list() returns it
-- [ ] ToolBus.dispatch() calls execute() and returns the result
-- [ ] Unknown tool name returns ToolError("unknown tool")
-- [ ] ToolBus.getAnthropicDefinitions() returns correct schema format for Anthropic API
-- [ ] Tool input is validated against inputSchema before execute() is called
+- [x] Tool interface matches docs/design/tools-system.md (name, description, inputSchema, sequential?, execute)
+- [x] ToolBus.register() adds a tool; ToolBus.list() returns it
+- [x] ToolBus.dispatch() calls execute() and returns the result
+- [x] Unknown tool name returns ToolError("unknown tool")
+- [x] ToolBus.getAnthropicDefinitions() returns correct schema format for Anthropic API
+- [x] Tool input is validated against inputSchema before execute() is called
 ```
 
 **S2-2: Tool allowlisting**
@@ -222,10 +222,10 @@ I want the Tool Bus to enforce allowlists per agent scope,
 so that sub-agents and skills cannot use tools outside their permitted set.
 
 Acceptance Criteria:
-- [ ] ToolContext.allowedTools restricts which tools are dispatched
-- [ ] Dispatch of a non-allowed tool returns ToolError
-- [ ] Allowlist intersection applies when both agent and skill allowlists are set
-- [ ] undefined allowedTools means all registered tools are permitted
+- [x] ToolContext.allowedTools restricts which tools are dispatched
+- [x] Dispatch of a non-allowed tool returns ToolError
+- [x] Allowlist intersection applies when both agent and skill allowlists are set
+- [x] undefined allowedTools means all registered tools are permitted
 ```
 
 **S2-3: ToolError and audit logging**
@@ -235,10 +235,10 @@ I want tools to signal failure via ToolError and have all calls logged,
 so that failures are recoverable and the audit trail is complete.
 
 Acceptance Criteria:
-- [ ] ToolError(message, retryable) is serialized as tool_result with is_error: true
-- [ ] Every dispatch (success or failure) is written to tool-audit.jsonl
-- [ ] Concurrent tool calls run in parallel unless tool.sequential is true
-- [ ] Sequential tools run one at a time
+- [x] ToolError(message, retryable) is serialized as tool_result with is_error: true
+- [x] Every dispatch (success or failure) is written to tool-audit.jsonl
+- [x] Concurrent tool calls run in parallel unless tool.sequential is true
+- [x] Sequential tools run one at a time
 ```
 
 **S2-4: bash tool**

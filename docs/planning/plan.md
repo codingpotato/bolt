@@ -116,6 +116,24 @@ Acceptance Criteria:
 - [x] PR template is auto-loaded by GitHub from .github/pull_request_template.md
 ```
 
+**S0-8: Structured logging system**
+```
+As a developer,
+I want a structured JSON-line logger that writes operational logs to .bolt/bolt.log,
+so that I can diagnose issues and trace agent behaviour after the fact.
+
+Acceptance Criteria:
+- [x] createLogger(logLevel, logFilePath) returns a Logger with debug/info/warn/error methods
+- [x] Each log entry is a JSON line with ts, level, message, and optional meta fields
+- [x] Entries below the configured log level are silently dropped
+- [x] error-level entries are additionally written to stderr
+- [x] .bolt/ directory is created lazily on the first write
+- [x] Logger is injected into AgentCore and ToolContext; no component constructs its own logger
+- [x] createNoopLogger() is available for tests
+- [x] Unit tests cover entry format, level filtering, stderr routing, lazy mkdir, and error resilience
+- [x] Design documented in docs/design/logging.md
+```
+
 ---
 
 ## Sprint 1 — Authentication + Channel Interface + CLI Channel

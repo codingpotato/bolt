@@ -103,9 +103,11 @@ export class MemoryManager {
   ): Promise<Anthropic.MessageParam[]> {
     const allSessionIds = await this.sessionStore.listSessionIds();
 
-    // Find the prior session with the most recent last-entry timestamp
+    // Find the prior session with the most recent last-entry timestamp.
+    // Cache the entries so the winning session is not loaded twice.
     let mostRecentId: string | null = null;
     let mostRecentTs = '';
+    let mostRecentEntries: SessionEntry[] = [];
 
     for (const sessionId of allSessionIds) {
       if (sessionId === currentSessionId) continue;
@@ -116,6 +118,7 @@ export class MemoryManager {
         if (lastTs > mostRecentTs) {
           mostRecentTs = lastTs;
           mostRecentId = sessionId;
+          mostRecentEntries = entries;
         }
       } catch (err) {
         this.logger.warn('Failed to load session for chat continuity', {
@@ -127,8 +130,7 @@ export class MemoryManager {
 
     if (!mostRecentId) return [];
 
-    const entries = await this.sessionStore.loadSession(mostRecentId);
-    const recent = entries.slice(-this.memConfig.keepRecentMessages);
+    const recent = mostRecentEntries.slice(-this.memConfig.keepRecentMessages);
     return entriesToMessageParams(recent);
   }
 }

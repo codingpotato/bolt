@@ -145,10 +145,11 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
 
   it('drops oldest entries when token budget is exceeded', async () => {
     listSessionIds.mockResolvedValue(['prior-1']);
-    // Each entry has ~40 chars of content → ~10 tokens each
+    // Alternate user/assistant so entriesToMessageParams keeps all entries.
+    // Each entry has ~40 chars of content → ~10 tokens each.
     const entries = Array.from({ length: 10 }, (_, i) =>
       makeEntry({
-        role: 'user',
+        role: i % 2 === 0 ? 'user' : 'assistant',
         content: `message-content-${i}`.padEnd(40, 'x'),
         taskId: 'task-1',
         ts: `2026-03-22T10:0${i}:00.000Z`,
@@ -157,7 +158,7 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
     );
     loadSession.mockResolvedValue(entries);
 
-    // Very small token budget — should drop oldest entries
+    // Budget fits ~3 entries (30 tokens / ~10 per entry).
     const manager = makeManager(
       { listSessionIds, loadSession },
       { taskHistoryTokenBudget: 30, taskHistoryMessages: 20 },
@@ -167,11 +168,14 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
       activeTaskId: 'task-1',
     });
 
-    // Fewer than all 10 entries should be injected
+    // applyTokenBudget must drop older entries to fit within the budget
+    expect(messages.length).toBeGreaterThan(0);
     expect(messages.length).toBeLessThan(10);
-    // The most recent entry should be included
+    // The most recent entry should be retained
     const contents = messages.map((m) => String(m.content));
     expect(contents[contents.length - 1]).toContain('message-content-9');
+    // The oldest entry should have been dropped
+    expect(contents).not.toContain(entries[0]!.content);
   });
 
   it('returns empty array when no prior sessions have task entries', async () => {

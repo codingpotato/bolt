@@ -365,12 +365,12 @@ I want to create, update, list, and delete todo items,
 so that I can track my immediate work items during a session.
 
 Acceptance Criteria:
-- [ ] todo_create({ title }) returns { id }
-- [ ] todo_update({ id, status?, description? }) updates the item
-- [ ] todo_list() returns the current ordered list with ids, titles, and statuses
-- [ ] todo_delete({ id }) removes the item; ToolError if not found
-- [ ] todo_update is marked sequential: true
-- [ ] All todo tools are unit tested with mocked state
+- [x] todo_create({ title }) returns { id }
+- [x] todo_update({ id, status?, description? }) updates the item
+- [x] todo_list() returns the current ordered list with ids, titles, and statuses
+- [x] todo_delete({ id }) removes the item; ToolError if not found
+- [x] todo_update is marked sequential: true
+- [x] All todo tools are unit tested with mocked state
 ```
 
 **S4-2: Task model and serialization**

@@ -1110,4 +1110,75 @@ describe('AgentCore', () => {
       expect(createSpy).toHaveBeenCalledOnce();
     });
   });
+
+  // ── L1 session context continuity ─────────────────────────────────────────
+
+  describe('L1 session context continuity', () => {
+    it('second turn includes first turn user message and assistant response', async () => {
+      // Two sequential user turns. The second API call for turn 2 must contain
+      // the full conversation from turn 1 so the model has context.
+      const { client, createSpy } = makeClient([
+        makeTextResponse('answer to hello'),
+        makeTextResponse('answer to world'),
+      ]);
+      const { channel } = makeChannel(['hello', 'world']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
+      await agent.run();
+
+      // Turn 1: API call 0 with [user:hello]
+      // Turn 2: API call 1 with [user:hello, assistant:answer, user:world]
+      const turn2Arg = createSpy.mock.calls[1]?.[0] as { messages: Anthropic.MessageParam[] };
+      expect(turn2Arg.messages).toHaveLength(3);
+      expect(turn2Arg.messages[0]).toMatchObject({ role: 'user', content: 'hello' });
+      expect(turn2Arg.messages[1]).toMatchObject({ role: 'assistant', content: 'answer to hello' });
+      expect(turn2Arg.messages[2]).toMatchObject({ role: 'user', content: 'world' });
+    });
+
+    it('L1 grows correctly across three turns', async () => {
+      const { client, createSpy } = makeClient([
+        makeTextResponse('reply 1'),
+        makeTextResponse('reply 2'),
+        makeTextResponse('reply 3'),
+      ]);
+      const { channel } = makeChannel(['msg1', 'msg2', 'msg3']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
+      await agent.run();
+
+      // Turn 3 API call should include all prior context: 5 messages
+      // [user:msg1, assistant:reply1, user:msg2, assistant:reply2, user:msg3]
+      const turn3Arg = createSpy.mock.calls[2]?.[0] as { messages: Anthropic.MessageParam[] };
+      expect(turn3Arg.messages).toHaveLength(5);
+      expect(turn3Arg.messages[4]).toMatchObject({ role: 'user', content: 'msg3' });
+    });
+
+    it('assembleInjectedHistory is called once at session start, not on every turn', async () => {
+      const assembleSpyFn = vi.fn().mockResolvedValue([]);
+      const mockMemoryManager = {
+        assembleInjectedHistory: assembleSpyFn,
+        compact: vi.fn().mockResolvedValue(null),
+      };
+
+      const { client } = makeClient([
+        makeTextResponse('r1'),
+        makeTextResponse('r2'),
+        makeTextResponse('r3'),
+      ]);
+      const { channel } = makeChannel(['a', 'b', 'c']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(
+        client, channel, toolBus, ctx, makeConfig(),
+        undefined, noopSleep, undefined, undefined, undefined,
+        mockMemoryManager as unknown as import('../memory/memory-manager').MemoryManager,
+      );
+      await agent.run();
+
+      // Three user turns, but assembleInjectedHistory should only be called once.
+      expect(assembleSpyFn).toHaveBeenCalledOnce();
+    });
+  });
 });

@@ -64,8 +64,27 @@ function getErrorMessage(err: unknown): string {
  * When a SessionStore is provided, every user turn, assistant response, tool
  * call, and tool result is persisted immediately to the L2 session log before
  * the next LLM call.
+ *
+ * L1 (active context) is maintained as instance state across turns so that
+ * the full current-session conversation is always available to the model.
+ * It is initialised once at session start with any injected history (task
+ * history, session resume, or chat continuity) and grows as turns proceed.
  */
 export class AgentCore {
+  /**
+   * L1 active context — the message array passed to the Anthropic API.
+   * Persistent across turns within a session; reset on construction.
+   */
+  private l1: Anthropic.MessageParam[] = [];
+
+  /**
+   * Estimated token cost of the messages injected at session start.
+   * Subtracted from input_tokens when evaluating the compaction threshold
+   * so that large injected history does not trigger premature compaction.
+   * Reset to 0 after compaction (injected messages have been evicted).
+   */
+  private injectedTokenEstimate = 0;
+
   constructor(
     private readonly client: Anthropic,
     private readonly channel: Channel,
@@ -89,6 +108,25 @@ export class AgentCore {
     // can record which session is doing the work.
     this.ctx.sessionId = sessionId;
     this.ctx.progress.onSessionStart(sessionId, this.initialSessionId !== undefined);
+
+    // Initialise L1 with injected history ONCE at session start.
+    // This covers task history, session resume, and chat continuity.
+    // Subsequent turns append to this.l1 rather than rebuilding from scratch,
+    // ensuring the model sees the full current-session conversation each turn.
+    if (this.memoryManager) {
+      const injected = await this.memoryManager.assembleInjectedHistory({
+        currentSessionId: sessionId,
+        resumedSessionId: this.initialSessionId,
+        activeTaskId: this.ctx.activeTaskId,
+      });
+      if (injected.length > 0) {
+        const source = this.ctx.activeTaskId ? 'task' : 'chat';
+        this.ctx.progress.onContextInjection(source, injected.length, this.ctx.activeTaskId);
+        this.l1 = [...injected];
+        this.injectedTokenEstimate = injected.reduce((sum, p) => sum + estimateTokens(p), 0);
+      }
+    }
+
     for await (const turn of this.channel.receive()) {
       const content = turn.content.trimStart();
       if (this.slashRegistry.isSlashCommand(content)) {
@@ -105,8 +143,9 @@ export class AgentCore {
 
   /**
    * Handle a single user turn:
-   * build messages, call the API, dispatch tool calls until done,
-   * then deliver the final response.
+   * append the user message to L1, call the API, dispatch tool calls until
+   * done, append the final assistant response to L1, then deliver it via
+   * channel.send().
    *
    * If the API call fails irrecoverably (4xx or exhausted retries) the error
    * message is delivered to the user via channel.send() rather than throwing.
@@ -114,44 +153,19 @@ export class AgentCore {
    * this way.
    */
   async handleTurn(userMessage: string, sessionId: string = randomUUID()): Promise<void> {
-    // Assemble injected history (task history / session resume / chat continuity).
-    const injectedMessages = this.memoryManager
-      ? await this.memoryManager.assembleInjectedHistory({
-          currentSessionId: sessionId,
-          resumedSessionId: this.initialSessionId,
-          activeTaskId: this.ctx.activeTaskId,
-        })
-      : [];
-
-    if (injectedMessages.length > 0) {
-      const source = this.ctx.activeTaskId ? 'task' : 'chat';
-      this.ctx.progress.onContextInjection(source, injectedMessages.length, this.ctx.activeTaskId);
-    }
-
-    // Estimated token cost of injected history — subtracted from input_tokens
-    // when checking the compaction threshold so L1 alone drives compaction.
-    const injectedTokenEstimate = injectedMessages.reduce(
-      (sum, p) => sum + estimateTokens(p),
-      0,
-    );
-
-    const messages: Anthropic.MessageParam[] = [
-      ...injectedMessages,
-      { role: 'user', content: userMessage },
-    ];
-
     // Tool definitions are stable for the lifetime of a turn — hoist the call
     // outside the loop to avoid redundant work on every round-trip.
     const tools = this.toolBus.getAnthropicDefinitions() as Anthropic.Tool[];
 
-    // Persist user turn before the first LLM call.
+    // Append the user message to L1 and persist to L2.
+    this.l1.push({ role: 'user', content: userMessage });
     await this.persistEntry(sessionId, 'user', userMessage);
 
     try {
       while (true) {
         this.logger.debug('Sending request to LLM', {
           model: this.config.model,
-          messageCount: messages.length,
+          messageCount: this.l1.length,
         });
 
         this.ctx.progress.onThinking();
@@ -160,7 +174,10 @@ export class AgentCore {
           system: this.systemPrompt,
           max_tokens: MAX_TOKENS,
           tools,
-          messages,
+          // Spread to snapshot l1 at call time — prevents later mutations to
+          // this.l1 (e.g. pushing the final assistant response) from being
+          // visible in test spy captures of the argument.
+          messages: [...this.l1],
         });
 
         this.logger.debug('Received response from LLM', {
@@ -197,11 +214,11 @@ export class AgentCore {
           }
 
           // Append the assistant turn (which contains the tool_use blocks)
-          messages.push({ role: 'assistant', content: response.content });
+          this.l1.push({ role: 'assistant', content: response.content });
 
           // Append all tool results as a single user turn.
           // Only include is_error when true — some proxy servers reject is_error: false.
-          messages.push({
+          this.l1.push({
             role: 'user',
             content: toolResults.map((result) => ({
               type: 'tool_result' as const,
@@ -214,19 +231,22 @@ export class AgentCore {
           // Check if L1 token usage is approaching the context window limit.
           // Subtract injected history tokens so a task with large injected
           // context does not trigger compaction when L1 itself is small.
-          const l1Tokens = Math.max(0, response.usage.input_tokens - injectedTokenEstimate);
+          const l1Tokens = Math.max(0, response.usage.input_tokens - this.injectedTokenEstimate);
           const tokenFraction = l1Tokens / MODEL_CONTEXT_WINDOW;
           if (tokenFraction > this.config.memory.compactThreshold) {
             const compacted = this.memoryManager
-              ? await this.memoryManager.compact(messages, sessionId, this.ctx.activeTaskId, this.ctx.progress)
-              : this.compactMessages(messages);
+              ? await this.memoryManager.compact(this.l1, sessionId, this.ctx.activeTaskId, this.ctx.progress)
+              : this.compactMessages(this.l1);
             if (compacted === null) {
               throw new Error(
                 `Context window exceeded and cannot be compacted further ` +
                 `(${response.usage.input_tokens.toLocaleString()}/${MODEL_CONTEXT_WINDOW.toLocaleString()} tokens used).`,
               );
             }
-            messages.splice(0, messages.length, ...compacted);
+            this.l1.splice(0, this.l1.length, ...compacted);
+            // Injected history has been evicted — clear its token estimate so it
+            // no longer artificially inflates the compaction headroom.
+            this.injectedTokenEstimate = 0;
           }
         } else {
           // Covers 'end_turn', 'max_tokens', 'stop_sequence', and null.
@@ -238,6 +258,10 @@ export class AgentCore {
 
           // Persist final assistant response before delivering to the channel.
           await this.persistEntry(sessionId, 'assistant', text);
+
+          // Append the final assistant response to L1 so the next user turn
+          // sees the full conversation including this response.
+          this.l1.push({ role: 'assistant', content: text });
 
           await this.channel.send(text);
           break;
@@ -284,17 +308,13 @@ export class AgentCore {
   }
 
   /**
-   * Compacts the message history to reduce token usage.
+   * Fallback compaction used when no MemoryManager is wired up.
    *
    * Keeps the `memory.keepRecentMessages` most recent messages and prepends a
    * single stub message indicating that earlier context was omitted.
    *
    * Returns `null` when there are not enough messages to evict anything —
    * the caller should treat this as an unresolvable context overflow.
-   *
-   * Full compaction (model-generated summary + Compact Store persistence) is
-   * implemented by the Memory Manager in Sprint 5. This is the minimal
-   * in-agent fallback that keeps the loop alive during long tool-use chains.
    */
   private compactMessages(
     messages: Anthropic.MessageParam[],

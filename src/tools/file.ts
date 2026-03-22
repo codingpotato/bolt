@@ -1,10 +1,21 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, sep } from 'node:path';
 import { ToolError } from './tool';
 import type { Tool, ToolContext } from './tool';
 
 function resolvePath(cwd: string, filePath: string): string {
   return resolve(cwd, filePath);
+}
+
+/**
+ * Throws a non-retryable ToolError if `resolved` is not strictly inside `cwd`.
+ * The workspace root itself is also rejected — only files *within* it are allowed.
+ */
+function assertWithinWorkspace(cwd: string, resolved: string, original: string): void {
+  const boundary = cwd.endsWith(sep) ? cwd : cwd + sep;
+  if (!resolved.startsWith(boundary)) {
+    throw new ToolError(`path "${original}" is outside the workspace (${cwd})`, false);
+  }
 }
 
 function isEnoent(err: unknown): boolean {
@@ -45,6 +56,7 @@ export const fileReadTool: Tool<FileReadInput, FileReadOutput> = {
 
   async execute(input: FileReadInput, ctx: ToolContext): Promise<FileReadOutput> {
     const abs = resolvePath(ctx.cwd, input.path);
+    assertWithinWorkspace(ctx.cwd, abs, input.path);
     try {
       const content = await readFile(abs, 'utf-8');
       return { content };
@@ -80,6 +92,7 @@ export const fileWriteTool: Tool<FileWriteInput, FileWriteOutput> = {
 
   async execute(input: FileWriteInput, ctx: ToolContext): Promise<FileWriteOutput> {
     const abs = resolvePath(ctx.cwd, input.path);
+    assertWithinWorkspace(ctx.cwd, abs, input.path);
     try {
       await mkdir(dirname(abs), { recursive: true });
       await writeFile(abs, input.content, 'utf-8');
@@ -120,6 +133,7 @@ export const fileEditTool: Tool<FileEditInput, FileEditOutput> = {
 
   async execute(input: FileEditInput, ctx: ToolContext): Promise<FileEditOutput> {
     const abs = resolvePath(ctx.cwd, input.path);
+    assertWithinWorkspace(ctx.cwd, abs, input.path);
     let content: string;
     try {
       content = await readFile(abs, 'utf-8');

@@ -37,6 +37,11 @@ export interface ToolContext {
   sessionId?: string;
   /** ID of the task currently being worked on, if any. Set by task_update when a task transitions to in_progress. */
   activeTaskId?: string;
+  /**
+   * Optional confirmation callback for dangerous operations.
+   * When absent (sub-agents, non-interactive mode) the operation is auto-denied.
+   */
+  confirm?: (message: string) => Promise<boolean>;
 }
 
 /** A tool registered with the Tool Bus. */

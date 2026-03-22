@@ -15,6 +15,10 @@ import { webFetchTool } from '../tools/web-fetch';
 import { createAuditLogger } from '../audit/audit-logger';
 import { createLogger } from '../logger';
 import { AgentCore } from '../agent/agent';
+import { TodoStore } from '../todo/todo-store';
+import { createTodoTools } from '../todo/todo-tools';
+import { TaskStore } from '../tasks/task-store';
+import { createTaskTools } from '../tasks/task-tools';
 import { resolve, join } from 'node:path';
 
 async function main(): Promise<void> {
@@ -30,12 +34,17 @@ async function main(): Promise<void> {
   const log = createAuditLogger(dataDir);
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
 
+  const todoStore = new TodoStore();
+  const taskStore = new TaskStore(dataDir);
+
   const toolBus = new ToolBus();
   toolBus.register(bashTool);
   toolBus.register(fileReadTool);
   toolBus.register(fileWriteTool);
   toolBus.register(fileEditTool);
   toolBus.register(webFetchTool);
+  for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
+  for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
 
   const ctx = { cwd, log, logger };
   const channel = new CliChannel();

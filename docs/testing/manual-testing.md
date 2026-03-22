@@ -167,6 +167,151 @@ Each line should be valid JSON with `ts`, `tool`, `input`, and `result` fields. 
 
 ---
 
+---
+
+> **Note:** Todos are held in-memory and do not survive process restarts. Run all todo test cases (11–15) within the same bolt session.
+
+### 11. `todo_create` — create a todo item
+
+**Input:**
+```
+Create a todo item titled "Buy groceries" with description "milk, eggs, bread".
+```
+
+**Expected:** Claude calls `todo_create`, receives the new item's ID, and confirms the todo was created.
+
+---
+
+### 12. `todo_list` — list all todos
+
+**Input:**
+```
+Show me all my current todo items.
+```
+
+*(Run after test case 11 so at least one item exists.)*
+
+**Expected:** Claude calls `todo_list` and returns the list including the "Buy groceries" item with `status: pending`.
+
+---
+
+### 13. `todo_update` — change status and description
+
+**Input:**
+```
+Mark the "Buy groceries" todo as in_progress.
+```
+
+**Expected:** Claude calls `todo_update` with the correct ID and `status: "in_progress"`. It confirms the update.
+
+---
+
+### 14. `todo_delete` — remove a todo
+
+**Input:**
+```
+Delete the "Buy groceries" todo item.
+```
+
+**Expected:** Claude calls `todo_delete` with the correct ID. A subsequent `todo_list` call should no longer include it.
+
+---
+
+### 15. Todo error — update non-existent item
+
+**Input:**
+```
+Update the status of todo ID "todo-9999" to done.
+```
+
+**Expected:** Claude calls `todo_update`, receives a `ToolError("todo not found: todo-9999")` as `is_error: true`, and reports the error gracefully without crashing.
+
+---
+
+### 16. `task_create` — create a task
+
+**Input:**
+```
+Create a task titled "Write blog post" with description "Draft an intro paragraph about TypeScript".
+```
+
+**Expected:** Claude calls `task_create`, receives the new task ID (e.g. `task-1`), and confirms creation. The task should have `status: pending`.
+**Verify:** `.bolt/tasks.json` is created in the data directory and contains the task.
+
+---
+
+### 17. `task_list` — list all tasks
+
+**Input:**
+```
+List all my tasks and their current statuses.
+```
+
+*(Run after test case 16 so at least one task exists.)*
+
+**Expected:** Claude calls `task_list` and returns all tasks including "Write blog post" with `status: pending`.
+
+---
+
+### 18. `task_update` — update task status
+
+**Input:**
+```
+Mark the "Write blog post" task as in_progress.
+```
+
+**Expected:** Claude calls `task_update` with the correct task ID and `status: "in_progress"`. It confirms the update.
+**Verify:** `.bolt/tasks.json` is updated with the new status.
+
+---
+
+### 19. `task_update` — mark task completed with result
+
+**Input:**
+```
+Mark the "Write blog post" task as completed with the result "Intro paragraph done — 150 words".
+```
+
+**Expected:** Claude calls `task_update` with `status: "completed"` and `result` set. It confirms.
+**Verify:** `.bolt/tasks.json` reflects `status: "completed"` and the result string.
+
+---
+
+### 20. Task persistence across restarts
+
+**Prerequisites:** Create a task (test case 16), then exit bolt with Ctrl+D.
+
+**Steps:**
+1. Restart bolt with `npm run dev`
+2. Ask: *"List all my tasks."*
+
+**Expected:** Claude calls `task_list` and the previously created task is still present with the same ID and status — it was loaded from `.bolt/tasks.json` on startup.
+
+---
+
+### 21. Task error — update non-existent task
+
+**Input:**
+```
+Update task ID "task-9999" to completed.
+```
+
+**Expected:** Claude calls `task_update`, receives a `ToolError("task not found: task-9999")` as `is_error: true`, and reports the error gracefully without crashing.
+
+---
+
+### 22. Structured log output
+
+After running any test case:
+
+```bash
+cat .bolt/bolt.log
+```
+
+Each line should be valid JSON with `ts`, `level`, `msg`, and optional `context` fields. The startup entry should include `model` and `auth` fields. LLM requests and responses appear as `debug`-level entries when `BOLT_LOG_LEVEL=debug` is set.
+
+---
+
 ## Local inference server
 
 To use a local Anthropic-compatible server instead of the real API:

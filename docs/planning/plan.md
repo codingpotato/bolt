@@ -459,15 +459,15 @@ I want every turn written to disk immediately,
 so that no conversation history is lost on crash or clean exit.
 
 Acceptance Criteria:
-- [ ] A sessionId (UUID v4) is generated at process startup and passed through AgentCore
-- [ ] --session <id> CLI flag resumes an existing session (loads prior sessionId)
-- [ ] SessionEntry interface matches docs/design/memory-system.md (sessionId, seq, ts, taskId?, date, role, content)
-- [ ] Memory Manager appends a SessionEntry to .bolt/sessions/<session-id>.jsonl on every:
+- [x] A sessionId (UUID v4) is generated at process startup and passed through AgentCore
+- [x] --session <id> CLI flag resumes an existing session (loads prior sessionId)
+- [x] SessionEntry interface matches docs/design/memory-system.md (sessionId, seq, ts, taskId?, date, role, content)
+- [x] Memory Manager appends a SessionEntry to .bolt/sessions/<session-id>.jsonl on every:
       user turn, assistant response, tool call, and tool result
-- [ ] Write happens before the next LLM call — a crash mid-turn loses at most one in-flight entry
-- [ ] Task model gains a sessionIds: string[] field; the current sessionId is appended when a task transitions to in_progress
-- [ ] Corrupt session files are skipped with a warning during session resume
-- [ ] Unit tests use an in-memory filesystem mock; no real disk I/O
+- [x] Write happens before the next LLM call — a crash mid-turn loses at most one in-flight entry
+- [x] Task model gains a sessionIds: string[] field; the current sessionId is appended when a task transitions to in_progress
+- [x] Corrupt session files are skipped with a warning during session resume
+- [x] Unit tests use an in-memory filesystem mock; no real disk I/O
 ```
 
 **S5-4: Long-term memory store (L3) — persistence**

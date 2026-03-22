@@ -62,12 +62,16 @@ export function createTaskTools(store: TaskStore): Tool[] {
       },
       required: ['id', 'status'],
     },
-    async execute(input: TaskUpdateInput, _ctx: ToolContext): Promise<TaskUpdateOutput> {
+    async execute(input: TaskUpdateInput, ctx: ToolContext): Promise<TaskUpdateOutput> {
+      let title = input.id;
       try {
+        const existing = store.list().find((t) => t.id === input.id);
+        if (existing) title = existing.title;
         await store.update(input.id, { status: input.status, result: input.result, error: input.error });
       } catch (err) {
         throw new ToolError(err instanceof Error ? err.message : String(err));
       }
+      ctx.progress.onTaskStatusChange(input.id, title, input.status);
       return { id: input.id };
     },
   };

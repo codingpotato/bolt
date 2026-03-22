@@ -26,6 +26,7 @@ function makeConfig(model = 'claude-test'): Config {
     tasks: { maxSubtaskDepth: 5, maxRetries: 3 },
     tools: { timeoutMs: 30000, allowedTools: [] },
     codeWorkflows: { testFixRetries: 3 },
+    cli: { progress: true, verbose: false },
     channels: { web: { enabled: false, port: 3000, mode: 'websocket' } },
   };
 }
@@ -54,7 +55,7 @@ function makeToolBus(dispatchAllResult: Awaited<ReturnType<ToolBus['dispatchAll'
 
 /** Build a minimal ToolContext. */
 function makeCtx(): ToolContext {
-  return { cwd: '/tmp', log: { log: vi.fn().mockResolvedValue(undefined) }, logger: createNoopLogger() };
+  return { cwd: '/tmp', log: { log: vi.fn().mockResolvedValue(undefined) }, logger: createNoopLogger(), progress: { onSessionStart: vi.fn(), onThinking: vi.fn(), onToolCall: vi.fn(), onToolResult: vi.fn(), onTaskStatusChange: vi.fn(), onContextInjection: vi.fn(), onMemoryCompaction: vi.fn(), onRetry: vi.fn() } };
 }
 
 /** Build a mock Logger whose methods can be asserted on. */

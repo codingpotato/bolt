@@ -217,7 +217,9 @@ export class AgentCore {
           const l1Tokens = Math.max(0, response.usage.input_tokens - injectedTokenEstimate);
           const tokenFraction = l1Tokens / MODEL_CONTEXT_WINDOW;
           if (tokenFraction > this.config.memory.compactThreshold) {
-            const compacted = this.compactMessages(messages);
+            const compacted = this.memoryManager
+              ? await this.memoryManager.compact(messages, sessionId, this.ctx.activeTaskId, this.ctx.progress)
+              : this.compactMessages(messages);
             if (compacted === null) {
               throw new Error(
                 `Context window exceeded and cannot be compacted further ` +

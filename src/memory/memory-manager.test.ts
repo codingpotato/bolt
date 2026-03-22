@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type Anthropic from '@anthropic-ai/sdk';
 import { MemoryManager } from './memory-manager';
 import type { MemoryConfig } from './memory-manager';
 import type { SessionStore, SessionEntry } from './session-store';
+import type { MemoryStore } from './memory-store';
+import type { ProgressReporter } from '../progress/progress';
 import { createNoopLogger } from '../logger';
 
 // ---------------------------------------------------------------------------
@@ -37,6 +40,70 @@ function makeManager(
     { ...DEFAULT_CONFIG, ...config },
     createNoopLogger(),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Compact helpers
+// ---------------------------------------------------------------------------
+
+interface CompactManagerOptions {
+  keepRecentMessages?: number;
+  modelResponse?: string;
+  clientThrows?: boolean;
+}
+
+interface CompactManagerFixture {
+  manager: MemoryManager;
+  createSpy: ReturnType<typeof vi.fn>;
+  writeSpy: ReturnType<typeof vi.fn>;
+  progress: ProgressReporter;
+}
+
+function makeMessage(role: 'user' | 'assistant', content: string): Anthropic.MessageParam {
+  return { role, content };
+}
+
+function makeCompactManager(options: CompactManagerOptions = {}): CompactManagerFixture {
+  const { keepRecentMessages = 3, modelResponse = 'Summary text\nTags: foo, bar', clientThrows = false } = options;
+
+  const createSpy = vi.fn();
+  if (clientThrows) {
+    createSpy.mockRejectedValue(new Error('model error'));
+  } else {
+    createSpy.mockResolvedValue({
+      content: [{ type: 'text', text: modelResponse }],
+    });
+  }
+
+  const mockClient = {
+    messages: { create: createSpy },
+  } as unknown as import('@anthropic-ai/sdk').default;
+
+  const writeSpy = vi.fn().mockResolvedValue('entry-id');
+  const mockMemoryStore = { write: writeSpy } as unknown as MemoryStore;
+
+  const mockProgress: ProgressReporter = {
+    onSessionStart: vi.fn(),
+    onThinking: vi.fn(),
+    onToolCall: vi.fn(),
+    onToolResult: vi.fn(),
+    onTaskStatusChange: vi.fn(),
+    onContextInjection: vi.fn(),
+    onMemoryCompaction: vi.fn(),
+    onRetry: vi.fn(),
+  };
+
+  const config: MemoryConfig = { ...DEFAULT_CONFIG, keepRecentMessages };
+  const manager = new MemoryManager(
+    {} as SessionStore,
+    config,
+    createNoopLogger(),
+    mockMemoryStore,
+    mockClient,
+    'claude-test-model',
+  );
+
+  return { manager, createSpy, writeSpy, progress: mockProgress };
 }
 
 // ---------------------------------------------------------------------------
@@ -290,5 +357,197 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
     });
 
     expect(messages).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MemoryManager.compact() tests
+// ---------------------------------------------------------------------------
+
+describe('MemoryManager.compact()', () => {
+  it('returns null when messages count is less than keepRecentMessages', async () => {
+    const { manager, progress } = makeCompactManager({ keepRecentMessages: 5 });
+    const messages = [
+      makeMessage('user', 'a'),
+      makeMessage('assistant', 'b'),
+      makeMessage('user', 'c'),
+    ];
+    const result = await manager.compact(messages, 'session-1', undefined, progress);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when messages count equals keepRecentMessages', async () => {
+    const { manager, progress } = makeCompactManager({ keepRecentMessages: 5 });
+    const messages = [
+      makeMessage('user', 'a'),
+      makeMessage('assistant', 'b'),
+      makeMessage('user', 'c'),
+      makeMessage('assistant', 'd'),
+      makeMessage('user', 'e'),
+    ];
+    const result = await manager.compact(messages, 'session-1', undefined, progress);
+    expect(result).toBeNull();
+  });
+
+  it('calls model to summarize evicted messages', async () => {
+    const { manager, createSpy, progress } = makeCompactManager({ keepRecentMessages: 3 });
+    const messages = [
+      makeMessage('user', 'msg-0'),
+      makeMessage('assistant', 'msg-1'),
+      makeMessage('user', 'msg-2'),
+      makeMessage('assistant', 'msg-3'),
+      makeMessage('user', 'msg-4'),
+    ];
+    await manager.compact(messages, 'session-1', undefined, progress);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    const callArgs = createSpy.mock.calls[0]![0] as { messages: Anthropic.MessageParam[] };
+    const userMessage = callArgs.messages[0];
+    expect(userMessage?.role).toBe('user');
+    expect(typeof userMessage?.content === 'string' && userMessage.content).toContain('msg-0');
+  });
+
+  it('writes CompactEntry to MemoryStore', async () => {
+    const { manager, writeSpy, progress } = makeCompactManager({ keepRecentMessages: 3 });
+    const messages = [
+      makeMessage('user', 'evicted-0'),
+      makeMessage('assistant', 'evicted-1'),
+      makeMessage('user', 'kept-0'),
+      makeMessage('assistant', 'kept-1'),
+      makeMessage('user', 'kept-2'),
+    ];
+    await manager.compact(messages, 'my-session', 'my-task', progress);
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    const writeArg = writeSpy.mock.calls[0]![0] as {
+      type: string;
+      sessionId: string;
+      taskId: string;
+      summary: string;
+      messages: Anthropic.MessageParam[];
+    };
+    expect(writeArg.type).toBe('compaction');
+    expect(writeArg.sessionId).toBe('my-session');
+    expect(writeArg.taskId).toBe('my-task');
+    expect(typeof writeArg.summary).toBe('string');
+    expect(writeArg.messages).toEqual([
+      makeMessage('user', 'evicted-0'),
+      makeMessage('assistant', 'evicted-1'),
+    ]);
+  });
+
+  it('extracts tags from model response', async () => {
+    const { manager, writeSpy, progress } = makeCompactManager({
+      keepRecentMessages: 3,
+      modelResponse: 'Here is the summary.\nTags: alpha, beta, gamma',
+    });
+    const messages = [
+      makeMessage('user', 'a'),
+      makeMessage('assistant', 'b'),
+      makeMessage('user', 'c'),
+      makeMessage('assistant', 'd'),
+      makeMessage('user', 'e'),
+    ];
+    await manager.compact(messages, 'session-1', undefined, progress);
+    const writeArg = writeSpy.mock.calls[0]![0] as { tags: string[] };
+    expect(writeArg.tags).toEqual(['alpha', 'beta', 'gamma']);
+  });
+
+  it('emits onMemoryCompaction with evicted count', async () => {
+    const { manager, progress } = makeCompactManager({ keepRecentMessages: 3 });
+    const messages = [
+      makeMessage('user', 'a'),
+      makeMessage('assistant', 'b'),
+      makeMessage('user', 'c'),
+      makeMessage('assistant', 'd'),
+      makeMessage('user', 'e'),
+    ];
+    await manager.compact(messages, 'session-1', undefined, progress);
+    expect(progress.onMemoryCompaction).toHaveBeenCalledWith(2);
+  });
+
+  it('handles model failure gracefully — uses fallback summary', async () => {
+    const { manager, writeSpy, progress } = makeCompactManager({
+      keepRecentMessages: 3,
+      clientThrows: true,
+    });
+    const messages = [
+      makeMessage('user', 'a'),
+      makeMessage('assistant', 'b'),
+      makeMessage('user', 'c'),
+      makeMessage('assistant', 'd'),
+      makeMessage('user', 'e'),
+    ];
+    const result = await manager.compact(messages, 'session-1', undefined, progress);
+    expect(result).not.toBeNull();
+    const writeArg = writeSpy.mock.calls[0]![0] as { summary: string };
+    expect(writeArg.summary).toBe('[Conversation history compacted — summary unavailable]');
+  });
+
+  it('returned messages start with summary stub followed by kept messages', async () => {
+    const { manager, progress } = makeCompactManager({ keepRecentMessages: 3 });
+    const messages = [
+      makeMessage('user', 'msg-0'),
+      makeMessage('assistant', 'msg-1'),
+      makeMessage('user', 'msg-2'),
+      makeMessage('assistant', 'msg-3'),
+      makeMessage('user', 'msg-4'),
+      makeMessage('assistant', 'msg-5'),
+      makeMessage('user', 'msg-6'),
+      makeMessage('assistant', 'msg-7'),
+    ];
+    const result = await manager.compact(messages, 'session-1', undefined, progress);
+    expect(result).not.toBeNull();
+    expect(result!.length).toBe(4); // 1 stub + 3 kept
+    expect(result![0]!.role).toBe('user');
+    expect(typeof result![0]!.content === 'string' && result![0]!.content).toContain('compacted');
+  });
+
+  it('writes CompactEntry before eviction (write called before return)', async () => {
+    const callOrder: string[] = [];
+    const createSpy = vi.fn().mockImplementation(async () => {
+      callOrder.push('create');
+      return { content: [{ type: 'text', text: 'Summary\nTags: x' }] };
+    });
+    const writeSpy = vi.fn().mockImplementation(async () => {
+      callOrder.push('write');
+      return 'entry-id';
+    });
+
+    const mockClient = { messages: { create: createSpy } } as unknown as import('@anthropic-ai/sdk').default;
+    const mockMemoryStore = { write: writeSpy } as unknown as MemoryStore;
+    const mockProgress: ProgressReporter = {
+      onSessionStart: vi.fn(),
+      onThinking: vi.fn(),
+      onToolCall: vi.fn(),
+      onToolResult: vi.fn(),
+      onTaskStatusChange: vi.fn(),
+      onContextInjection: vi.fn(),
+      onMemoryCompaction: vi.fn(),
+      onRetry: vi.fn(),
+    };
+
+    const config: MemoryConfig = { ...DEFAULT_CONFIG, keepRecentMessages: 3 };
+    const manager = new MemoryManager(
+      {} as SessionStore,
+      config,
+      createNoopLogger(),
+      mockMemoryStore,
+      mockClient,
+      'claude-test-model',
+    );
+
+    const messages = [
+      makeMessage('user', 'a'),
+      makeMessage('assistant', 'b'),
+      makeMessage('user', 'c'),
+      makeMessage('assistant', 'd'),
+      makeMessage('user', 'e'),
+    ];
+    await manager.compact(messages, 'session-1', undefined, mockProgress);
+    expect(callOrder.indexOf('write')).toBeLessThan(messages.length); // write was called
+    expect(writeSpy).toHaveBeenCalledTimes(1);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    // write must be called before compact returns (both in callOrder)
+    expect(callOrder).toContain('write');
+    expect(callOrder).toContain('create');
   });
 });

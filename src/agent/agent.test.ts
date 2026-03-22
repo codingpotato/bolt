@@ -857,6 +857,42 @@ describe('AgentCore', () => {
       expect(sendSpy.mock.calls[0]?.[0]).toMatch(/Context window exceeded/);
     });
 
+    it('delegates to memoryManager.compact() when a MemoryManager is provided', async () => {
+      const toolUse = makeToolUseResponseWithTokens([TOOL_CALL], 170_000);
+      const final = makeTextResponse('done');
+
+      const { client } = makeClient([toolUse, final]);
+      const { channel } = makeChannel(['go']);
+      const toolBus = makeToolBus([TOOL_RESULT]);
+
+      const compactSpy = vi.fn().mockImplementation(
+        async (msgs: Anthropic.MessageParam[]) => [
+          { role: 'user' as const, content: '[compacted by manager]' },
+          ...msgs.slice(-2),
+        ],
+      );
+      const mockMemoryManager = {
+        assembleInjectedHistory: vi.fn().mockResolvedValue([]),
+        compact: compactSpy,
+      };
+
+      const agent = new AgentCore(
+        client, channel, toolBus, ctx, makeOverflowConfig(),
+        undefined, noopSleep, undefined, undefined, undefined,
+        mockMemoryManager as unknown as import('../memory/memory-manager').MemoryManager,
+      );
+      await agent.run();
+
+      expect(compactSpy).toHaveBeenCalledOnce();
+      const [msgs, sessionId, activeTaskId, progress] = compactSpy.mock.calls[0] as [
+        Anthropic.MessageParam[], string, string | undefined, unknown
+      ];
+      expect(Array.isArray(msgs)).toBe(true);
+      expect(typeof sessionId).toBe('string');
+      expect(activeTaskId).toBeUndefined();
+      expect(progress).toBe(ctx.progress);
+    });
+
     it('includes token counts in the unresolvable overflow error message', async () => {
       const overflowConfig = {
         ...makeConfig(),

@@ -548,13 +548,13 @@ I want my active context compacted before messages are dropped,
 so that I never silently lose information during long sessions.
 
 Acceptance Criteria:
-- [ ] Memory Manager tracks L1 token count from each API response (excluding injected history)
-- [ ] When L1 count exceeds memory.compactThreshold × context_window, compaction is triggered
-- [ ] The memory.keepRecentMessages most recent messages are always retained in L1
-- [ ] Evicted messages are summarised by calling the model
-- [ ] A CompactEntry (type: 'compaction') is written to .bolt/memory/ before eviction; entry includes sessionId, taskId, summary, raw messages, tags, date
-- [ ] Active context (L1) is replaced with a single summary stub message
-- [ ] Unit tests mock the Anthropic API summary call
+- [x] Memory Manager tracks L1 token count from each API response (excluding injected history)
+- [x] When L1 count exceeds memory.compactThreshold × context_window, compaction is triggered
+- [x] The memory.keepRecentMessages most recent messages are always retained in L1
+- [x] Evicted messages are summarised by calling the model
+- [x] A CompactEntry (type: 'compaction') is written to .bolt/memory/ before eviction; entry includes sessionId, taskId, summary, raw messages, tags, date
+- [x] Active context (L1) is replaced with a single summary stub message
+- [x] Unit tests mock the Anthropic API summary call
 ```
 
 **S5-7: memory_search tool — keyword backend**

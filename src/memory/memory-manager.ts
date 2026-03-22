@@ -1,7 +1,9 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SessionStore, SessionEntry } from './session-store';
+import type { MemoryStore } from './memory-store';
 import type { Config } from '../config/config';
 import type { Logger } from '../logger';
+import type { ProgressReporter } from '../progress/progress';
 
 export type MemoryConfig = Pick<
   Config['memory'],
@@ -34,6 +36,9 @@ export class MemoryManager {
     private readonly sessionStore: SessionStore,
     private readonly memConfig: MemoryConfig,
     private readonly logger: Logger,
+    private readonly memoryStore: MemoryStore | null = null,
+    private readonly client: Anthropic | null = null,
+    private readonly model: string | null = null,
   ) {}
 
   async assembleInjectedHistory(opts: AssembleOptions): Promise<Anthropic.MessageParam[]> {
@@ -52,6 +57,95 @@ export class MemoryManager {
     }
 
     return [];
+  }
+
+  /**
+   * Compacts the message history by evicting the oldest messages and replacing
+   * them with a model-generated summary stub.
+   *
+   * Returns `null` when there are not enough messages to evict anything.
+   * Otherwise returns the compacted message list.
+   */
+  async compact(
+    messages: Anthropic.MessageParam[],
+    sessionId: string,
+    activeTaskId: string | undefined,
+    progress: ProgressReporter,
+  ): Promise<Anthropic.MessageParam[] | null> {
+    const keep = this.memConfig.keepRecentMessages;
+    if (messages.length <= keep) {
+      return null;
+    }
+
+    const toEvict = messages.slice(0, messages.length - keep);
+    const toKeep = messages.slice(-keep);
+
+    let summary: string;
+    let tags: string[] = [];
+
+    if (this.client !== null && this.model !== null) {
+      const evictedText = toEvict
+        .map(
+          (m) =>
+            `${m.role.toUpperCase()}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`,
+        )
+        .join('\n\n');
+
+      try {
+        const response = await this.client.messages.create({
+          model: this.model,
+          max_tokens: 1024,
+          messages: [
+            {
+              role: 'user',
+              content: `Please summarize the following conversation history concisely:\n\n${evictedText}\n\nAfter the summary, add a line "Tags: tag1, tag2, tag3" with 3-5 relevant topic tags.`,
+            },
+          ],
+        });
+
+        const textBlock = response.content.find(
+          (block): block is Anthropic.TextBlock => block.type === 'text',
+        );
+        const fullText = textBlock?.text ?? '';
+
+        // Parse tags from the last line
+        const tagLineMatch = /\nTags:\s*(.+)$/m.exec(fullText);
+        if (tagLineMatch) {
+          tags = tagLineMatch[1]!.split(',').map((t) => t.trim()).filter(Boolean);
+          summary = fullText.replace(/\nTags:\s*.+$/m, '').trim();
+        } else {
+          summary = fullText.trim();
+        }
+      } catch (err) {
+        this.logger.warn('Failed to summarize evicted messages, using fallback', {
+          error: String(err),
+        });
+        summary = '[Conversation history compacted — summary unavailable]';
+        tags = [];
+      }
+    } else {
+      summary = '[Earlier context has been compacted to stay within the context window.]';
+      tags = [];
+    }
+
+    // Write CompactEntry to MemoryStore before eviction
+    if (this.memoryStore !== null) {
+      await this.memoryStore.write({
+        type: 'compaction',
+        sessionId,
+        taskId: activeTaskId,
+        summary,
+        messages: toEvict,
+        tags,
+      });
+    }
+
+    progress.onMemoryCompaction(toEvict.length);
+
+    return [
+      { role: 'user', content: `[Earlier context compacted. Summary: ${summary}]` },
+      ...toKeep,
+    ];
   }
 
   // ---------------------------------------------------------------------------

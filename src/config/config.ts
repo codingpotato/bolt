@@ -18,6 +18,11 @@ export interface Config {
   local: {
     endpoint?: string;
   };
+  agentPrompt: {
+    projectFile: string;
+    userFile: string;
+    suggestionsPath: string;
+  };
   memory: {
     compactThreshold: number;
     keepRecentMessages: number;
@@ -50,6 +55,11 @@ const DEFAULTS: Config = {
   logLevel: 'info',
   auth: {},
   local: {},
+  agentPrompt: {
+    projectFile: '.bolt/AGENT.md',
+    userFile: '~/.bolt/AGENT.md',
+    suggestionsPath: '.bolt/suggestions',
+  },
   memory: {
     compactThreshold: 0.8,
     keepRecentMessages: 10,
@@ -88,7 +98,7 @@ const CREDENTIAL_FIELDS = [
 // Intentionally excludes `logLevel` (env-var only: BOLT_LOG_LEVEL) and
 // `dataDir` (computed from BOLT_DATA_DIR, used to locate the file itself).
 const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(
-  ['model', 'auth', 'local', 'memory', 'tasks', 'tools', 'codeWorkflows', 'channels'] satisfies (keyof Config)[]
+  ['model', 'auth', 'local', 'agentPrompt', 'memory', 'tasks', 'tools', 'codeWorkflows', 'channels'] satisfies (keyof Config)[]
 );
 
 // Validation constants — defined once, not recreated on every call.
@@ -173,6 +183,7 @@ function applyEnvOverrides(config: Config): Config {
     ...config,
     auth: { ...config.auth },
     local: { ...config.local },
+    agentPrompt: { ...config.agentPrompt },
     memory: { ...config.memory },
     tasks: { ...config.tasks },
     tools: { ...config.tools, allowedTools: [...config.tools.allowedTools] },

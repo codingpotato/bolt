@@ -4,8 +4,9 @@ node_modules/
 # Build output
 dist/
 
-# Runtime data
+# Runtime data (logs, tasks, sessions, memory) — but keep the project agent prompt
 .bolt/
+!.bolt/AGENT.md
 
 # Environment
 .env

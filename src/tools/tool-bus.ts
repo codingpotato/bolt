@@ -9,6 +9,22 @@ export interface AnthropicToolDefinition {
 }
 
 /**
+ * Produces a short human-readable summary from a serialised tool result for
+ * the progress reporter.  Tries to extract meaningful fields from JSON; falls
+ * back to truncated raw content.
+ */
+function summariseResult(content: string): string {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    if ('exitCode' in parsed) return `exit ${String(parsed['exitCode'])}`;
+    if ('path' in parsed) return String(parsed['path']);
+    if ('tasks' in parsed && Array.isArray(parsed['tasks'])) return `${String((parsed['tasks'] as unknown[]).length)} tasks`;
+    if ('id' in parsed) return String(parsed['id']);
+  } catch { /* not JSON */ }
+  return content.slice(0, 80);
+}
+
+/**
  * Validates that all required fields declared in the JSON Schema are present
  * in the input object.  Deep validation is out of scope; we only check the
  * top-level `required` array.
@@ -104,6 +120,8 @@ export class ToolBus {
     }
 
     // 4. Execute (only ToolError is caught; other exceptions propagate)
+    ctx.progress.onToolCall(call.name, call.input);
+
     let result: unknown;
     try {
       result = await tool.execute(call.input, ctx);
@@ -111,6 +129,7 @@ export class ToolBus {
       if (err instanceof ToolError) {
         const errContent = JSON.stringify({ error: err.message, retryable: err.retryable });
         await ctx.log.log(call.name, call.input, { error: err.message });
+        ctx.progress.onToolResult(call.name, false, err.message);
         return { id: call.id, content: errContent, is_error: true };
       }
       throw err;
@@ -118,6 +137,7 @@ export class ToolBus {
 
     await ctx.log.log(call.name, call.input, result);
     const content = typeof result === 'string' ? result : JSON.stringify(result);
+    ctx.progress.onToolResult(call.name, true, summariseResult(content));
     return { id: call.id, content };
   }
 

@@ -7,8 +7,6 @@ const BOLD = '\x1b[1m';
 const DIM = '\x1b[2m';
 const CYAN = '\x1b[36m';
 
-// Move cursor up N lines, then erase to end of line
-const ERASE_LINE = '\x1b[1A\x1b[2K';
 
 /**
  * Channel implementation for CLI interaction.
@@ -22,11 +20,12 @@ const ERASE_LINE = '\x1b[1A\x1b[2K';
  */
 export class CliChannel implements Channel {
   private rl: Interface | null = null;
-  private pendingThinking = false;
 
   constructor(
     private readonly input: NodeJS.ReadableStream = process.stdin,
     private readonly output: NodeJS.WritableStream = process.stdout,
+    /** Called just before send() writes the response — used to erase the Thinking line. */
+    private readonly beforeSend?: () => void,
   ) {}
 
   private get isTTY(): boolean {
@@ -59,20 +58,12 @@ export class CliChannel implements Channel {
         continue;
       }
 
-      if (this.isTTY) {
-        this.output.write(`${DIM}Thinking…${RESET}\n`);
-        this.pendingThinking = true;
-      }
-
       yield { content };
     }
   }
 
   async send(response: string): Promise<void> {
-    if (this.isTTY && this.pendingThinking) {
-      this.output.write(ERASE_LINE);
-      this.pendingThinking = false;
-    }
+    this.beforeSend?.();
 
     const sep = this.separator();
     const content = this.isTTY

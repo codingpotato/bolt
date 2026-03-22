@@ -20,6 +20,7 @@ import { createTodoTools } from '../todo/todo-tools';
 import { TaskStore } from '../tasks/task-store';
 import { createTaskTools } from '../tasks/task-tools';
 import { loadAgentPrompt } from '../agent-prompt/agent-prompt';
+import { CliProgressReporter } from '../progress';
 import { resolve, join } from 'node:path';
 
 async function main(): Promise<void> {
@@ -35,6 +36,13 @@ async function main(): Promise<void> {
   const log = createAuditLogger(dataDir);
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
 
+  // Parse progress-related CLI flags (override config defaults).
+  const args = process.argv.slice(2);
+  const verbose = args.includes('--verbose') || config.cli.verbose;
+  const quiet = args.includes('--quiet') || !config.cli.progress;
+
+  const progress = new CliProgressReporter(process.stdout, verbose, quiet);
+
   const todoStore = new TodoStore();
   const taskStore = new TaskStore(dataDir);
 
@@ -47,8 +55,8 @@ async function main(): Promise<void> {
   for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
   for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
 
-  const ctx = { cwd, log, logger };
-  const channel = new CliChannel();
+  const ctx = { cwd, log, logger, progress };
+  const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
   const systemPrompt = await loadAgentPrompt(config);
   const agent = new AgentCore(client, channel, toolBus, ctx, config, systemPrompt, undefined, logger);
 

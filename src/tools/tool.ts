@@ -1,5 +1,6 @@
 import type { ToolLogger } from '../audit/audit-logger';
 import type { Logger } from '../logger';
+import type { ProgressReporter } from '../progress';
 
 export type { ToolLogger };
 
@@ -30,6 +31,8 @@ export interface ToolContext {
    * undefined means all registered tools are permitted.
    */
   allowedTools?: string[];
+  /** Progress reporter — emits structured events to the UI layer. */
+  progress: ProgressReporter;
 }
 
 /** A tool registered with the Tool Bus. */

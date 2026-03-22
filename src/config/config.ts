@@ -40,6 +40,12 @@ export interface Config {
   codeWorkflows: {
     testFixRetries: number;
   };
+  cli: {
+    /** Show progress events in TTY mode (default: true). */
+    progress: boolean;
+    /** Show progress events even in non-TTY mode (default: false). */
+    verbose: boolean;
+  };
   channels: {
     web: {
       enabled: boolean;
@@ -77,6 +83,10 @@ const DEFAULTS: Config = {
   codeWorkflows: {
     testFixRetries: 3,
   },
+  cli: {
+    progress: true,
+    verbose: false,
+  },
   channels: {
     web: {
       enabled: false,
@@ -98,7 +108,7 @@ const CREDENTIAL_FIELDS = [
 // Intentionally excludes `logLevel` (env-var only: BOLT_LOG_LEVEL) and
 // `dataDir` (computed from BOLT_DATA_DIR, used to locate the file itself).
 const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(
-  ['model', 'auth', 'local', 'agentPrompt', 'memory', 'tasks', 'tools', 'codeWorkflows', 'channels'] satisfies (keyof Config)[]
+  ['model', 'auth', 'local', 'agentPrompt', 'memory', 'tasks', 'tools', 'codeWorkflows', 'cli', 'channels'] satisfies (keyof Config)[]
 );
 
 // Validation constants — defined once, not recreated on every call.
@@ -188,6 +198,7 @@ function applyEnvOverrides(config: Config): Config {
     tasks: { ...config.tasks },
     tools: { ...config.tools, allowedTools: [...config.tools.allowedTools] },
     codeWorkflows: { ...config.codeWorkflows },
+    cli: { ...config.cli },
     channels: { web: { ...config.channels.web } },
   };
 

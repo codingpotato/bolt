@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Readable, Writable } from 'node:stream';
 import { CliChannel } from './cli-channel';
 
@@ -93,6 +93,16 @@ describe('CliChannel', () => {
       const channel = new CliChannel(Readable.from(''), errorStream);
 
       await expect(channel.send('test')).rejects.toThrow('write failed');
+    });
+
+    it('calls beforeSend hook before writing the response', async () => {
+      const { stream } = makeOutput();
+      const beforeSend = vi.fn();
+      const channel = new CliChannel(Readable.from(''), stream, beforeSend);
+
+      await channel.send('hello');
+
+      expect(beforeSend).toHaveBeenCalledOnce();
     });
   });
 

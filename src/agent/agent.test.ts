@@ -26,6 +26,7 @@ function makeConfig(model = 'claude-test'): Config {
     tasks: { maxSubtaskDepth: 5, maxRetries: 3 },
     tools: { timeoutMs: 30000, allowedTools: [] },
     codeWorkflows: { testFixRetries: 3 },
+    cli: { progress: true, verbose: false },
     channels: { web: { enabled: false, port: 3000, mode: 'websocket' } },
   };
 }
@@ -54,7 +55,7 @@ function makeToolBus(dispatchAllResult: Awaited<ReturnType<ToolBus['dispatchAll'
 
 /** Build a minimal ToolContext. */
 function makeCtx(): ToolContext {
-  return { cwd: '/tmp', log: { log: vi.fn().mockResolvedValue(undefined) }, logger: createNoopLogger() };
+  return { cwd: '/tmp', log: { log: vi.fn().mockResolvedValue(undefined) }, logger: createNoopLogger(), progress: { onSessionStart: vi.fn(), onThinking: vi.fn(), onToolCall: vi.fn(), onToolResult: vi.fn(), onTaskStatusChange: vi.fn(), onContextInjection: vi.fn(), onMemoryCompaction: vi.fn(), onRetry: vi.fn() } };
 }
 
 /** Build a mock Logger whose methods can be asserted on. */
@@ -248,6 +249,59 @@ describe('AgentCore', () => {
 
       expect(createSpy).not.toHaveBeenCalled();
       expect(sendSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── progress emissions (S5-2) ─────────────────────────────────────────────
+
+  describe('progress emissions', () => {
+    it('emits onSessionStart once when run() is called', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      expect(ctx.progress.onSessionStart).toHaveBeenCalledOnce();
+      expect(ctx.progress.onSessionStart).toHaveBeenCalledWith(expect.any(String), false);
+    });
+
+    it('emits onThinking before each API call', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      expect(ctx.progress.onThinking).toHaveBeenCalledOnce();
+    });
+
+    it('emits onThinking for each round-trip in a tool-call loop', async () => {
+      const toolUse = makeToolUseResponse([{ id: 'tu_1', name: 'bash', input: { command: 'ls' } }]);
+      const { client } = makeClient([toolUse, makeTextResponse('done')]);
+      const { channel } = makeChannel(['go']);
+      const toolBus = makeToolBus([{ id: 'tu_1', content: '{"exitCode":0}' }]);
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      // onThinking is called before each API call — 2 calls = 2 emissions
+      expect(ctx.progress.onThinking).toHaveBeenCalledTimes(2);
+    });
+
+    it('emits onRetry on each transient failure', async () => {
+      const { client } = makeClient([make5xxError(500), make5xxError(500), makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
+      await agent.run();
+
+      expect(ctx.progress.onRetry).toHaveBeenCalledTimes(2);
+      expect(ctx.progress.onRetry).toHaveBeenNthCalledWith(1, 1, 3, expect.any(String));
+      expect(ctx.progress.onRetry).toHaveBeenNthCalledWith(2, 2, 3, expect.any(String));
     });
   });
 

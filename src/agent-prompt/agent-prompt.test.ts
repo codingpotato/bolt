@@ -23,6 +23,7 @@ function makeConfig(overrides?: Partial<Config['agentPrompt']>): Config {
     tasks: { maxSubtaskDepth: 5, maxRetries: 3 },
     tools: { timeoutMs: 30000, allowedTools: [] },
     codeWorkflows: { testFixRetries: 3 },
+    cli: { progress: true, verbose: false },
     channels: { web: { enabled: false, port: 3000, mode: 'websocket' } },
   };
 }

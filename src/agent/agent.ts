@@ -1,4 +1,5 @@
 import Anthropic, { APIConnectionError, APIError } from '@anthropic-ai/sdk';
+import { randomUUID } from 'node:crypto';
 import type { Channel } from '../channels';
 import type { ToolBus } from '../tools/tool-bus';
 import type { ToolContext } from '../tools/tool';
@@ -68,6 +69,8 @@ export class AgentCore {
 
   /** Run the agent loop until the channel closes. */
   async run(): Promise<void> {
+    const sessionId = randomUUID();
+    this.ctx.progress.onSessionStart(sessionId, false);
     for await (const turn of this.channel.receive()) {
       await this.handleTurn(turn.content);
     }
@@ -100,6 +103,7 @@ export class AgentCore {
           messageCount: messages.length,
         });
 
+        this.ctx.progress.onThinking();
         const response = await this.callApi({
           model: this.config.model,
           system: this.systemPrompt,
@@ -193,12 +197,14 @@ export class AgentCore {
           throw err;
         }
         const delayMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        const reason = getErrorMessage(err);
         this.logger.warn('API call failed, retrying', {
           attempt: attempt + 1,
           total: MAX_RETRIES + 1,
-          error: getErrorMessage(err),
+          error: reason,
           retryMs: delayMs,
         });
+        this.ctx.progress.onRetry(attempt + 1, MAX_RETRIES, reason);
         await this.sleep(delayMs);
       }
     }

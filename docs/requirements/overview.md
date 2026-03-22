@@ -66,6 +66,21 @@ The task-driven principle shapes the heavier subsystems:
 - Delegate subtasks to sub-agents; parent/child contexts are fully isolated
 - Task results are persisted alongside status for auditability
 
+### CLI Progress Output
+
+The CLI must surface significant agent steps in real time so the user can follow what the agent is doing without waiting for the final response.
+
+Events that must be shown:
+- Session start or resume (with context injection summary)
+- Model thinking (spinner while generating)
+- Each tool call — name and a brief input summary
+- Each tool result — success or error with a one-line summary
+- Task status changes (created → in_progress → completed / failed)
+- Memory compaction (how many messages were evicted)
+- API retries (attempt number and reason)
+
+Progress output is suppressed in non-TTY environments (pipes, CI) unless `--verbose` is passed. The `--quiet` flag suppresses it even on a TTY. A `ProgressReporter` interface decouples progress emission from the channel and agent loop — the CLI implementation writes to stdout; sub-agents and Discord use a no-op implementation.
+
 ### Agent Prompt System
 
 bolt loads one or two `AGENT.md` files at startup and uses them as the system prompt:

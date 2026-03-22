@@ -99,6 +99,14 @@ Configuration is resolved from three sources, in order of precedence (highest fi
     "testFixRetries": 3
   },
 
+  // CLI output
+  "cli": {
+    // Show progress events (tool calls, compaction, task changes) in TTY mode
+    "progress": true,
+    // Show progress events even in non-TTY mode (e.g. CI with visible output)
+    "verbose": false
+  },
+
   // Channels
   "channels": {
     "web": {

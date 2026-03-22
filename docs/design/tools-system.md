@@ -35,6 +35,8 @@ interface ToolContext {
   logger: Logger;
   /** Allowlisted tool names for the current agent scope (undefined = all allowed) */
   allowedTools?: string[];
+  /** Progress reporter — emits real-time events to the CLI (no-op for sub-agents/Discord) */
+  progress: ProgressReporter;
 }
 ```
 

@@ -82,6 +82,11 @@ Adding a new transport (e.g. Slack, SMS) means implementing `Channel` — no cha
 ### Agent Core
 The central loop that drives bolt. At startup it assembles the system prompt from `~/.bolt/AGENT.md` and `.bolt/AGENT.md` (falling back to a built-in default if neither exists). It then calls the Anthropic API with the assembled context and available tools, processes tool calls, appends results, and loops until the task is complete.
 
+AgentCore holds a `ProgressReporter` and emits `onSessionStart`, `onThinking`, and `onRetry` events. Tool call events (`onToolCall`, `onToolResult`) are emitted by the Tool Bus. Memory events (`onContextInjection`, `onMemoryCompaction`) are emitted by the Memory Manager.
+
+### ProgressReporter
+An interface injected into AgentCore, ToolBus (via ToolContext), and MemoryManager. Emits real-time events at each significant step. `CliProgressReporter` writes formatted lines to stdout (TTY-guarded); `NoopProgressReporter` is used for sub-agents, Discord, and tests. See `docs/design/cli-progress.md`.
+
 ### Tool Bus
 Registers and dispatches tool calls from the model. Each tool is a standalone module with a JSON schema definition (used by the API) and an `execute` function.
 

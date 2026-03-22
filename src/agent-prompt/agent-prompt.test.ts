@@ -19,7 +19,7 @@ function makeConfig(overrides?: Partial<Config['agentPrompt']>): Config {
       suggestionsPath: '.bolt/suggestions',
       ...overrides,
     },
-    memory: { compactThreshold: 0.8, keepRecentMessages: 10, storePath: 'memory', searchBackend: 'keyword' },
+    memory: { compactThreshold: 0.8, keepRecentMessages: 10, storePath: 'memory', sessionPath: 'sessions', taskHistoryMessages: 20, taskHistoryTokenBudget: 20000, injectRecentChat: true, searchBackend: 'keyword' },
     tasks: { maxSubtaskDepth: 5, maxRetries: 3 },
     tools: { timeoutMs: 30000, allowedTools: [] },
     codeWorkflows: { testFixRetries: 3 },

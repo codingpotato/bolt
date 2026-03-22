@@ -102,6 +102,7 @@ describe('TaskStore', () => {
         description: 'my description',
         status: 'pending',
         subtaskIds: [],
+        sessionIds: [],
       });
     });
 
@@ -182,6 +183,36 @@ describe('TaskStore', () => {
       vi.mocked(fsPromises.writeFile).mockClear();
       await store.update(id, { status: 'in_progress' });
       expect(vi.mocked(fsPromises.writeFile)).toHaveBeenCalledOnce();
+    });
+
+    it('appends sessionId when transitioning to in_progress', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc');
+      await store.update(id, { status: 'in_progress', sessionId: 'session-abc' });
+      expect(store.list().find((t) => t.id === id)?.sessionIds).toEqual(['session-abc']);
+    });
+
+    it('appends multiple sessionIds across successive in_progress transitions', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc');
+      await store.update(id, { status: 'in_progress', sessionId: 'session-1' });
+      await store.update(id, { status: 'completed' });
+      await store.update(id, { status: 'in_progress', sessionId: 'session-2' });
+      expect(store.list().find((t) => t.id === id)?.sessionIds).toEqual(['session-1', 'session-2']);
+    });
+
+    it('does not modify sessionIds when transitioning to a non-in_progress status', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc');
+      await store.update(id, { status: 'completed', sessionId: 'session-x' });
+      expect(store.list().find((t) => t.id === id)?.sessionIds).toEqual([]);
+    });
+
+    it('does not modify sessionIds when no sessionId is provided', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc');
+      await store.update(id, { status: 'in_progress' });
+      expect(store.list().find((t) => t.id === id)?.sessionIds).toEqual([]);
     });
   });
 

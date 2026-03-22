@@ -27,6 +27,10 @@ export interface Config {
     compactThreshold: number;
     keepRecentMessages: number;
     storePath: string;
+    sessionPath: string;
+    taskHistoryMessages: number;
+    taskHistoryTokenBudget: number;
+    injectRecentChat: boolean;
     searchBackend: 'keyword' | 'embedding';
   };
   tasks: {
@@ -70,6 +74,10 @@ const DEFAULTS: Config = {
     compactThreshold: 0.8,
     keepRecentMessages: 10,
     storePath: 'memory',
+    sessionPath: 'sessions',
+    taskHistoryMessages: 20,
+    taskHistoryTokenBudget: 20000,
+    injectRecentChat: true,
     searchBackend: 'keyword',
   },
   tasks: {
@@ -230,6 +238,8 @@ function validate(config: Config): void {
   }
 
   validatePositiveInteger(config.memory.keepRecentMessages, 'config.memory.keepRecentMessages');
+  validatePositiveInteger(config.memory.taskHistoryMessages, 'config.memory.taskHistoryMessages');
+  validatePositiveInteger(config.memory.taskHistoryTokenBudget, 'config.memory.taskHistoryTokenBudget');
   validatePositiveInteger(config.tasks.maxSubtaskDepth, 'config.tasks.maxSubtaskDepth');
   validatePositiveInteger(config.tasks.maxRetries, 'config.tasks.maxRetries');
   validatePositiveInteger(config.codeWorkflows.testFixRetries, 'config.codeWorkflows.testFixRetries');

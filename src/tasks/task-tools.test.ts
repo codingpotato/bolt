@@ -40,6 +40,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     description: 'test description',
     status: 'pending',
     subtaskIds: [],
+    sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -126,6 +127,23 @@ describe('task tools', () => {
 
     it('is marked sequential', () => {
       expect(getTool('task_update').sequential).toBe(true);
+    });
+
+    it('sets ctx.activeTaskId when transitioning to in_progress', async () => {
+      await getTool('task_update').execute({ id: 'task-1', status: 'in_progress' }, ctx);
+      expect(ctx.activeTaskId).toBe('task-1');
+    });
+
+    it('clears ctx.activeTaskId when the active task leaves in_progress', async () => {
+      ctx.activeTaskId = 'task-1';
+      await getTool('task_update').execute({ id: 'task-1', status: 'completed' }, ctx);
+      expect(ctx.activeTaskId).toBeUndefined();
+    });
+
+    it('does not clear ctx.activeTaskId when a different task changes status', async () => {
+      ctx.activeTaskId = 'task-1';
+      await getTool('task_update').execute({ id: 'task-2', status: 'completed' }, ctx);
+      expect(ctx.activeTaskId).toBe('task-1');
     });
   });
 

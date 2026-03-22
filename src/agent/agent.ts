@@ -7,6 +7,7 @@ import type { Config } from '../config/config';
 import type { Logger } from '../logger';
 import { createNoopLogger } from '../logger';
 import { DEFAULT_SYSTEM_PROMPT } from '../agent-prompt/agent-prompt';
+import type { SessionStore } from '../memory/session-store';
 
 /** Maximum tokens to request per API call. */
 const MAX_TOKENS = 8096;
@@ -53,6 +54,10 @@ function getErrorMessage(err: unknown): string {
  *
  * When token usage exceeds memory.compactThreshold, older messages are
  * compacted before the next API call to stay within the context window.
+ *
+ * When a SessionStore is provided, every user turn, assistant response, tool
+ * call, and tool result is persisted immediately to the L2 session log before
+ * the next LLM call.
  */
 export class AgentCore {
   constructor(
@@ -65,14 +70,19 @@ export class AgentCore {
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise<void>((resolve) => setTimeout(resolve, ms)),
     private readonly logger: Logger = createNoopLogger(),
+    private readonly sessionStore: SessionStore | null = null,
+    private readonly initialSessionId?: string,
   ) {}
 
   /** Run the agent loop until the channel closes. */
   async run(): Promise<void> {
-    const sessionId = randomUUID();
-    this.ctx.progress.onSessionStart(sessionId, false);
+    const sessionId = this.initialSessionId ?? randomUUID();
+    // Stamp the sessionId into the shared ToolContext so tools (e.g. task_update)
+    // can record which session is doing the work.
+    this.ctx.sessionId = sessionId;
+    this.ctx.progress.onSessionStart(sessionId, this.initialSessionId !== undefined);
     for await (const turn of this.channel.receive()) {
-      await this.handleTurn(turn.content);
+      await this.handleTurn(turn.content, sessionId);
     }
   }
 
@@ -86,7 +96,7 @@ export class AgentCore {
    * Context overflow that cannot be resolved by compaction is also surfaced
    * this way.
    */
-  async handleTurn(userMessage: string): Promise<void> {
+  async handleTurn(userMessage: string, sessionId: string = randomUUID()): Promise<void> {
     // Each user turn starts with a fresh message history. Cross-turn memory
     // (persisting context across multiple turns in the same run() session) is
     // handled by the Memory Manager introduced in Sprint 5.
@@ -95,6 +105,9 @@ export class AgentCore {
     // Tool definitions are stable for the lifetime of a turn — hoist the call
     // outside the loop to avoid redundant work on every round-trip.
     const tools = this.toolBus.getAnthropicDefinitions() as Anthropic.Tool[];
+
+    // Persist user turn before the first LLM call.
+    await this.persistEntry(sessionId, 'user', userMessage);
 
     try {
       while (true) {
@@ -130,7 +143,20 @@ export class AgentCore {
             input: block.input,
           }));
 
+          // Persist assistant turn (with tool_use blocks) before dispatching.
+          await this.persistEntry(sessionId, 'assistant', response.content);
+
+          // Persist each tool call before dispatch.
+          for (const call of toolCalls) {
+            await this.persistEntry(sessionId, 'tool_call', call);
+          }
+
           const toolResults = await this.toolBus.dispatchAll(toolCalls, this.ctx);
+
+          // Persist each tool result after dispatch (before next LLM call).
+          for (const result of toolResults) {
+            await this.persistEntry(sessionId, 'tool_result', result);
+          }
 
           // Append the assistant turn (which contains the tool_use blocks)
           messages.push({ role: 'assistant', content: response.content });
@@ -168,7 +194,12 @@ export class AgentCore {
           const textBlock = response.content.find(
             (block): block is Anthropic.TextBlock => block.type === 'text',
           );
-          await this.channel.send(textBlock?.text ?? '');
+          const text = textBlock?.text ?? '';
+
+          // Persist final assistant response before delivering to the channel.
+          await this.persistEntry(sessionId, 'assistant', text);
+
+          await this.channel.send(text);
           break;
         }
       }
@@ -239,5 +270,29 @@ export class AgentCore {
       },
       ...messages.slice(-keep),
     ];
+  }
+
+  /** Appends one entry to the L2 session log. No-ops when no store is configured. */
+  private async persistEntry(
+    sessionId: string,
+    role: 'user' | 'assistant' | 'tool_call' | 'tool_result',
+    content: unknown,
+  ): Promise<void> {
+    if (!this.sessionStore) return;
+    try {
+      await this.sessionStore.append({
+        sessionId,
+        role,
+        content,
+        taskId: this.ctx.activeTaskId,
+      });
+    } catch (err) {
+      // Log but do not throw — a persistence failure must not abort the agent loop.
+      this.logger.warn('Failed to persist session entry', {
+        sessionId,
+        role,
+        error: getErrorMessage(err),
+      });
+    }
   }
 }

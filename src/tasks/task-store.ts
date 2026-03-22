@@ -11,6 +11,8 @@ export interface Task {
   status: TaskStatus;
   parentId?: string;
   subtaskIds: string[];
+  /** Sessions that have worked on this task (appended when status → in_progress). */
+  sessionIds: string[];
   result?: string;
   error?: string;
   createdAt: string;
@@ -99,6 +101,7 @@ export class TaskStore {
       description,
       status: 'pending',
       subtaskIds: [],
+      sessionIds: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -109,7 +112,7 @@ export class TaskStore {
 
   async update(
     id: string,
-    changes: { status: TaskStatus; result?: string; error?: string },
+    changes: { status: TaskStatus; result?: string; error?: string; sessionId?: string },
   ): Promise<void> {
     const task = this.taskMap.get(id);
     if (!task) throw new Error(`task not found: ${id}`);
@@ -117,6 +120,9 @@ export class TaskStore {
     task.updatedAt = new Date().toISOString();
     if (changes.result !== undefined) task.result = changes.result;
     if (changes.error !== undefined) task.error = changes.error;
+    if (changes.status === 'in_progress' && changes.sessionId !== undefined) {
+      task.sessionIds.push(changes.sessionId);
+    }
     await this.persist();
   }
 

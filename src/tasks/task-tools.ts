@@ -67,9 +67,21 @@ export function createTaskTools(store: TaskStore): Tool[] {
       try {
         const existing = store.list().find((t) => t.id === input.id);
         if (existing) title = existing.title;
-        await store.update(input.id, { status: input.status, result: input.result, error: input.error });
+        await store.update(input.id, {
+          status: input.status,
+          result: input.result,
+          error: input.error,
+          sessionId: ctx.sessionId,
+        });
       } catch (err) {
         throw new ToolError(err instanceof Error ? err.message : String(err));
+      }
+      // Track the active task in ToolContext so AgentCore can stamp taskId on
+      // session entries. Set when a task moves to in_progress, cleared otherwise.
+      if (input.status === 'in_progress') {
+        ctx.activeTaskId = input.id;
+      } else if (ctx.activeTaskId === input.id) {
+        ctx.activeTaskId = undefined;
       }
       ctx.progress.onTaskStatusChange(input.id, title, input.status);
       return { id: input.id };

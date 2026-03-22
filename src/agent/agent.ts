@@ -10,6 +10,10 @@ import { DEFAULT_SYSTEM_PROMPT } from '../agent-prompt/agent-prompt';
 import type { SessionStore } from '../memory/session-store';
 import type { MemoryManager } from '../memory/memory-manager';
 import { estimateTokens } from '../memory/memory-manager';
+import {
+  createSlashCommandRegistry,
+  type SlashCommandRegistry,
+} from '../slash-commands/slash-commands';
 
 /** Maximum tokens to request per API call. */
 const MAX_TOKENS = 8096;
@@ -75,9 +79,10 @@ export class AgentCore {
     private readonly sessionStore: SessionStore | null = null,
     private readonly initialSessionId?: string,
     private readonly memoryManager: MemoryManager | null = null,
+    private readonly slashRegistry: SlashCommandRegistry = createSlashCommandRegistry(),
   ) {}
 
-  /** Run the agent loop until the channel closes. */
+  /** Run the agent loop until the channel closes or /exit is received. */
   async run(): Promise<void> {
     const sessionId = this.initialSessionId ?? randomUUID();
     // Stamp the sessionId into the shared ToolContext so tools (e.g. task_update)
@@ -85,6 +90,15 @@ export class AgentCore {
     this.ctx.sessionId = sessionId;
     this.ctx.progress.onSessionStart(sessionId, this.initialSessionId !== undefined);
     for await (const turn of this.channel.receive()) {
+      const content = turn.content.trimStart();
+      if (this.slashRegistry.isSlashCommand(content)) {
+        const result = await this.slashRegistry.dispatch(content, {
+          send: (msg) => this.channel.send(msg),
+          sessionId,
+        });
+        if (result.exit) break;
+        continue;
+      }
       await this.handleTurn(turn.content, sessionId);
     }
   }

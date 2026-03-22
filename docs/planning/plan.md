@@ -210,6 +210,27 @@ Acceptance Criteria:
 - [x] CliChannel implements the Channel interface
 ```
 
+**S1-5: CLI slash commands**
+```
+As a CLI user,
+I want to type slash commands like /exit and /help,
+so that I can control the agent session without consuming API tokens.
+
+Acceptance Criteria:
+- [x] User messages starting with / are intercepted by SlashCommandRegistry before reaching the LLM
+- [x] /help lists all registered slash commands with descriptions
+- [x] /exit terminates the agent loop cleanly (same as Ctrl+D / EOF)
+- [x] /session shows the current session ID
+- [x] Unknown commands send an error message listing available commands; no crash, no LLM call
+- [x] SlashCommand interface: { name, description, execute(args, ctx) }
+- [x] SlashContext interface: { send(message), sessionId }
+- [x] SlashResult interface: { exit?: boolean }
+- [x] New commands can be registered via SlashCommandRegistry.register()
+- [x] createSlashCommandRegistry() returns a registry pre-loaded with /help, /exit, /session
+- [x] Unit tests cover: /exit breaks loop, /help lists commands, /session shows ID, unknown command error, non-slash message passes through to LLM
+- [x] Design documented in docs/design/slash-commands.md
+```
+
 ---
 
 ## Sprint 2 — Tool Bus + Core Tools

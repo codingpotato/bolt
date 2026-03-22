@@ -24,6 +24,7 @@ The task-driven principle shapes the heavier subsystems:
 ### Interface
 - Operated entirely via the command line
 - Can connect to and interact with Discord channels
+- **Slash commands** — CLI directives starting with `/` are intercepted before the LLM: `/exit` terminates the session, `/help` lists commands, `/session` shows the current session ID. New commands can be registered without modifying core code.
 - **Planned:** web interface via `WebChannel` (HTTP/WebSocket) — not in v1 scope
 
 ### Tools Execution

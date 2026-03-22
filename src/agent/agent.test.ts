@@ -1022,4 +1022,56 @@ describe('AgentCore', () => {
       expect(calls.every(([e]) => e.taskId === undefined)).toBe(true);
     });
   });
+
+  // ── slash commands ────────────────────────────────────────────────────────
+
+  describe('slash command handling', () => {
+    it('/exit terminates the loop without calling the LLM', async () => {
+      const { client, createSpy } = makeClient([]);
+      const { channel, sendSpy } = makeChannel(['/exit']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
+      await agent.run();
+
+      expect(createSpy).not.toHaveBeenCalled();
+      expect(sendSpy).not.toHaveBeenCalled();
+    });
+
+    it('normal message after /exit is never processed', async () => {
+      const { client, createSpy } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['/exit', 'hello']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
+      await agent.run();
+
+      expect(createSpy).not.toHaveBeenCalled();
+    });
+
+    it('/help sends a list of commands without calling the LLM', async () => {
+      const { client, createSpy } = makeClient([]);
+      const { channel, sendSpy } = makeChannel(['/help', '/exit']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
+      await agent.run();
+
+      expect(createSpy).not.toHaveBeenCalled();
+      expect(sendSpy).toHaveBeenCalledOnce();
+      const msg = (sendSpy.mock.calls[0] as unknown[])[0] as string;
+      expect(msg).toContain('/exit');
+    });
+
+    it('non-slash messages are still forwarded to the LLM', async () => {
+      const { client, createSpy } = makeClient([makeTextResponse('hello back')]);
+      const { channel } = makeChannel(['hello', '/exit']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledOnce();
+    });
+  });
 });

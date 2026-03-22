@@ -79,8 +79,12 @@ Implementations:
 
 Adding a new transport (e.g. Slack, SMS) means implementing `Channel` — no changes to Agent Core are required.
 
+### Slash Command Registry
+
+Before a user turn reaches the LLM, `AgentCore` checks whether it starts with `/`. Matching messages are dispatched to `SlashCommandRegistry` instead of the API. Built-in commands: `/help`, `/exit`, `/session`. New commands can be registered without modifying AgentCore. See `docs/design/slash-commands.md`.
+
 ### Agent Core
-The central loop that drives bolt. At startup it assembles the system prompt from `~/.bolt/AGENT.md` and `.bolt/AGENT.md` (falling back to a built-in default if neither exists). It then calls the Anthropic API with the assembled context and available tools, processes tool calls, appends results, and loops until the task is complete.
+The central loop that drives bolt. At startup it assembles the system prompt from `~/.bolt/AGENT.md` and `.bolt/AGENT.md` (falling back to a built-in default if neither exists). It checks each user turn for slash commands first, then calls the Anthropic API with the assembled context and available tools, processes tool calls, appends results, and loops until the task is complete.
 
 AgentCore holds a `ProgressReporter` and emits `onSessionStart`, `onThinking`, and `onRetry` events. Tool call events (`onToolCall`, `onToolResult`) are emitted by the Tool Bus. Memory events (`onContextInjection`, `onMemoryCompaction`) are emitted by the Memory Manager.
 

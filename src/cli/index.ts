@@ -22,6 +22,7 @@ import { createTaskTools } from '../tasks/task-tools';
 import { loadAgentPrompt } from '../agent-prompt/agent-prompt';
 import { CliProgressReporter } from '../progress';
 import { SessionStore } from '../memory/session-store';
+import { MemoryStore } from '../memory/memory-store';
 import { MemoryManager } from '../memory/memory-manager';
 import { resolve, join } from 'node:path';
 
@@ -54,7 +55,10 @@ async function main(): Promise<void> {
 
   const sessionsDir = join(dataDir, config.memory.sessionPath);
   const sessionStore = new SessionStore(sessionsDir, logger);
-  const memoryManager = new MemoryManager(sessionStore, config.memory, logger);
+  const memoryStoreDir = join(dataDir, config.memory.storePath);
+  const corruptedDir = join(dataDir, 'corrupted');
+  const memoryStore = new MemoryStore(memoryStoreDir, corruptedDir, logger);
+  const memoryManager = new MemoryManager(sessionStore, config.memory, logger, memoryStore, client, config.model);
 
   const toolBus = new ToolBus();
   toolBus.register(bashTool);

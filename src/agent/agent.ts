@@ -5,6 +5,7 @@ import type { ToolContext } from '../tools/tool';
 import type { Config } from '../config/config';
 import type { Logger } from '../logger';
 import { createNoopLogger } from '../logger';
+import { DEFAULT_SYSTEM_PROMPT } from '../agent-prompt/agent-prompt';
 
 /** Maximum tokens to request per API call. */
 const MAX_TOKENS = 8096;
@@ -21,8 +22,6 @@ const INITIAL_BACKOFF_MS = 1000;
  */
 const MODEL_CONTEXT_WINDOW = 200_000;
 
-/** System prompt sent on every API call. */
-const SYSTEM = 'You are bolt, an autonomous CLI agent. You have access to tools to execute shell commands, read and write files, and fetch web content. Use them to complete the user\'s request.';
 
 /** Returns true if the error is transient and the call should be retried. */
 function isRetryableError(err: unknown): boolean {
@@ -61,6 +60,7 @@ export class AgentCore {
     private readonly toolBus: ToolBus,
     private readonly ctx: ToolContext,
     private readonly config: Config,
+    private readonly systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise<void>((resolve) => setTimeout(resolve, ms)),
     private readonly logger: Logger = createNoopLogger(),
@@ -102,7 +102,7 @@ export class AgentCore {
 
         const response = await this.callApi({
           model: this.config.model,
-          system: SYSTEM,
+          system: this.systemPrompt,
           max_tokens: MAX_TOKENS,
           tools,
           messages,

@@ -19,6 +19,7 @@ import { TodoStore } from '../todo/todo-store';
 import { createTodoTools } from '../todo/todo-tools';
 import { TaskStore } from '../tasks/task-store';
 import { createTaskTools } from '../tasks/task-tools';
+import { loadAgentPrompt } from '../agent-prompt/agent-prompt';
 import { resolve, join } from 'node:path';
 
 async function main(): Promise<void> {
@@ -48,7 +49,8 @@ async function main(): Promise<void> {
 
   const ctx = { cwd, log, logger };
   const channel = new CliChannel();
-  const agent = new AgentCore(client, channel, toolBus, ctx, config, undefined, logger);
+  const systemPrompt = await loadAgentPrompt(config);
+  const agent = new AgentCore(client, channel, toolBus, ctx, config, systemPrompt, undefined, logger);
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });
 

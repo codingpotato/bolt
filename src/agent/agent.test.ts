@@ -21,6 +21,7 @@ function makeConfig(model = 'claude-test'): Config {
     logLevel: 'info',
     auth: {},
     local: {},
+    agentPrompt: { projectFile: '.bolt/AGENT.md', userFile: '~/.bolt/AGENT.md', suggestionsPath: '.bolt/suggestions' },
     memory: { compactThreshold: 0.8, keepRecentMessages: 10, storePath: 'memory', searchBackend: 'keyword' },
     tasks: { maxSubtaskDepth: 5, maxRetries: 3 },
     tools: { timeoutMs: 30000, allowedTools: [] },
@@ -513,7 +514,7 @@ describe('AgentCore', () => {
       const { channel, sendSpy } = makeChannel(['hi']);
       const toolBus = makeToolBus();
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
       await agent.run();
 
       expect(createSpy).toHaveBeenCalledTimes(2);
@@ -525,7 +526,7 @@ describe('AgentCore', () => {
       const { channel, sendSpy } = makeChannel(['hi']);
       const toolBus = makeToolBus();
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
       await agent.run();
 
       expect(createSpy).toHaveBeenCalledTimes(2);
@@ -543,7 +544,7 @@ describe('AgentCore', () => {
       const { channel, sendSpy } = makeChannel(['hi']);
       const toolBus = makeToolBus();
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
       await agent.run();
 
       expect(createSpy).toHaveBeenCalledTimes(4);
@@ -556,7 +557,7 @@ describe('AgentCore', () => {
       const { channel, sendSpy } = makeChannel(['hi']);
       const toolBus = makeToolBus();
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
       await agent.run();
 
       expect(createSpy).toHaveBeenCalledOnce();
@@ -570,7 +571,7 @@ describe('AgentCore', () => {
       const { channel, sendSpy } = makeChannel(['hi']);
       const toolBus = makeToolBus();
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
       await agent.run();
 
       expect(createSpy).toHaveBeenCalledOnce();
@@ -590,7 +591,7 @@ describe('AgentCore', () => {
       const { channel } = makeChannel(['hi']);
       const toolBus = makeToolBus();
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
       await agent.run();
 
       expect(createSpy).toHaveBeenCalledTimes(4);
@@ -607,7 +608,7 @@ describe('AgentCore', () => {
       const toolBus = makeToolBus();
       const mockLogger = makeLogger();
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep, mockLogger);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep, mockLogger);
       await agent.run();
 
       expect(mockLogger.warn).toHaveBeenCalledTimes(2);
@@ -626,7 +627,7 @@ describe('AgentCore', () => {
       const { channel } = makeChannel(['hi']);
       const toolBus = makeToolBus();
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
       await agent.run();
 
       expect(noopSleep).toHaveBeenCalledTimes(3);
@@ -640,7 +641,7 @@ describe('AgentCore', () => {
       const { channel } = makeChannel(['hi']);
       const toolBus = makeToolBus();
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
       await agent.run();
 
       expect(noopSleep).not.toHaveBeenCalled();
@@ -656,7 +657,7 @@ describe('AgentCore', () => {
       const { channel, sendSpy } = makeChannel(['turn 1', 'turn 2']);
       const toolBus = makeToolBus();
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
       await agent.run();
 
       expect(createSpy).toHaveBeenCalledTimes(3);
@@ -686,7 +687,7 @@ describe('AgentCore', () => {
       const { channel } = makeChannel(['go']);
       const toolBus = makeToolBus([TOOL_RESULT]);
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), undefined, noopSleep);
       await agent.run();
 
       // Second call should have the full un-compacted message history:
@@ -704,7 +705,7 @@ describe('AgentCore', () => {
       const { channel } = makeChannel(['go']);
       const toolBus = makeToolBus([TOOL_RESULT]);
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), undefined, noopSleep);
       await agent.run();
 
       // After compaction (keepRecentMessages=2), messages shrink:
@@ -721,7 +722,7 @@ describe('AgentCore', () => {
       const { channel } = makeChannel(['go']);
       const toolBus = makeToolBus([TOOL_RESULT]);
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), undefined, noopSleep);
       await agent.run();
 
       const secondCallArg = createSpy.mock.calls[1]?.[0] as { messages: Anthropic.MessageParam[] };
@@ -741,7 +742,7 @@ describe('AgentCore', () => {
       const { channel } = makeChannel(['go']);
       const toolBus = makeToolBus([TOOL_RESULT]);
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), undefined, noopSleep);
       await agent.run();
 
       const secondCallArg = createSpy.mock.calls[1]?.[0] as { messages: Anthropic.MessageParam[] };
@@ -758,7 +759,7 @@ describe('AgentCore', () => {
       const { channel, sendSpy } = makeChannel(['go']);
       const toolBus = makeToolBus([TOOL_RESULT]);
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), undefined, noopSleep);
       await agent.run();
 
       expect(sendSpy).toHaveBeenCalledWith('all done');
@@ -780,7 +781,7 @@ describe('AgentCore', () => {
       const { channel, sendSpy } = makeChannel(['go']);
       const toolBus = makeToolBus([TOOL_RESULT]);
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, overflowConfig, noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, overflowConfig, undefined, noopSleep);
       await agent.run();
 
       // The API should only be called once (no retry after unresolvable overflow)
@@ -800,7 +801,7 @@ describe('AgentCore', () => {
       const { channel, sendSpy } = makeChannel(['go']);
       const toolBus = makeToolBus([TOOL_RESULT]);
 
-      const agent = new AgentCore(client, channel, toolBus, ctx, overflowConfig, noopSleep);
+      const agent = new AgentCore(client, channel, toolBus, ctx, overflowConfig, undefined, noopSleep);
       await agent.run();
 
       expect(sendSpy.mock.calls[0]?.[0]).toContain('170,000');

@@ -71,6 +71,13 @@ describe('TodoStore', () => {
       items.pop();
       expect(store.list()).toHaveLength(1);
     });
+
+    it('returns item copies — mutating a returned item does not affect the store', () => {
+      const id = store.create('task');
+      const item = store.list()[0];
+      if (item) item.status = 'done';
+      expect(store.list().find((i: { id: string }) => i.id === id)?.status).toBe('pending');
+    });
   });
 
   describe('delete', () => {

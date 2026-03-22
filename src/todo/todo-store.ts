@@ -25,7 +25,7 @@ export class TodoStore {
   }
 
   list(): TodoItem[] {
-    return Array.from(this.items.values());
+    return Array.from(this.items.values()).map((item) => ({ ...item }));
   }
 
   delete(id: string): void {

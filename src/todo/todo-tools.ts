@@ -1,7 +1,6 @@
 import { ToolError } from '../tools/tool';
 import type { Tool, ToolContext } from '../tools/tool';
-import type { TodoItem, TodoStatus } from './todo-store';
-import type { TodoStore } from './todo-store';
+import type { TodoItem, TodoStatus, TodoStore } from './todo-store';
 
 interface TodoCreateInput {
   title: string;
@@ -44,9 +43,9 @@ export function createTodoTools(store: TodoStore): Tool[] {
       },
       required: ['title'],
     },
-    execute(_input: TodoCreateInput, _ctx: ToolContext): Promise<TodoCreateOutput> {
-      const id = store.create(_input.title);
-      return Promise.resolve({ id });
+    async execute(input: TodoCreateInput, _ctx: ToolContext): Promise<TodoCreateOutput> {
+      const id = store.create(input.title);
+      return { id };
     },
   };
 
@@ -81,8 +80,8 @@ export function createTodoTools(store: TodoStore): Tool[] {
     name: 'todo_list',
     description: 'Return the current ordered todo list with ids, titles, statuses, and descriptions.',
     inputSchema: { type: 'object', properties: {} },
-    execute(_input: Record<string, never>, _ctx: ToolContext): Promise<TodoListOutput> {
-      return Promise.resolve({ items: store.list() });
+    async execute(_input: Record<string, never>, _ctx: ToolContext): Promise<TodoListOutput> {
+      return { items: store.list() };
     },
   };
 

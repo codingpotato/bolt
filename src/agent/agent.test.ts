@@ -22,7 +22,7 @@ function makeConfig(model = 'claude-test'): Config {
     auth: {},
     local: {},
     agentPrompt: { projectFile: '.bolt/AGENT.md', userFile: '~/.bolt/AGENT.md', suggestionsPath: '.bolt/suggestions' },
-    memory: { compactThreshold: 0.8, keepRecentMessages: 10, storePath: 'memory', searchBackend: 'keyword' },
+    memory: { compactThreshold: 0.8, keepRecentMessages: 10, storePath: 'memory', sessionPath: 'sessions', taskHistoryMessages: 20, taskHistoryTokenBudget: 20000, injectRecentChat: true, searchBackend: 'keyword' },
     tasks: { maxSubtaskDepth: 5, maxRetries: 3 },
     tools: { timeoutMs: 30000, allowedTools: [] },
     codeWorkflows: { testFixRetries: 3 },
@@ -873,6 +873,119 @@ describe('AgentCore', () => {
 
       expect(sendSpy.mock.calls[0]?.[0]).toContain('170,000');
       expect(sendSpy.mock.calls[0]?.[0]).toContain('200,000');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Session store persistence
+  // ---------------------------------------------------------------------------
+
+  describe('session store persistence', () => {
+    function makeSessionStore() {
+      return { append: vi.fn().mockResolvedValue(undefined) };
+    }
+
+    it('writes a user entry before the first LLM call', async () => {
+      const { client } = makeClient([makeTextResponse('hi')]);
+      const { channel } = makeChannel(['hello']);
+      const toolBus = makeToolBus();
+      const store = makeSessionStore();
+
+      const agent = new AgentCore(
+        client, channel, toolBus, makeCtx(), makeConfig(),
+        undefined, noopSleep, createNoopLogger(), store as never,
+      );
+      await agent.run();
+
+      const calls = store.append.mock.calls as Array<[{ role: string; content: unknown }]>;
+      const userEntries = calls.filter(([e]) => e.role === 'user');
+      expect(userEntries.length).toBeGreaterThanOrEqual(1);
+      expect(userEntries[0]?.[0].content).toBe('hello');
+    });
+
+    it('writes an assistant entry for the final text response', async () => {
+      const { client } = makeClient([makeTextResponse('world')]);
+      const { channel } = makeChannel(['hello']);
+      const toolBus = makeToolBus();
+      const store = makeSessionStore();
+
+      const agent = new AgentCore(
+        client, channel, toolBus, makeCtx(), makeConfig(),
+        undefined, noopSleep, createNoopLogger(), store as never,
+      );
+      await agent.run();
+
+      const calls = store.append.mock.calls as Array<[{ role: string; content: unknown }]>;
+      const assistantEntries = calls.filter(([e]) => e.role === 'assistant');
+      expect(assistantEntries.length).toBeGreaterThanOrEqual(1);
+      expect(assistantEntries[0]?.[0].content).toBe('world');
+    });
+
+    it('writes tool_call and tool_result entries during a tool-use turn', async () => {
+      const toolCall = { id: 'tc1', name: 'bash', input: { command: 'ls' } };
+      const toolResult = { id: 'tc1', content: 'file.txt', is_error: false };
+      const { client } = makeClient([makeToolUseResponse([toolCall]), makeTextResponse('done')]);
+      const { channel } = makeChannel(['run']);
+      const toolBus = makeToolBus([toolResult]);
+      const store = makeSessionStore();
+
+      const agent = new AgentCore(
+        client, channel, toolBus, makeCtx(), makeConfig(),
+        undefined, noopSleep, createNoopLogger(), store as never,
+      );
+      await agent.run();
+
+      const calls = store.append.mock.calls as Array<[{ role: string }]>;
+      const roles = calls.map(([e]) => e.role);
+      expect(roles).toContain('tool_call');
+      expect(roles).toContain('tool_result');
+    });
+
+    it('stamps all entries with the same sessionId', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hello']);
+      const toolBus = makeToolBus();
+      const store = makeSessionStore();
+
+      const agent = new AgentCore(
+        client, channel, toolBus, makeCtx(), makeConfig(),
+        undefined, noopSleep, createNoopLogger(), store as never,
+      );
+      await agent.run();
+
+      const calls = store.append.mock.calls as Array<[{ sessionId: string }]>;
+      const sessionIds = new Set(calls.map(([e]) => e.sessionId));
+      expect(sessionIds.size).toBe(1);
+      expect([...sessionIds][0]).toBeTruthy();
+    });
+
+    it('uses the provided initialSessionId when resuming', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hello']);
+      const toolBus = makeToolBus();
+      const store = makeSessionStore();
+      const resumedId = 'my-resumed-session-id';
+
+      const agent = new AgentCore(
+        client, channel, toolBus, makeCtx(), makeConfig(),
+        undefined, noopSleep, createNoopLogger(), store as never, resumedId,
+      );
+      await agent.run();
+
+      const calls = store.append.mock.calls as Array<[{ sessionId: string }]>;
+      expect(calls.every(([e]) => e.sessionId === resumedId)).toBe(true);
+    });
+
+    it('does not throw when no session store is provided', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel, sendSpy } = makeChannel(['hello']);
+      const toolBus = makeToolBus();
+
+      // No session store — should work exactly as before
+      const agent = new AgentCore(client, channel, toolBus, makeCtx(), makeConfig(), undefined, noopSleep);
+      await agent.run();
+
+      expect(sendSpy).toHaveBeenCalledWith('ok');
     });
   });
 });

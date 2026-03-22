@@ -21,6 +21,7 @@ import { TaskStore } from '../tasks/task-store';
 import { createTaskTools } from '../tasks/task-tools';
 import { loadAgentPrompt } from '../agent-prompt/agent-prompt';
 import { CliProgressReporter } from '../progress';
+import { SessionStore } from '../memory/session-store';
 import { resolve, join } from 'node:path';
 
 async function main(): Promise<void> {
@@ -41,10 +42,17 @@ async function main(): Promise<void> {
   const verbose = args.includes('--verbose') || config.cli.verbose;
   const quiet = args.includes('--quiet') || !config.cli.progress;
 
+  // Parse --session <id> flag for resuming a prior session.
+  const sessionFlagIndex = args.indexOf('--session');
+  const sessionId = sessionFlagIndex !== -1 ? args[sessionFlagIndex + 1] : undefined;
+
   const progress = new CliProgressReporter(process.stdout, verbose, quiet);
 
   const todoStore = new TodoStore();
   const taskStore = new TaskStore(dataDir);
+
+  const sessionsDir = join(dataDir, config.memory.sessionPath);
+  const sessionStore = new SessionStore(sessionsDir, logger);
 
   const toolBus = new ToolBus();
   toolBus.register(bashTool);
@@ -58,7 +66,18 @@ async function main(): Promise<void> {
   const ctx = { cwd, log, logger, progress };
   const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
   const systemPrompt = await loadAgentPrompt(config);
-  const agent = new AgentCore(client, channel, toolBus, ctx, config, systemPrompt, undefined, logger);
+  const agent = new AgentCore(
+    client,
+    channel,
+    toolBus,
+    ctx,
+    config,
+    systemPrompt,
+    undefined,
+    logger,
+    sessionStore,
+    sessionId,
+  );
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });
 

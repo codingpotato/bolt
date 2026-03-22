@@ -11,6 +11,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     description: 'do something',
     status: 'pending',
     subtaskIds: [],
+    sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,

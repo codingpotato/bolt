@@ -33,6 +33,8 @@ export interface ToolContext {
   allowedTools?: string[];
   /** Progress reporter — emits structured events to the UI layer. */
   progress: ProgressReporter;
+  /** Current session ID — used by tools that need to stamp session provenance. */
+  sessionId?: string;
 }
 
 /** A tool registered with the Tool Bus. */

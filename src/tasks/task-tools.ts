@@ -67,7 +67,12 @@ export function createTaskTools(store: TaskStore): Tool[] {
       try {
         const existing = store.list().find((t) => t.id === input.id);
         if (existing) title = existing.title;
-        await store.update(input.id, { status: input.status, result: input.result, error: input.error });
+        await store.update(input.id, {
+          status: input.status,
+          result: input.result,
+          error: input.error,
+          sessionId: ctx.sessionId,
+        });
       } catch (err) {
         throw new ToolError(err instanceof Error ? err.message : String(err));
       }

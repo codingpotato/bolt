@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Logger } from '../logger';
 
@@ -55,6 +55,25 @@ export class SessionStore {
     const filePath = join(this.sessionsDir, `${sessionId}.jsonl`);
     await mkdir(this.sessionsDir, { recursive: true });
     await appendFile(filePath, JSON.stringify(full) + '\n', 'utf-8');
+  }
+
+  /**
+   * List all session IDs that have a persisted log file.
+   * Returns an empty array if the sessions directory does not exist.
+   */
+  async listSessionIds(): Promise<string[]> {
+    let fileNames: string[];
+    try {
+      fileNames = await readdir(this.sessionsDir);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return [];
+      }
+      throw err;
+    }
+    return fileNames
+      .filter((name) => name.endsWith('.jsonl'))
+      .map((name) => name.slice(0, -6));
   }
 
   /**

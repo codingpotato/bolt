@@ -27,6 +27,12 @@ vi.mock('node:fs/promises', () => ({
     }
     return files[p];
   }),
+  readdir: vi.fn(async (dir: string) => {
+    const prefix = String(dir).endsWith('/') ? String(dir) : String(dir) + '/';
+    return Object.keys(files)
+      .filter((p) => p.startsWith(prefix) && !p.slice(prefix.length).includes('/'))
+      .map((p) => p.slice(prefix.length));
+  }),
 }));
 
 beforeEach(() => {
@@ -219,5 +225,35 @@ describe('SessionStore.loadSession', () => {
 
     const entries = await store.loadSession(SESSION_ID);
     expect(entries).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listSessionIds
+// ---------------------------------------------------------------------------
+
+describe('SessionStore.listSessionIds()', () => {
+  it('returns empty array when sessions directory does not exist', async () => {
+    const store = makeStore();
+    const ids = await store.listSessionIds();
+    expect(ids).toEqual([]);
+  });
+
+  it('returns session IDs derived from .jsonl filenames', async () => {
+    files[`${SESSIONS_DIR}/session-a.jsonl`] = '';
+    files[`${SESSIONS_DIR}/session-b.jsonl`] = '';
+
+    const store = makeStore();
+    const ids = await store.listSessionIds();
+    expect(ids.sort()).toEqual(['session-a', 'session-b']);
+  });
+
+  it('ignores non-.jsonl files', async () => {
+    files[`${SESSIONS_DIR}/session-a.jsonl`] = '';
+    files[`${SESSIONS_DIR}/readme.txt`] = '';
+
+    const store = makeStore();
+    const ids = await store.listSessionIds();
+    expect(ids).toEqual(['session-a']);
   });
 });

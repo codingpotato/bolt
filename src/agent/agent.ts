@@ -8,6 +8,8 @@ import type { Logger } from '../logger';
 import { createNoopLogger } from '../logger';
 import { DEFAULT_SYSTEM_PROMPT } from '../agent-prompt/agent-prompt';
 import type { SessionStore } from '../memory/session-store';
+import type { MemoryManager } from '../memory/memory-manager';
+import { estimateTokens } from '../memory/memory-manager';
 
 /** Maximum tokens to request per API call. */
 const MAX_TOKENS = 8096;
@@ -72,6 +74,7 @@ export class AgentCore {
     private readonly logger: Logger = createNoopLogger(),
     private readonly sessionStore: SessionStore | null = null,
     private readonly initialSessionId?: string,
+    private readonly memoryManager: MemoryManager | null = null,
   ) {}
 
   /** Run the agent loop until the channel closes. */
@@ -97,10 +100,31 @@ export class AgentCore {
    * this way.
    */
   async handleTurn(userMessage: string, sessionId: string = randomUUID()): Promise<void> {
-    // Each user turn starts with a fresh message history. Cross-turn memory
-    // (persisting context across multiple turns in the same run() session) is
-    // handled by the Memory Manager introduced in Sprint 5.
-    const messages: Anthropic.MessageParam[] = [{ role: 'user', content: userMessage }];
+    // Assemble injected history (task history / session resume / chat continuity).
+    const injectedMessages = this.memoryManager
+      ? await this.memoryManager.assembleInjectedHistory({
+          currentSessionId: sessionId,
+          resumedSessionId: this.initialSessionId,
+          activeTaskId: this.ctx.activeTaskId,
+        })
+      : [];
+
+    if (injectedMessages.length > 0) {
+      const source = this.ctx.activeTaskId ? 'task' : 'chat';
+      this.ctx.progress.onContextInjection(source, injectedMessages.length, this.ctx.activeTaskId);
+    }
+
+    // Estimated token cost of injected history — subtracted from input_tokens
+    // when checking the compaction threshold so L1 alone drives compaction.
+    const injectedTokenEstimate = injectedMessages.reduce(
+      (sum, p) => sum + estimateTokens(p),
+      0,
+    );
+
+    const messages: Anthropic.MessageParam[] = [
+      ...injectedMessages,
+      { role: 'user', content: userMessage },
+    ];
 
     // Tool definitions are stable for the lifetime of a turn — hoist the call
     // outside the loop to avoid redundant work on every round-trip.
@@ -173,11 +197,11 @@ export class AgentCore {
             })),
           });
 
-          // Check if token usage is approaching the context window limit.
-          // We check here (after appending tool results) so the assessment
-          // includes the full cost of the current round-trip. If over the
-          // threshold, compact before the next API call.
-          const tokenFraction = response.usage.input_tokens / MODEL_CONTEXT_WINDOW;
+          // Check if L1 token usage is approaching the context window limit.
+          // Subtract injected history tokens so a task with large injected
+          // context does not trigger compaction when L1 itself is small.
+          const l1Tokens = Math.max(0, response.usage.input_tokens - injectedTokenEstimate);
+          const tokenFraction = l1Tokens / MODEL_CONTEXT_WINDOW;
           if (tokenFraction > this.config.memory.compactThreshold) {
             const compacted = this.compactMessages(messages);
             if (compacted === null) {

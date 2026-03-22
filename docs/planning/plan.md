@@ -477,10 +477,10 @@ I want compacted summaries and agent notes persisted to disk,
 so that I can retrieve cross-session knowledge in future runs.
 
 Acceptance Criteria:
-- [ ] CompactEntry interface matches docs/design/memory-system.md (id, type, sessionId, taskId?, createdAt, date, summary, messages?, tags)
-- [ ] Entries are written as JSON files in .bolt/memory/<id>.json
-- [ ] On startup, all .bolt/memory/ files are loaded; corrupt files are skipped with a warning
-- [ ] Corrupt entry files are moved to .bolt/corrupted/ and do not block startup
+- [x] CompactEntry interface matches docs/design/memory-system.md (id, type, sessionId, taskId?, createdAt, date, summary, messages?, tags)
+- [x] Entries are written as JSON files in .bolt/memory/<id>.json
+- [x] On startup, all .bolt/memory/ files are loaded; corrupt files are skipped with a warning
+- [x] Corrupt entry files are moved to .bolt/corrupted/ and do not block startup
 ```
 
 **S5-5: Memory Manager — context assembly and task history injection**

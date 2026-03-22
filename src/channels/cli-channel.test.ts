@@ -106,6 +106,29 @@ describe('CliChannel', () => {
     });
   });
 
+  describe('question()', () => {
+    it('returns empty string when receive() has not been called (rl is null)', async () => {
+      const channel = new CliChannel(Readable.from(''), makeOutput().stream);
+      const answer = await channel.question('Are you sure? ');
+      expect(answer).toBe('');
+    });
+
+    it('resolves with the answer provided via the readline interface', async () => {
+      const channel = new CliChannel(makeInput(['yes']), makeOutput().stream);
+
+      // Calling next() without awaiting runs the async generator synchronously up to
+      // its first await (the for-await loop), which creates this.rl before suspending.
+      const receiveIterator = channel.receive()[Symbol.asyncIterator]();
+      void receiveIterator.next();
+
+      // question() registers a one-time line listener; readline delivers 'yes' async.
+      const answer = await channel.question('Confirm? ');
+
+      expect(answer).toBe('yes');
+      await receiveIterator.return?.();
+    });
+  });
+
   describe('implements Channel interface', () => {
     it('uses process.stdin and process.stdout by default', () => {
       const channel = new CliChannel();

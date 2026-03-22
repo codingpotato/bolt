@@ -280,7 +280,12 @@ export class AgentCore {
   ): Promise<void> {
     if (!this.sessionStore) return;
     try {
-      await this.sessionStore.append({ sessionId, role, content });
+      await this.sessionStore.append({
+        sessionId,
+        role,
+        content,
+        taskId: this.ctx.activeTaskId,
+      });
     } catch (err) {
       // Log but do not throw — a persistence failure must not abort the agent loop.
       this.logger.warn('Failed to persist session entry', {

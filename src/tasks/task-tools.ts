@@ -76,6 +76,13 @@ export function createTaskTools(store: TaskStore): Tool[] {
       } catch (err) {
         throw new ToolError(err instanceof Error ? err.message : String(err));
       }
+      // Track the active task in ToolContext so AgentCore can stamp taskId on
+      // session entries. Set when a task moves to in_progress, cleared otherwise.
+      if (input.status === 'in_progress') {
+        ctx.activeTaskId = input.id;
+      } else if (ctx.activeTaskId === input.id) {
+        ctx.activeTaskId = undefined;
+      }
       ctx.progress.onTaskStatusChange(input.id, title, input.status);
       return { id: input.id };
     },

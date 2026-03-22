@@ -238,6 +238,8 @@ function validate(config: Config): void {
   }
 
   validatePositiveInteger(config.memory.keepRecentMessages, 'config.memory.keepRecentMessages');
+  validatePositiveInteger(config.memory.taskHistoryMessages, 'config.memory.taskHistoryMessages');
+  validatePositiveInteger(config.memory.taskHistoryTokenBudget, 'config.memory.taskHistoryTokenBudget');
   validatePositiveInteger(config.tasks.maxSubtaskDepth, 'config.tasks.maxSubtaskDepth');
   validatePositiveInteger(config.tasks.maxRetries, 'config.tasks.maxRetries');
   validatePositiveInteger(config.codeWorkflows.testFixRetries, 'config.codeWorkflows.testFixRetries');

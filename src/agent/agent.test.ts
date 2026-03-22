@@ -987,5 +987,39 @@ describe('AgentCore', () => {
 
       expect(sendSpy).toHaveBeenCalledWith('ok');
     });
+
+    it('stamps entries with activeTaskId from ToolContext when set', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hello']);
+      const toolBus = makeToolBus();
+      const store = makeSessionStore();
+      const ctx = makeCtx();
+      ctx.activeTaskId = 'task-42';
+
+      const agent = new AgentCore(
+        client, channel, toolBus, ctx, makeConfig(),
+        undefined, noopSleep, createNoopLogger(), store as never,
+      );
+      await agent.run();
+
+      const calls = store.append.mock.calls as Array<[{ taskId?: string }]>;
+      expect(calls.every(([e]) => e.taskId === 'task-42')).toBe(true);
+    });
+
+    it('stamps entries with undefined taskId when no active task', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hello']);
+      const toolBus = makeToolBus();
+      const store = makeSessionStore();
+
+      const agent = new AgentCore(
+        client, channel, toolBus, makeCtx(), makeConfig(),
+        undefined, noopSleep, createNoopLogger(), store as never,
+      );
+      await agent.run();
+
+      const calls = store.append.mock.calls as Array<[{ taskId?: string }]>;
+      expect(calls.every(([e]) => e.taskId === undefined)).toBe(true);
+    });
   });
 });

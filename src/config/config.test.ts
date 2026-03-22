@@ -252,6 +252,26 @@ describe('resolveConfig', () => {
       expect(() => resolveConfig()).toThrow(ConfigError);
     });
 
+    it('throws ConfigError for non-integer taskHistoryMessages', () => {
+      mockConfigFile({ memory: { taskHistoryMessages: 5.5 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
+    it('throws ConfigError for zero taskHistoryMessages', () => {
+      mockConfigFile({ memory: { taskHistoryMessages: 0 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
+    it('throws ConfigError for non-integer taskHistoryTokenBudget', () => {
+      mockConfigFile({ memory: { taskHistoryTokenBudget: 1000.5 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
+    it('throws ConfigError for zero taskHistoryTokenBudget', () => {
+      mockConfigFile({ memory: { taskHistoryTokenBudget: 0 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+
     it('throws ConfigError for non-integer maxSubtaskDepth', () => {
       mockConfigFile({ tasks: { maxSubtaskDepth: 1.5 } });
       expect(() => resolveConfig()).toThrow(ConfigError);

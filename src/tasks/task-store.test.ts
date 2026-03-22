@@ -31,7 +31,7 @@ describe('TaskStore', () => {
       expect(store.list()).toEqual([]);
     });
 
-    it('loads tasks from an existing tasks.json', () => {
+    it('loads tasks from an existing tasks.json', async () => {
       const saved = [
         {
           id: 'task-1',
@@ -49,6 +49,10 @@ describe('TaskStore', () => {
       const store = new TaskStore(dataDir);
       expect(store.list()).toHaveLength(1);
       expect(store.list()[0]?.title).toBe('loaded task');
+
+      // Counter must be restored so new tasks don't collide with loaded ones
+      const newId = await store.create('next task', 'desc');
+      expect(newId).toBe('task-2');
     });
 
     it('uses an empty state and moves the corrupt file when JSON is invalid', async () => {

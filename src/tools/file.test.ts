@@ -45,12 +45,12 @@ describe('file tools', () => {
       );
     });
 
-    it('handles absolute paths unchanged', async () => {
+    it('accepts an absolute path within the workspace', async () => {
       vi.mocked(fsPromises.readFile).mockResolvedValue('content' as never);
 
-      await fileReadTool.execute({ path: '/absolute/path.txt' }, ctx);
+      await fileReadTool.execute({ path: '/workspace/sub/file.txt' }, ctx);
 
-      expect(vi.mocked(fsPromises.readFile)).toHaveBeenCalledWith('/absolute/path.txt', 'utf-8');
+      expect(vi.mocked(fsPromises.readFile)).toHaveBeenCalledWith('/workspace/sub/file.txt', 'utf-8');
     });
 
     it('throws ToolError when file is not found', async () => {
@@ -69,6 +69,27 @@ describe('file tools', () => {
 
       const { ToolError } = await import('./tool');
       await expect(fileReadTool.execute({ path: 'secret.txt' }, ctx)).rejects.toBeInstanceOf(
+        ToolError,
+      );
+    });
+
+    it('throws ToolError for path outside workspace via traversal', async () => {
+      const { ToolError } = await import('./tool');
+      await expect(fileReadTool.execute({ path: '../../etc/passwd' }, ctx)).rejects.toBeInstanceOf(
+        ToolError,
+      );
+    });
+
+    it('throws ToolError for absolute path outside workspace', async () => {
+      const { ToolError } = await import('./tool');
+      await expect(fileReadTool.execute({ path: '/etc/passwd' }, ctx)).rejects.toBeInstanceOf(
+        ToolError,
+      );
+    });
+
+    it('throws ToolError when path resolves to the workspace root itself', async () => {
+      const { ToolError } = await import('./tool');
+      await expect(fileReadTool.execute({ path: '/workspace' }, ctx)).rejects.toBeInstanceOf(
         ToolError,
       );
     });
@@ -146,6 +167,13 @@ describe('file tools', () => {
       const { ToolError } = await import('./tool');
       await expect(
         fileWriteTool.execute({ path: 'full.txt', content: 'x' }, ctx),
+      ).rejects.toBeInstanceOf(ToolError);
+    });
+
+    it('throws ToolError when writing outside workspace', async () => {
+      const { ToolError } = await import('./tool');
+      await expect(
+        fileWriteTool.execute({ path: '../../etc/cron', content: 'evil' }, ctx),
       ).rejects.toBeInstanceOf(ToolError);
     });
   });
@@ -242,6 +270,13 @@ describe('file tools', () => {
         'prefix:hello',
         'utf-8',
       );
+    });
+
+    it('throws ToolError when editing outside workspace', async () => {
+      const { ToolError } = await import('./tool');
+      await expect(
+        fileEditTool.execute({ path: '../../etc/passwd', oldString: 'a', newString: 'b' }, ctx),
+      ).rejects.toBeInstanceOf(ToolError);
     });
   });
 });

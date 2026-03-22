@@ -62,6 +62,21 @@ export class CliChannel implements Channel {
     }
   }
 
+  /**
+   * Prompt the user for a single-line answer and return it.
+   * Uses the active readline interface so the answer is consumed before the
+   * next user turn, without interfering with the normal input loop.
+   * Returns an empty string when no readline interface is active.
+   */
+  async question(prompt: string): Promise<string> {
+    if (!this.rl) return '';
+    return new Promise((resolve) => {
+      this.rl!.question(prompt, (answer) => {
+        resolve(answer);
+      });
+    });
+  }
+
   async send(response: string): Promise<void> {
     this.beforeSend?.();
 

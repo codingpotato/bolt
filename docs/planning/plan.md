@@ -300,6 +300,25 @@ Acceptance Criteria:
 - [x] Unit tests mock the HTTP client
 ```
 
+**S2-7: Workspace safety — file confinement and dangerous bash confirmation**
+```
+As a user,
+I want bolt to be confined to the workspace directory and to ask before running dangerous commands,
+so that it cannot accidentally damage my system.
+
+Acceptance Criteria:
+- [x] file_read, file_write, file_edit reject any path that resolves outside ToolContext.cwd with a non-retryable ToolError
+- [x] Rejected cases include: absolute paths outside workspace, ../.. traversal, and the workspace root itself
+- [x] ToolContext gains an optional confirm?: (message: string) => Promise<boolean> callback
+- [x] bash tool detects dangerous patterns (rm -r, sudo, su, | sh/bash, mkfs, dd of=, block device writes, killall, pkill, shred) and calls ctx.confirm before executing
+- [x] When ctx.confirm is absent, dangerous commands are auto-denied with a non-retryable ToolError
+- [x] When ctx.confirm returns false, the command is denied with a non-retryable ToolError
+- [x] CliChannel.question() uses the active readline interface to prompt and return a single-line answer
+- [x] CLI entry point wires confirm via channel.question(); accepts "y" or "yes"
+- [x] Design documented in docs/design/workspace.md
+- [x] Unit tests cover: workspace confinement (all three file tools), dangerous detection, confirm absent/false/true
+```
+
 ---
 
 ## Sprint 3 — Agent Core Loop

@@ -16,6 +16,7 @@ Read these docs before making decisions in the relevant area:
 | Architecture | `docs/design/architecture.md` | System structure, components, and data flow |
 | Authentication | `docs/design/authentication.md` | API key vs subscription auth modes, startup validation |
 | Tools System | `docs/design/tools-system.md` | Tool interface, Tool Bus, built-in tools, allowlisting, audit log |
+| Workspace Safety | `docs/design/workspace.md` | File confinement to workspace root, dangerous bash command confirmation |
 | Agent Prompt | `docs/design/agent-prompt.md` | AGENT.md loading, system prompt construction, agent_suggest flow |
 | CLI Progress | `docs/design/cli-progress.md` | ProgressReporter interface, CliProgressReporter output format, TTY guard |
 | Memory System | `docs/design/memory-system.md` | How context compaction and persistent memory work |

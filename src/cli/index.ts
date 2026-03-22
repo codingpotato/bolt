@@ -58,6 +58,7 @@ async function main(): Promise<void> {
   const memoryStoreDir = join(dataDir, config.memory.storePath);
   const corruptedDir = join(dataDir, 'corrupted');
   const memoryStore = new MemoryStore(memoryStoreDir, corruptedDir, logger);
+  await memoryStore.loadAll();
   const memoryManager = new MemoryManager(sessionStore, config.memory, logger, memoryStore, client, config.model);
 
   const toolBus = new ToolBus();

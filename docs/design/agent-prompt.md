@@ -78,7 +78,7 @@ The agent cannot directly edit `AGENT.md`. Instead, it uses `agent_suggest` to p
 interface AgentSuggestInput {
   target: 'AGENT.md';           // only AGENT.md is supported for now
   scope: 'project' | 'user';   // which file to propose editing
-  content: string;              // the full proposed addition or replacement
+  content: string;              // the proposed content to append to the target file
   reason: string;               // why the agent thinks this change is warranted
 }
 

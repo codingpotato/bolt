@@ -136,6 +136,7 @@ Additional rules:
 - **L1 is always fully included** after any injected history
 - **L3 is never auto-injected** — the agent queries L3 explicitly via `memory_search`. This avoids noisy retrieval and keeps the context predictable.
 - **Token budget** — task history injection (priority 1) is bounded by `memory.taskHistoryTokenBudget`; oldest entries are dropped first if over budget.
+- **Compaction threshold uses L1 token count only** — injected history tokens are excluded from the compaction threshold check. The threshold is evaluated against `response.usage.output_tokens` (i.e. L1 growth) rather than total `input_tokens`. This prevents a task with large injected history from triggering a compaction loop even when L1 itself is small.
 
 ---
 

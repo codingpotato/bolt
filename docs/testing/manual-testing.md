@@ -169,6 +169,8 @@ Each line should be valid JSON with `ts`, `tool`, `input`, and `result` fields. 
 
 ---
 
+> **Note:** Todos are held in-memory and do not survive process restarts. Run all todo test cases (11–15) within the same bolt session.
+
 ### 11. `todo_create` — create a todo item
 
 **Input:**
@@ -306,7 +308,7 @@ After running any test case:
 cat .bolt/bolt.log
 ```
 
-Each line should be valid JSON with `ts`, `level`, `msg`, and optional `context` fields. The startup entry should include `model` and `auth` fields. Tool calls should produce `info`-level entries if log level is set to `debug`.
+Each line should be valid JSON with `ts`, `level`, `msg`, and optional `context` fields. The startup entry should include `model` and `auth` fields. LLM requests and responses appear as `debug`-level entries when `BOLT_LOG_LEVEL=debug` is set.
 
 ---
 

@@ -254,6 +254,19 @@ describe('AgentCore', () => {
   // ── API parameters ────────────────────────────────────────────────────────
 
   describe('API call parameters', () => {
+    it('uses the provided systemPrompt as the system field in every API call', async () => {
+      const { client, createSpy } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), 'custom system prompt');
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ system: 'custom system prompt' }),
+      );
+    });
+
     it('uses model from config', async () => {
       const { client, createSpy } = makeClient([makeTextResponse('ok')]);
       const { channel } = makeChannel(['hi']);

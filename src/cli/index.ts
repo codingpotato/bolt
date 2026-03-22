@@ -22,6 +22,7 @@ import { createTaskTools } from '../tasks/task-tools';
 import { loadAgentPrompt } from '../agent-prompt/agent-prompt';
 import { CliProgressReporter } from '../progress';
 import { SessionStore } from '../memory/session-store';
+import { MemoryManager } from '../memory/memory-manager';
 import { resolve, join } from 'node:path';
 
 async function main(): Promise<void> {
@@ -53,6 +54,7 @@ async function main(): Promise<void> {
 
   const sessionsDir = join(dataDir, config.memory.sessionPath);
   const sessionStore = new SessionStore(sessionsDir, logger);
+  const memoryManager = new MemoryManager(sessionStore, config.memory, logger);
 
   const toolBus = new ToolBus();
   toolBus.register(bashTool);
@@ -77,6 +79,7 @@ async function main(): Promise<void> {
     logger,
     sessionStore,
     sessionId,
+    memoryManager,
   );
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });

@@ -490,15 +490,15 @@ I want prior work on my current task automatically included in my context,
 so that I can resume a task across sessions without manually searching for history.
 
 Acceptance Criteria:
-- [ ] Memory Manager assembles the LLM message array on each turn: system prompt → task history → L1 active context
-- [ ] When a task is active, Memory Manager reads .bolt/sessions/ for entries tagged with the current taskId
-- [ ] The last memory.taskHistoryMessages entries (across all prior sessions for the task) are injected as a read-only context block
-- [ ] Injected history is capped at memory.taskHistoryTokenBudget tokens; oldest entries are dropped if over budget
-- [ ] The compaction threshold check uses only L1 token count, not injected history tokens
-- [ ] When --session <id> is used with no active task, the last memory.keepRecentMessages entries from the resumed session are injected
-- [ ] When no task is active and no --session flag is given, and memory.injectRecentChat is true (default), the last memory.keepRecentMessages entries from the most recent prior session are injected (chat continuity)
-- [ ] When no task is active, no --session flag, and memory.injectRecentChat is false, no history is injected
-- [ ] Unit tests cover: task with prior sessions (injection + token budget), session resume, chat continuity injection, chat continuity disabled, first-ever session (no injection)
+- [x] Memory Manager assembles the LLM message array on each turn: system prompt → task history → L1 active context
+- [x] When a task is active, Memory Manager reads .bolt/sessions/ for entries tagged with the current taskId
+- [x] The last memory.taskHistoryMessages entries (across all prior sessions for the task) are injected as a read-only context block
+- [x] Injected history is capped at memory.taskHistoryTokenBudget tokens; oldest entries are dropped if over budget
+- [x] The compaction threshold check uses only L1 token count, not injected history tokens
+- [x] When --session <id> is used with no active task, the last memory.keepRecentMessages entries from the resumed session are injected
+- [x] When no task is active and no --session flag is given, and memory.injectRecentChat is true (default), the last memory.keepRecentMessages entries from the most recent prior session are injected (chat continuity)
+- [x] When no task is active, no --session flag, and memory.injectRecentChat is false, no history is injected
+- [x] Unit tests cover: task with prior sessions (injection + token budget), session resume, chat continuity injection, chat continuity disabled, first-ever session (no injection)
 ```
 
 **S5-6: Memory Manager — compaction (L1 → L3)**

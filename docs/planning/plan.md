@@ -435,20 +435,20 @@ I want to see what the agent is doing at each significant step in real time,
 so that I can follow progress without waiting for the final response.
 
 Acceptance Criteria:
-- [ ] ProgressReporter interface matches docs/design/cli-progress.md
+- [x] ProgressReporter interface matches docs/design/cli-progress.md
       (onSessionStart, onThinking, onToolCall, onToolResult, onTaskStatusChange,
        onContextInjection, onMemoryCompaction, onRetry)
-- [ ] NoopProgressReporter implements all methods as no-ops; used by sub-agents, Discord, and tests
-- [ ] CliProgressReporter writes formatted output matching the examples in docs/design/cli-progress.md
-- [ ] CliProgressReporter only writes when process.stdout.isTTY is true or --verbose is passed
-- [ ] --quiet flag suppresses all progress output even on a TTY
-- [ ] CliProgressReporter summarises tool inputs per the table in docs/design/cli-progress.md
+- [x] NoopProgressReporter implements all methods as no-ops; used by sub-agents, Discord, and tests
+- [x] CliProgressReporter writes formatted output matching the examples in docs/design/cli-progress.md
+- [x] CliProgressReporter only writes when process.stdout.isTTY is true or --verbose is passed
+- [x] --quiet flag suppresses all progress output even on a TTY
+- [x] CliProgressReporter summarises tool inputs per the table in docs/design/cli-progress.md
       (bash shows command, file tools show path, web_fetch shows URL, default truncates JSON)
-- [ ] CliProgressReporter manages the "Thinking…" line (replaces CliChannel's current implementation)
-- [ ] ProgressReporter is added to ToolContext; AgentCore, ToolBus, and MemoryManager accept it
-- [ ] AgentCore emits: onSessionStart (startup), onThinking (before each API call), onRetry
-- [ ] ToolBus emits: onToolCall (before dispatch), onToolResult (after dispatch)
-- [ ] Unit tests cover: TTY mode shows output, non-TTY suppresses output, --quiet suppresses output,
+- [x] CliProgressReporter manages the "Thinking…" line (replaces CliChannel's current implementation)
+- [x] ProgressReporter is added to ToolContext; AgentCore, ToolBus, and MemoryManager accept it
+- [x] AgentCore emits: onSessionStart (startup), onThinking (before each API call), onRetry
+- [x] ToolBus emits: onToolCall (before dispatch), onToolResult (after dispatch)
+- [x] Unit tests cover: TTY mode shows output, non-TTY suppresses output, --quiet suppresses output,
       input summarisation for each built-in tool, NoopProgressReporter emits nothing
 ```
 

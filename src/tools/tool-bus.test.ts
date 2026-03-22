@@ -211,6 +211,40 @@ describe('ToolBus', () => {
       expect(result.is_error).toBeFalsy();
       expect(executeSpy).toHaveBeenCalledOnce();
     });
+
+    // ── progress emissions (S5-2) ──────────────────────────────────────────
+
+    it('emits onToolCall before executing the tool', async () => {
+      bus.register(makeTool('greet', async () => ({ ok: true })));
+      await bus.dispatch(makeCall('greet', { value: 'hi' }), ctx);
+      expect(ctx.progress.onToolCall).toHaveBeenCalledOnce();
+      expect(ctx.progress.onToolCall).toHaveBeenCalledWith('greet', { value: 'hi' });
+    });
+
+    it('emits onToolResult with success=true after a successful dispatch', async () => {
+      bus.register(makeTool('greet', async () => ({ ok: true })));
+      await bus.dispatch(makeCall('greet', { value: 'hi' }), ctx);
+      expect(ctx.progress.onToolResult).toHaveBeenCalledOnce();
+      expect(ctx.progress.onToolResult).toHaveBeenCalledWith('greet', true, expect.any(String));
+    });
+
+    it('emits onToolResult with success=false when tool throws ToolError', async () => {
+      bus.register(
+        makeTool('fail', async () => {
+          throw new ToolError('bad input');
+        }),
+      );
+      await bus.dispatch(makeCall('fail', { value: 'x' }), ctx);
+      expect(ctx.progress.onToolResult).toHaveBeenCalledOnce();
+      expect(ctx.progress.onToolResult).toHaveBeenCalledWith('fail', false, 'bad input');
+    });
+
+    it('does not emit onToolCall for allowlist failures', async () => {
+      bus.register(makeTool('greet', async () => ({ ok: true })));
+      const restrictedCtx: ToolContext = { ...ctx, allowedTools: ['other'] };
+      await bus.dispatch(makeCall('greet', { value: 'hi' }), restrictedCtx);
+      expect(restrictedCtx.progress.onToolCall).not.toHaveBeenCalled();
+    });
   });
 
   // ── input validation — null guard ─────────────────────────────────────────

@@ -252,6 +252,59 @@ describe('AgentCore', () => {
     });
   });
 
+  // ── progress emissions (S5-2) ─────────────────────────────────────────────
+
+  describe('progress emissions', () => {
+    it('emits onSessionStart once when run() is called', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      expect(ctx.progress.onSessionStart).toHaveBeenCalledOnce();
+      expect(ctx.progress.onSessionStart).toHaveBeenCalledWith(expect.any(String), false);
+    });
+
+    it('emits onThinking before each API call', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      expect(ctx.progress.onThinking).toHaveBeenCalledOnce();
+    });
+
+    it('emits onThinking for each round-trip in a tool-call loop', async () => {
+      const toolUse = makeToolUseResponse([{ id: 'tu_1', name: 'bash', input: { command: 'ls' } }]);
+      const { client } = makeClient([toolUse, makeTextResponse('done')]);
+      const { channel } = makeChannel(['go']);
+      const toolBus = makeToolBus([{ id: 'tu_1', content: '{"exitCode":0}' }]);
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      // onThinking is called before each API call — 2 calls = 2 emissions
+      expect(ctx.progress.onThinking).toHaveBeenCalledTimes(2);
+    });
+
+    it('emits onRetry on each transient failure', async () => {
+      const { client } = makeClient([make5xxError(500), make5xxError(500), makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig(), undefined, noopSleep);
+      await agent.run();
+
+      expect(ctx.progress.onRetry).toHaveBeenCalledTimes(2);
+      expect(ctx.progress.onRetry).toHaveBeenNthCalledWith(1, 1, 3, expect.any(String));
+      expect(ctx.progress.onRetry).toHaveBeenNthCalledWith(2, 2, 3, expect.any(String));
+    });
+  });
+
   // ── API parameters ────────────────────────────────────────────────────────
 
   describe('API call parameters', () => {

@@ -380,13 +380,13 @@ I want tasks to be serialized to .bolt/tasks.json after every mutation,
 so that in-progress work survives process restarts.
 
 Acceptance Criteria:
-- [ ] Task interface matches docs/design/task-system.md
-- [ ] task_create({ title, description }) returns { id }; writes to .bolt/tasks.json immediately
-- [ ] task_update({ id, status, result?, error? }) updates and re-serializes
-- [ ] task_list() returns all tasks with current status
-- [ ] On startup, existing .bolt/tasks.json is loaded and tasks resume from last status
-- [ ] Corrupt .bolt/tasks.json is moved to .bolt/corrupted/ and a fresh state is used
-- [ ] task_update is marked sequential: true
+- [x] Task interface matches docs/design/task-system.md
+- [x] task_create({ title, description }) returns { id }; writes to .bolt/tasks.json immediately
+- [x] task_update({ id, status, result?, error? }) updates and re-serializes
+- [x] task_list() returns all tasks with current status
+- [x] On startup, existing .bolt/tasks.json is loaded and tasks resume from last status
+- [x] Corrupt .bolt/tasks.json is moved to .bolt/corrupted/ and a fresh state is used
+- [x] task_update is marked sequential: true
 ```
 
 **S4-3: Task execution loop**

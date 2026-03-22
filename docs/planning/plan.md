@@ -396,11 +396,11 @@ I want to execute tasks from my task list step by step,
 so that I can work through complex multi-step goals.
 
 Acceptance Criteria:
-- [ ] Agent can pick the next pending task and mark it in_progress
-- [ ] On success, task is marked completed with a result
-- [ ] On failure, task is marked failed with an error reason
-- [ ] blocked status is set when a task cannot proceed until another completes
-- [ ] Execution loop continues until all tasks are completed or failed
+- [x] Agent can pick the next pending task and mark it in_progress
+- [x] On success, task is marked completed with a result
+- [x] On failure, task is marked failed with an error reason
+- [x] blocked status is set when a task cannot proceed until another completes
+- [x] Execution loop continues until all tasks are completed or failed
 ```
 
 ---

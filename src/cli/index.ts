@@ -65,15 +65,18 @@ async function main(): Promise<void> {
   for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
   for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
 
+  const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
   const ctx = {
     cwd,
     log,
     logger,
     progress,
     confirm: (message: string) =>
-      channel.question(`\n${message}\nType "y" to confirm: `).then((a) => a.trim().toLowerCase() === 'y'),
+      channel.question(`\n${message}\nType "y" to confirm: `).then((a) => {
+        const answer = a.trim().toLowerCase();
+        return answer === 'y' || answer === 'yes';
+      }),
   };
-  const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
   const systemPrompt = await loadAgentPrompt(config);
   const agent = new AgentCore(
     client,

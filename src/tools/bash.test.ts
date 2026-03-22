@@ -134,6 +134,16 @@ describe('bashTool', () => {
     ).rejects.toBeInstanceOf(ToolError);
   });
 
+  it('detects bare su (no arguments) as dangerous', async () => {
+    const { ToolError } = await import('./tool');
+    await expect(bashTool.execute({ command: 'su' }, ctx)).rejects.toBeInstanceOf(ToolError);
+  });
+
+  it('detects su with a username as dangerous', async () => {
+    const { ToolError } = await import('./tool');
+    await expect(bashTool.execute({ command: 'su root' }, ctx)).rejects.toBeInstanceOf(ToolError);
+  });
+
   it('does not block non-dangerous commands', async () => {
     vi.mocked(childProcess.spawn).mockReturnValue(
       makeMockProcess({ stdout: 'hello\n', stderr: '', exitCode: 0 }),

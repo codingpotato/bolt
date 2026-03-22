@@ -10,7 +10,7 @@ export interface BashInput {
 const DANGEROUS_PATTERNS: RegExp[] = [
   /\brm\b.*-[a-zA-Z]*[rR]/,        // rm -r, rm -rf, rm -Rf, etc.
   /\bsudo\b/,                        // sudo
-  /\bsu\s/,                          // su <user>
+  /\bsu(\s|$)/,                      // su <user> or bare su
   /\|\s*(sh|bash)\b/,               // pipe to shell
   /\bmkfs/,                          // filesystem format
   /\bdd\b.*\bof=/,                   // raw disk write

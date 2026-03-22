@@ -418,14 +418,14 @@ I want to define bolt's identity, rules, and domain knowledge in a Markdown file
 so that I can tailor bolt's behaviour for my project without modifying code.
 
 Acceptance Criteria:
-- [ ] AgentCore loads ~/.bolt/AGENT.md (user-level) and .bolt/AGENT.md (project-level) at startup
-- [ ] If both exist, user-level content is prepended and project-level content is appended
-- [ ] If neither exists, a built-in default system prompt is used
-- [ ] The assembled prompt is used as the system field in every Anthropic API call for the session
-- [ ] The prompt is never modified mid-session
-- [ ] Missing files are not an error — they are silently skipped
-- [ ] agentPrompt.projectFile and agentPrompt.userFile config keys override the default paths
-- [ ] Unit tests cover: no files (default), user-level only, project-level only, both files
+- [x] AgentCore loads ~/.bolt/AGENT.md (user-level) and .bolt/AGENT.md (project-level) at startup
+- [x] If both exist, user-level content is prepended and project-level content is appended
+- [x] If neither exists, a built-in default system prompt is used
+- [x] The assembled prompt is used as the system field in every Anthropic API call for the session
+- [x] The prompt is never modified mid-session
+- [x] Missing files are not an error — they are silently skipped
+- [x] agentPrompt.projectFile and agentPrompt.userFile config keys override the default paths
+- [x] Unit tests cover: no files (default), user-level only, project-level only, both files
 ```
 
 **S5-2: ProgressReporter interface and CliProgressReporter**

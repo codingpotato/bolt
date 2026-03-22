@@ -51,12 +51,30 @@ Configuration is resolved from three sources, in order of precedence (highest fi
   "memory": {
     // Fraction of context window that triggers compaction (0.0–1.0)
     "compactThreshold": 0.8,
-    // Number of recent messages always retained after compaction
+    // Number of recent messages always retained in L1 after compaction
     "keepRecentMessages": 10,
-    // Directory for compact store files (relative to BOLT_DATA_DIR)
+    // Directory for L3 long-term memory files (relative to BOLT_DATA_DIR)
     "storePath": "memory",
-    // Search backend: "keyword" (default) | "embedding"
+    // Directory for L2 session store files (relative to BOLT_DATA_DIR)
+    "sessionPath": "sessions",
+    // Max number of prior task messages to inject from L2 into context
+    "taskHistoryMessages": 20,
+    // Max tokens to spend on injected task history (oldest entries dropped if over budget)
+    "taskHistoryTokenBudget": 20000,
+    // Inject recent chat history when no task is active and no --session flag is given
+    "injectRecentChat": true,
+    // Search backend for memory_search: "keyword" (default) | "embedding"
     "searchBackend": "keyword"
+  },
+
+  // Agent prompt system
+  "agentPrompt": {
+    // Path to the project-level agent prompt file
+    "projectFile": ".bolt/AGENT.md",
+    // Path to the user-level agent prompt file
+    "userFile": "~/.bolt/AGENT.md",
+    // Directory for pending suggestion files
+    "suggestionsPath": ".bolt/suggestions"
   },
 
   // Task system
@@ -79,6 +97,14 @@ Configuration is resolved from three sources, in order of precedence (highest fi
   "codeWorkflows": {
     // Max retries when a test run fails during automated fix attempts
     "testFixRetries": 3
+  },
+
+  // CLI output
+  "cli": {
+    // Show progress events (tool calls, compaction, task changes) in TTY mode
+    "progress": true,
+    // Show progress events even in non-TTY mode (e.g. CI with visible output)
+    "verbose": false
   },
 
   // Channels

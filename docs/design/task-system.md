@@ -18,12 +18,15 @@ interface Task {
   status: TaskStatus;
   parentId?: string;        // set if this is a subtask
   subtaskIds: string[];
+  sessionIds: string[];     // all sessions that have worked on this task (in order)
   result?: string;          // output when completed
   error?: string;           // reason when failed
   createdAt: string;
   updatedAt: string;
 }
 ```
+
+`sessionIds` is appended with the current `sessionId` each time a session begins work on the task (i.e. when status transitions to `in_progress`). This field is used by the Memory Manager to locate relevant prior context in the L2 session store and inject it into the LLM context when the task is resumed.
 
 ## Todo List vs Tasks
 

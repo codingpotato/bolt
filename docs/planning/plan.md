@@ -10,7 +10,7 @@ Sprint 1 — Auth + Channel + CLI
 Sprint 2 — Tool Bus + Core Tools
 Sprint 3 — Agent Core Loop
 Sprint 4 — Todo & Task System
-Sprint 5 — Memory System
+Sprint 5 — Memory System (L2 + L3 + Context Assembly)
 Sprint 6 — Sub-agent + Skills
 Sprint 7 — Discord Channel
 Sprint 8 — Code Workflows + Content Generation
@@ -407,51 +407,163 @@ Acceptance Criteria:
 
 ## Sprint 5 — Memory System
 
-**Goal:** The agent can compact its context on overflow and search past sessions.
+**Goal:** Every turn is persisted immediately. The agent automatically recalls prior work on the current task. Compacted history and agent notes are searchable across sessions.
 
 ### Stories
 
-**S5-1: Memory Manager — compaction**
+**S5-1: Agent prompt system (AGENT.md)**
+```
+As a user,
+I want to define bolt's identity, rules, and domain knowledge in a Markdown file,
+so that I can tailor bolt's behaviour for my project without modifying code.
+
+Acceptance Criteria:
+- [ ] AgentCore loads ~/.bolt/AGENT.md (user-level) and .bolt/AGENT.md (project-level) at startup
+- [ ] If both exist, user-level content is prepended and project-level content is appended
+- [ ] If neither exists, a built-in default system prompt is used
+- [ ] The assembled prompt is used as the system field in every Anthropic API call for the session
+- [ ] The prompt is never modified mid-session
+- [ ] Missing files are not an error — they are silently skipped
+- [ ] agentPrompt.projectFile and agentPrompt.userFile config keys override the default paths
+- [ ] Unit tests cover: no files (default), user-level only, project-level only, both files
+```
+
+**S5-2: ProgressReporter interface and CliProgressReporter**
+```
+As a CLI user,
+I want to see what the agent is doing at each significant step in real time,
+so that I can follow progress without waiting for the final response.
+
+Acceptance Criteria:
+- [ ] ProgressReporter interface matches docs/design/cli-progress.md
+      (onSessionStart, onThinking, onToolCall, onToolResult, onTaskStatusChange,
+       onContextInjection, onMemoryCompaction, onRetry)
+- [ ] NoopProgressReporter implements all methods as no-ops; used by sub-agents, Discord, and tests
+- [ ] CliProgressReporter writes formatted output matching the examples in docs/design/cli-progress.md
+- [ ] CliProgressReporter only writes when process.stdout.isTTY is true or --verbose is passed
+- [ ] --quiet flag suppresses all progress output even on a TTY
+- [ ] CliProgressReporter summarises tool inputs per the table in docs/design/cli-progress.md
+      (bash shows command, file tools show path, web_fetch shows URL, default truncates JSON)
+- [ ] CliProgressReporter manages the "Thinking…" line (replaces CliChannel's current implementation)
+- [ ] ProgressReporter is added to ToolContext; AgentCore, ToolBus, and MemoryManager accept it
+- [ ] AgentCore emits: onSessionStart (startup), onThinking (before each API call), onRetry
+- [ ] ToolBus emits: onToolCall (before dispatch), onToolResult (after dispatch)
+- [ ] Unit tests cover: TTY mode shows output, non-TTY suppresses output, --quiet suppresses output,
+      input summarisation for each built-in tool, NoopProgressReporter emits nothing
+```
+
+**S5-3: Session Store (L2) — per-turn persistence**
+```
+As a developer,
+I want every turn written to disk immediately,
+so that no conversation history is lost on crash or clean exit.
+
+Acceptance Criteria:
+- [ ] A sessionId (UUID v4) is generated at process startup and passed through AgentCore
+- [ ] --session <id> CLI flag resumes an existing session (loads prior sessionId)
+- [ ] SessionEntry interface matches docs/design/memory-system.md (sessionId, seq, ts, taskId?, date, role, content)
+- [ ] Memory Manager appends a SessionEntry to .bolt/sessions/<session-id>.jsonl on every:
+      user turn, assistant response, tool call, and tool result
+- [ ] Write happens before the next LLM call — a crash mid-turn loses at most one in-flight entry
+- [ ] Task model gains a sessionIds: string[] field; the current sessionId is appended when a task transitions to in_progress
+- [ ] Corrupt session files are skipped with a warning during session resume
+- [ ] Unit tests use an in-memory filesystem mock; no real disk I/O
+```
+
+**S5-4: Long-term memory store (L3) — persistence**
 ```
 As an agent,
-I want my context to be compacted before messages are dropped,
+I want compacted summaries and agent notes persisted to disk,
+so that I can retrieve cross-session knowledge in future runs.
+
+Acceptance Criteria:
+- [ ] CompactEntry interface matches docs/design/memory-system.md (id, type, sessionId, taskId?, createdAt, date, summary, messages?, tags)
+- [ ] Entries are written as JSON files in .bolt/memory/<id>.json
+- [ ] On startup, all .bolt/memory/ files are loaded; corrupt files are skipped with a warning
+- [ ] Corrupt entry files are moved to .bolt/corrupted/ and do not block startup
+```
+
+**S5-5: Memory Manager — context assembly and task history injection**
+```
+As an agent,
+I want prior work on my current task automatically included in my context,
+so that I can resume a task across sessions without manually searching for history.
+
+Acceptance Criteria:
+- [ ] Memory Manager assembles the LLM message array on each turn: system prompt → task history → L1 active context
+- [ ] When a task is active, Memory Manager reads .bolt/sessions/ for entries tagged with the current taskId
+- [ ] The last memory.taskHistoryMessages entries (across all prior sessions for the task) are injected as a read-only context block
+- [ ] Injected history is capped at memory.taskHistoryTokenBudget tokens; oldest entries are dropped if over budget
+- [ ] The compaction threshold check uses only L1 token count, not injected history tokens
+- [ ] When --session <id> is used with no active task, the last memory.keepRecentMessages entries from the resumed session are injected
+- [ ] When no task is active and no --session flag is given, and memory.injectRecentChat is true (default), the last memory.keepRecentMessages entries from the most recent prior session are injected (chat continuity)
+- [ ] When no task is active, no --session flag, and memory.injectRecentChat is false, no history is injected
+- [ ] Unit tests cover: task with prior sessions (injection + token budget), session resume, chat continuity injection, chat continuity disabled, first-ever session (no injection)
+```
+
+**S5-6: Memory Manager — compaction (L1 → L3)**
+```
+As an agent,
+I want my active context compacted before messages are dropped,
 so that I never silently lose information during long sessions.
 
 Acceptance Criteria:
-- [ ] Memory Manager tracks token count from each API response
-- [ ] When count exceeds memory.compactThreshold × context_window, compaction is triggered
-- [ ] The memory.keepRecentMessages most recent messages are always retained
-- [ ] Evicted messages are summarized by calling the model
-- [ ] Summary + raw messages are written to .bolt/memory/ before eviction
-- [ ] Active context is replaced with a single summary stub message
+- [ ] Memory Manager tracks L1 token count from each API response (excluding injected history)
+- [ ] When L1 count exceeds memory.compactThreshold × context_window, compaction is triggered
+- [ ] The memory.keepRecentMessages most recent messages are always retained in L1
+- [ ] Evicted messages are summarised by calling the model
+- [ ] A CompactEntry (type: 'compaction') is written to .bolt/memory/ before eviction; entry includes sessionId, taskId, summary, raw messages, tags, date
+- [ ] Active context (L1) is replaced with a single summary stub message
 - [ ] Unit tests mock the Anthropic API summary call
 ```
 
-**S5-2: Compact Store — persistence**
+**S5-7: memory_search tool — keyword backend**
 ```
 As an agent,
-I want compacted summaries persisted to disk,
-so that I can retrieve past context in future sessions.
+I want to search my long-term memory by keyword,
+so that I can recall relevant facts and summaries from past sessions.
 
 Acceptance Criteria:
-- [ ] CompactEntry interface matches docs/design/memory-system.md
-- [ ] Entries are written as JSON files in .bolt/memory/
-- [ ] Each entry has id, createdAt, summary, messages, tags
-- [ ] Corrupt entry files are skipped with a warning
-```
-
-**S5-3: memory_search tool — keyword backend**
-```
-As an agent,
-I want to search my compact memory store by keyword,
-so that I can recall relevant context from past sessions.
-
-Acceptance Criteria:
-- [ ] memory_search({ query, limit? }) returns matching CompactEntry summaries
-- [ ] Default limit is 5; results are ranked by relevance
-- [ ] Keyword backend searches summary and tags fields
+- [ ] memory_search({ query, limit?, taskId?, dateFrom?, dateTo? }) returns matching L3 entries
+- [ ] Default limit is 5; results are ranked by relevance (BM25-style over summary and tags)
+- [ ] taskId filter restricts results to entries from a specific task
+- [ ] dateFrom / dateTo filters restrict results by the date field (YYYY-MM-DD)
 - [ ] memory_search is registered as a built-in tool
 - [ ] Returns empty results (not an error) when no matches found
+- [ ] Unit tests cover: keyword match, taskId filter, date filter, empty results
+```
+
+**S5-8: memory_write tool**
+```
+As an agent,
+I want to explicitly write facts and notes to long-term memory,
+so that I can persist cross-task knowledge that would not otherwise be compacted.
+
+Acceptance Criteria:
+- [ ] memory_write({ content, tags? }) creates a CompactEntry with type: 'agent_note' in .bolt/memory/
+- [ ] Entry carries the current sessionId and taskId (if active)
+- [ ] Returns { id } of the created entry
+- [ ] memory_write is registered as a built-in tool
+- [ ] Unit tests verify entry is written with correct fields
+```
+
+**S5-9: agent_suggest tool and suggestions CLI**
+```
+As an agent,
+I want to propose improvements to my own rules without being able to apply them directly,
+so that bolt can improve over time while humans stay in control of its core behaviour.
+
+Acceptance Criteria:
+- [ ] agent_suggest({ target: 'AGENT.md', scope: 'project'|'user', content, reason }) writes a Suggestion to .bolt/suggestions/<id>.json
+- [ ] Suggestion schema matches docs/design/agent-prompt.md (id, createdAt, sessionId, taskId?, target, scope, content, reason, status)
+- [ ] agent_suggest is registered as a built-in tool; it is NOT in the default sub-agent or skill allowlist
+- [ ] Returns { suggestionId, path }
+- [ ] bolt suggestions CLI command lists all pending suggestions with id, createdAt, scope, and first line of reason
+- [ ] bolt suggestions show <id> prints the full content and reason
+- [ ] bolt suggestions apply <id> appends content to the target AGENT.md (creates the file if absent); sets status to 'applied'
+- [ ] bolt suggestions reject <id> sets status to 'rejected'
+- [ ] Applied/rejected suggestions are retained in .bolt/suggestions/ for audit purposes
+- [ ] Unit tests cover: suggest writes file, apply creates AGENT.md, apply appends to existing AGENT.md, reject updates status
 ```
 
 ---
@@ -638,7 +750,8 @@ so that a crash mid-write does not permanently break a user's installation.
 
 Acceptance Criteria:
 - [ ] Corrupt .bolt/tasks.json: moved to .bolt/corrupted/<timestamp>-tasks.json, fresh state used
-- [ ] Corrupt memory entry files: skipped with a warning, rest of memory loads normally
+- [ ] Corrupt .bolt/sessions/<id>.jsonl: partial entries at end of file are truncated; valid entries before the corruption are loaded normally
+- [ ] Corrupt .bolt/memory/<id>.json entries: moved to .bolt/corrupted/ and skipped with a warning; rest of memory loads normally
 - [ ] Corrupt .bolt/config.json: exits with a descriptive error (not a silent default)
 - [ ] All recovery paths are unit tested with injected corrupt fixtures
 ```

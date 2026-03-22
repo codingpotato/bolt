@@ -90,7 +90,9 @@ Call model again with updated messages
 | `task_list` | Return all tasks with their current status |
 | `skill_run` | Run a named skill as an isolated sub-agent; returns skill output |
 | `subagent_run` | Delegate a free-form prompt to an isolated child agent |
-| `memory_search` | Query the compact memory store; returns matching summaries |
+| `memory_search` | Query the long-term memory store (L3); returns matching summaries |
+| `memory_write` | Write a fact or note to the long-term memory store (L3) |
+| `agent_suggest` | Propose an addition to `AGENT.md`; writes to `.bolt/suggestions/` for human review |
 
 ## Tool Registration
 

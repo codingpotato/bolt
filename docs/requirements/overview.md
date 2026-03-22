@@ -2,6 +2,23 @@
 
 bolt is an autonomous AI CLI agent built with TypeScript and the Anthropic SDK. It operates independently from the command line and can complete complex, multi-step tasks by combining tools, memory, skills, and sub-agent delegation.
 
+## Core Design Principle: Task-Driven
+
+**bolt operates in two modes:**
+
+| Mode | Description |
+|------|-------------|
+| **Simple chat** | The user sends a message; bolt responds directly. No task is created. History is persisted and conversation continuity is maintained across sessions automatically. |
+| **Task-driven** | The primary mode for structured, autonomous work. bolt breaks goals into tasks, executes them step by step, and tracks outcomes. Tasks survive process restarts, can be delegated to sub-agents, and carry their full session history. |
+
+Tasks are the primary building block for non-trivial work, but simple chat is a first-class mode and bolt must not force users to create a task before receiving a response.
+
+The task-driven principle shapes the heavier subsystems:
+- **Memory** is organized around tasks for structured work — prior context for a task is automatically injected when the task is resumed
+- **Sub-agents** are spawned to execute specific tasks — they receive a task description, not a raw prompt
+- **Skills** are invoked within the context of a task — their results are recorded against the task
+- **Session continuity for chat** is maintained by automatically injecting recent prior session history when no task is active
+
 ## Functional Requirements
 
 ### Interface
@@ -23,7 +40,8 @@ bolt is an autonomous AI CLI agent built with TypeScript and the Anthropic SDK. 
   - **task_create / task_update / task_list** — manage serialized tasks
   - **skill_run** — invoke a named skill as an isolated sub-agent
   - **subagent_run** — delegate a free-form task to an isolated child agent
-  - **memory_search** — query the compact memory store
+  - **memory_search** — query the long-term memory store (L3) by keyword or embedding
+  - **memory_write** — explicitly write a fact or note to the long-term memory store (L3)
 - New tools can be registered at runtime without restarting the agent
 - Tools may be restricted per skill or sub-agent (allowlist model)
 - All tool calls and their results must be logged for auditability
@@ -48,10 +66,34 @@ bolt is an autonomous AI CLI agent built with TypeScript and the Anthropic SDK. 
 - Delegate subtasks to sub-agents; parent/child contexts are fully isolated
 - Task results are persisted alongside status for auditability
 
+### Agent Prompt System
+
+bolt loads one or two `AGENT.md` files at startup and uses them as the system prompt:
+
+- `~/.bolt/AGENT.md` — user-level defaults (personal style, cross-project rules)
+- `.bolt/AGENT.md` — project-level rules (domain knowledge, project conventions)
+
+Both files are optional; bolt falls back to a built-in default if neither exists. Project-level content is appended after user-level content, so it can override user-level rules.
+
+The agent **cannot directly edit** `AGENT.md`. It may propose changes via the `agent_suggest` tool, which writes a proposal to `.bolt/suggestions/` for human review. A human applies proposals via the `bolt suggestions apply <id>` CLI command.
+
 ### Memory System
-- Maintain in-context memory during a session
-- Compact messages when approaching context window limits
-- Persist compacted history for future retrieval and querying
+
+bolt uses a three-level memory architecture:
+
+| Level | Name | Storage | Written | Purpose |
+|-------|------|---------|---------|---------|
+| L1 | Active context | In-process array | Always | Current session messages sent to the LLM |
+| L2 | Session store | `.bolt/sessions/<id>.jsonl` | Every turn, immediately | Durable raw log of all turns; survives crashes |
+| L3 | Long-term memory | `.bolt/memory/*.json` | Compaction + `memory_write` | Summarised history and agent-written facts; searchable across sessions |
+
+Key requirements:
+- Every user input, tool call, tool result, and assistant response must be persisted to L2 **before** the next turn — no data loss on crash
+- Every L2 entry carries a `sessionId` and an optional `taskId`
+- When the agent works on a task, the last N messages from prior sessions on that same task are automatically injected into the LLM context — no explicit search needed
+- L3 is queried explicitly via `memory_search`; it is not auto-injected on every turn
+- The agent can proactively write facts to L3 via `memory_write`
+- Compaction (L1 → L3) is triggered when the active context approaches the token limit
 
 ### Code Workflows
 - Write code, write tests, run tests, perform code review

@@ -16,6 +16,7 @@ Read these docs before making decisions in the relevant area:
 | Architecture | `docs/design/architecture.md` | System structure, components, and data flow |
 | Authentication | `docs/design/authentication.md` | API key vs subscription auth modes, startup validation |
 | Tools System | `docs/design/tools-system.md` | Tool interface, Tool Bus, built-in tools, allowlisting, audit log |
+| Agent Prompt | `docs/design/agent-prompt.md` | AGENT.md loading, system prompt construction, agent_suggest flow |
 | Memory System | `docs/design/memory-system.md` | How context compaction and persistent memory work |
 | Task System | `docs/design/task-system.md` | Task model, todo list tools, sub-agent delegation |
 | Skills System | `docs/design/skills-system.md` | Skill definition, discovery, invocation, and chaining |

@@ -228,4 +228,21 @@ describe('MemoryStore.loadAll()', () => {
     expect(store.getAll()).toHaveLength(1);
     expect(store.getAll()[0]?.id).toBe(entry.id);
   });
+
+  it('rethrows non-ENOENT errors from readdir', async () => {
+    const { readdir } = await import('node:fs/promises');
+    vi.mocked(readdir).mockRejectedValueOnce(Object.assign(new Error('EPERM'), { code: 'EPERM' }));
+
+    const store = makeStore();
+    await expect(store.loadAll()).rejects.toThrow('EPERM');
+  });
+
+  it('logs a warning and continues when moveToCorrupted rename fails', async () => {
+    files[`${STORE_DIR}/bad.json`] = 'invalid json';
+    const { rename } = await import('node:fs/promises');
+    vi.mocked(rename).mockRejectedValueOnce(new Error('rename failed'));
+
+    const store = makeStore();
+    await expect(store.loadAll()).resolves.toHaveLength(0);
+  });
 });

@@ -358,6 +358,38 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
 
     expect(messages).toEqual([]);
   });
+
+  it('renders assistant entry with array content containing no text blocks as [Tool use response]', async () => {
+    loadSession.mockResolvedValue([
+      makeEntry({
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'tu_1', name: 'bash', input: {} }],
+        seq: 1,
+      }),
+    ]);
+
+    const manager = makeManager({ listSessionIds, loadSession }, { injectRecentChat: true });
+    const messages = await manager.assembleInjectedHistory({
+      currentSessionId: 'current',
+      resumedSessionId: 'prior',
+    });
+
+    expect(messages.some((m) => m.content === '[Tool use response]')).toBe(true);
+  });
+
+  it('renders assistant entry with non-string non-array content via JSON.stringify', async () => {
+    loadSession.mockResolvedValue([
+      makeEntry({ role: 'assistant', content: 42 as unknown as string, seq: 1 }),
+    ]);
+
+    const manager = makeManager({ listSessionIds, loadSession }, { injectRecentChat: true });
+    const messages = await manager.assembleInjectedHistory({
+      currentSessionId: 'current',
+      resumedSessionId: 'prior',
+    });
+
+    expect(messages.some((m) => m.content === '42')).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

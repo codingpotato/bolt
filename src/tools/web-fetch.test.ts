@@ -90,6 +90,20 @@ describe('webFetchTool', () => {
     );
   });
 
+  it('throws a ToolError when response is not ok and error body read fails', async () => {
+    fetchMock.mockResolvedValue({
+      status: 500,
+      ok: false,
+      headers: { get: () => 'text/plain' },
+      text: () => Promise.reject(new Error('body read failed')),
+    });
+
+    const { ToolError } = await import('./tool');
+    await expect(webFetchTool.execute({ url: 'https://example.com' }, ctx)).rejects.toSatisfy(
+      (err) => err instanceof ToolError && err.message.includes('500'),
+    );
+  });
+
   it('includes the response body in the HTTP error message', async () => {
     fetchMock.mockResolvedValue(makeMockResponse(422, 'application/json', '{"error":"invalid"}'));
 

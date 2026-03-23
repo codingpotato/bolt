@@ -594,16 +594,16 @@ I want to propose improvements to my own rules without being able to apply them 
 so that bolt can improve over time while humans stay in control of its core behaviour.
 
 Acceptance Criteria:
-- [ ] agent_suggest({ target: 'AGENT.md', scope: 'project'|'user', content, reason }) writes a Suggestion to .bolt/suggestions/<id>.json
-- [ ] Suggestion schema matches docs/design/agent-prompt.md (id, createdAt, sessionId, taskId?, target, scope, content, reason, status)
-- [ ] agent_suggest is registered as a built-in tool; it is NOT in the default sub-agent or skill allowlist
-- [ ] Returns { suggestionId, path }
-- [ ] bolt suggestions CLI command lists all pending suggestions with id, createdAt, scope, and first line of reason
-- [ ] bolt suggestions show <id> prints the full content and reason
-- [ ] bolt suggestions apply <id> appends content to the target AGENT.md (creates the file if absent); sets status to 'applied'
-- [ ] bolt suggestions reject <id> sets status to 'rejected'
-- [ ] Applied/rejected suggestions are retained in .bolt/suggestions/ for audit purposes
-- [ ] Unit tests cover: suggest writes file, apply creates AGENT.md, apply appends to existing AGENT.md, reject updates status
+- [x] agent_suggest({ target: 'AGENT.md', scope: 'project'|'user', content, reason }) writes a Suggestion to .bolt/suggestions/<id>.json
+- [x] Suggestion schema matches docs/design/agent-prompt.md (id, createdAt, sessionId, taskId?, target, scope, content, reason, status)
+- [x] agent_suggest is registered as a built-in tool; it is NOT in the default sub-agent or skill allowlist
+- [x] Returns { suggestionId, path }
+- [x] bolt suggestions CLI command lists all pending suggestions with id, createdAt, scope, and first line of reason
+- [x] bolt suggestions show <id> prints the full content and reason
+- [x] bolt suggestions apply <id> appends content to the target AGENT.md (creates the file if absent); sets status to 'applied'
+- [x] bolt suggestions reject <id> sets status to 'rejected'
+- [x] Applied/rejected suggestions are retained in .bolt/suggestions/ for audit purposes
+- [x] Unit tests cover: suggest writes file, apply creates AGENT.md, apply appends to existing AGENT.md, reject updates status
 ```
 
 ---

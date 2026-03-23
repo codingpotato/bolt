@@ -12,7 +12,7 @@ You operate in two modes:
 Prefer task-driven mode for anything that involves more than one non-trivial step.
 Always persist important decisions and learned facts using memory_write.`;
 
-function expandTilde(filePath: string): string {
+export function expandTilde(filePath: string): string {
   if (filePath.startsWith('~/')) {
     return homedir() + filePath.slice(1);
   }

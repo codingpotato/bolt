@@ -130,6 +130,18 @@ describe('runSubagent()', () => {
     );
   });
 
+  it('throws when child exits 0 but stdout is invalid JSON', async () => {
+    const { spawn } = await import('node:child_process');
+    const child = makeChildProcess(0);
+    vi.mocked(spawn).mockReturnValue(child as never);
+
+    setTimeout(() => child.stdout.emit('data', Buffer.from('not valid json')), 0);
+
+    await expect(runSubagent(makePayload(), '/path/to/subagent.js')).rejects.toThrow(
+      'invalid JSON output',
+    );
+  });
+
   it('passes allowedTools in the payload when provided', async () => {
     const { spawn } = await import('node:child_process');
     const child = makeChildProcess(0);

@@ -170,6 +170,21 @@ describe('suggestions apply <id>', () => {
     );
   });
 
+  it('updates status before writing file so double-apply is prevented on partial failure', async () => {
+    const { readFile, writeFile, mkdir } = await import('node:fs/promises');
+    vi.mocked(readFile).mockResolvedValue('' as never);
+    vi.mocked(mkdir).mockResolvedValue(undefined);
+
+    const callOrder: string[] = [];
+    const store = makeStore([makeSuggestion()]);
+    vi.mocked(store.updateStatus).mockImplementation(async () => { callOrder.push('updateStatus'); });
+    vi.mocked(writeFile).mockImplementation(async () => { callOrder.push('writeFile'); });
+
+    await handleSuggestionsCli(['apply', 'abc-123'], store, AGENT_MD_PATHS, captureOutput().write);
+
+    expect(callOrder.indexOf('updateStatus')).toBeLessThan(callOrder.indexOf('writeFile'));
+  });
+
   it('prints an error when id is not found', async () => {
     const store = makeStore([]);
     const out = captureOutput();

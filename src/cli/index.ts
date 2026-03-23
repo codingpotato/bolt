@@ -19,7 +19,7 @@ import { TodoStore } from '../todo/todo-store';
 import { createTodoTools } from '../todo/todo-tools';
 import { TaskStore } from '../tasks/task-store';
 import { createTaskTools } from '../tasks/task-tools';
-import { loadAgentPrompt } from '../agent-prompt/agent-prompt';
+import { loadAgentPrompt, expandTilde } from '../agent-prompt/agent-prompt';
 import { CliProgressReporter } from '../progress';
 import { SessionStore } from '../memory/session-store';
 import { MemoryStore } from '../memory/memory-store';
@@ -30,7 +30,6 @@ import { createAgentSuggestTool } from '../tools/agent-suggest';
 import { SuggestionStore } from '../suggestions/suggestion-store';
 import { handleSuggestionsCli } from '../suggestions/suggestions-cli';
 import { resolve, join } from 'node:path';
-import { homedir } from 'node:os';
 
 async function main(): Promise<void> {
   const config = resolveConfig();
@@ -45,7 +44,7 @@ async function main(): Promise<void> {
     const store = new SuggestionStore(suggestionsDir, logger);
     const paths = {
       project: resolve(cwd, config.agentPrompt.projectFile),
-      user: resolve(homedir(), '.bolt', 'AGENT.md'),
+      user: expandTilde(config.agentPrompt.userFile),
     };
     await handleSuggestionsCli(args.slice(1), store, paths, (s) => process.stdout.write(s + '\n'));
     return;

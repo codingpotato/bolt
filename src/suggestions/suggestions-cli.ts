@@ -92,9 +92,9 @@ async function cmdApply(
   const separator = existing.length > 0 && !existing.endsWith('\n') ? '\n\n' : existing.length > 0 ? '\n' : '';
   const updated = existing + separator + suggestion.content;
 
+  await store.updateStatus(id, 'applied');
   await mkdir(dirname(targetPath), { recursive: true });
   await writeFile(targetPath, updated, 'utf-8');
-  await store.updateStatus(id, 'applied');
   write(`Applied suggestion ${id} to ${targetPath}`);
 }
 

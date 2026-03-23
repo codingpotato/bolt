@@ -24,6 +24,7 @@ import { CliProgressReporter } from '../progress';
 import { SessionStore } from '../memory/session-store';
 import { MemoryStore } from '../memory/memory-store';
 import { MemoryManager } from '../memory/memory-manager';
+import { createMemorySearchTool } from '../tools/memory-search';
 import { resolve, join } from 'node:path';
 
 async function main(): Promise<void> {
@@ -69,6 +70,7 @@ async function main(): Promise<void> {
   toolBus.register(webFetchTool);
   for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
   for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
+  toolBus.register(createMemorySearchTool(memoryStore));
 
   const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
   const ctx = {

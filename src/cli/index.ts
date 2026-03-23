@@ -26,10 +26,32 @@ import { MemoryStore } from '../memory/memory-store';
 import { MemoryManager } from '../memory/memory-manager';
 import { createMemorySearchTool } from '../tools/memory-search';
 import { createMemoryWriteTool } from '../tools/memory-write';
+import { createAgentSuggestTool } from '../tools/agent-suggest';
+import { SuggestionStore } from '../suggestions/suggestion-store';
+import { handleSuggestionsCli } from '../suggestions/suggestions-cli';
 import { resolve, join } from 'node:path';
+import { homedir } from 'node:os';
 
 async function main(): Promise<void> {
   const config = resolveConfig();
+  const args = process.argv.slice(2);
+
+  // Dispatch 'bolt suggestions [...]' sub-command before starting the agent.
+  if (args[0] === 'suggestions') {
+    const cwd = process.cwd();
+    const dataDir = resolve(cwd, config.dataDir);
+    const suggestionsDir = resolve(cwd, config.agentPrompt.suggestionsPath);
+    const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
+    const store = new SuggestionStore(suggestionsDir, logger);
+    const paths = {
+      project: resolve(cwd, config.agentPrompt.projectFile),
+      user: resolve(homedir(), '.bolt', 'AGENT.md'),
+    };
+    await handleSuggestionsCli(args.slice(1), store, paths, (s) => process.stdout.write(s + '\n'));
+    return;
+  }
+
+
   const auth = resolveAuth();
   const client = createAnthropicClient(auth);
 
@@ -42,7 +64,6 @@ async function main(): Promise<void> {
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
 
   // Parse progress-related CLI flags (override config defaults).
-  const args = process.argv.slice(2);
   const verbose = args.includes('--verbose') || config.cli.verbose;
   const quiet = args.includes('--quiet') || !config.cli.progress;
 
@@ -73,6 +94,9 @@ async function main(): Promise<void> {
   for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
   toolBus.register(createMemorySearchTool(memoryStore));
   toolBus.register(createMemoryWriteTool(memoryStore));
+  const suggestionsDir = resolve(cwd, config.agentPrompt.suggestionsPath);
+  const suggestionStore = new SuggestionStore(suggestionsDir, logger);
+  toolBus.register(createAgentSuggestTool(suggestionStore, suggestionsDir));
 
   const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
   const ctx = {

@@ -29,6 +29,8 @@ import { createMemoryWriteTool } from '../tools/memory-write';
 import { createAgentSuggestTool } from '../tools/agent-suggest';
 import { SuggestionStore } from '../suggestions/suggestion-store';
 import { handleSuggestionsCli } from '../suggestions/suggestions-cli';
+import { createSubagentRunTool } from '../tools/subagent-run';
+import { runSubagent } from '../subagent/subagent-runner';
 import { resolve, join } from 'node:path';
 
 async function main(): Promise<void> {
@@ -96,6 +98,8 @@ async function main(): Promise<void> {
   const suggestionsDir = resolve(cwd, config.agentPrompt.suggestionsPath);
   const suggestionStore = new SuggestionStore(suggestionsDir, logger);
   toolBus.register(createAgentSuggestTool(suggestionStore, suggestionsDir));
+  const subagentScript = join(__dirname, 'subagent.js');
+  toolBus.register(createSubagentRunTool(auth, config.model, subagentScript, runSubagent));
 
   const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
   const ctx = {

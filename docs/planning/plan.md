@@ -621,12 +621,12 @@ I want to spawn isolated child agent processes for subtasks,
 so that delegated work cannot corrupt my context.
 
 Acceptance Criteria:
-- [ ] subagent_run({ prompt, allowedTools? }) spawns a child process
-- [ ] Child has no access to parent message history, memory, or tasks
-- [ ] Auth config is passed by value at spawn time (not from child process.env)
-- [ ] Child result is returned as a structured response to the parent
-- [ ] Non-zero exit code from child marks the delegated task as failed with stderr
-- [ ] allowedTools in subagent_run are intersected with parent allowedTools
+- [x] subagent_run({ prompt, allowedTools? }) spawns a child process
+- [x] Child has no access to parent message history, memory, or tasks
+- [x] Auth config is passed by value at spawn time (not from child process.env)
+- [x] Child result is returned as a structured response to the parent
+- [x] Non-zero exit code from child marks the delegated task as failed with stderr
+- [x] allowedTools in subagent_run are intersected with parent allowedTools
 ```
 
 **S6-2: Skill file loader**

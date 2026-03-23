@@ -93,4 +93,11 @@ describe('subagent_run tool', () => {
     expect(result.output).toContain('child crashed');
     expect(result.error).toBe(true);
   });
+
+  it('returns error output when runner rejects with a non-Error value', async () => {
+    runnerSpy.mockRejectedValue('string rejection');
+    const result = await tool.execute({ prompt: 'task' }, makeCtx());
+    expect(result.output).toContain('string rejection');
+    expect(result.error).toBe(true);
+  });
 });

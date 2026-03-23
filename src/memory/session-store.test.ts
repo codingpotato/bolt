@@ -256,4 +256,22 @@ describe('SessionStore.listSessionIds()', () => {
     const ids = await store.listSessionIds();
     expect(ids).toEqual(['session-a']);
   });
+
+  it('rethrows non-ENOENT errors from readdir', async () => {
+    const { readdir } = await import('node:fs/promises');
+    vi.mocked(readdir).mockRejectedValueOnce(Object.assign(new Error('EPERM'), { code: 'EPERM' }));
+
+    const store = makeStore();
+    await expect(store.listSessionIds()).rejects.toThrow('EPERM');
+  });
+});
+
+describe('SessionStore.loadSession()', () => {
+  it('rethrows non-ENOENT readFile errors', async () => {
+    const { readFile } = await import('node:fs/promises');
+    vi.mocked(readFile).mockRejectedValueOnce(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
+
+    const store = makeStore();
+    await expect(store.loadSession('any-session')).rejects.toThrow('EACCES');
+  });
 });

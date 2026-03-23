@@ -256,6 +256,20 @@ describe('ToolBus', () => {
       expect(result.is_error).toBe(true);
       expect(result.content).toMatch(/required/i);
     });
+
+    it('returns ToolError when input itself is null', async () => {
+      bus.register(makeTool('greet', async () => ({ ok: true })));
+      const result = await bus.dispatch(makeCall('greet', null), ctx);
+      expect(result.is_error).toBe(true);
+      expect(result.content).toMatch(/must be an object/i);
+    });
+
+    it('returns ToolError when input is an array', async () => {
+      bus.register(makeTool('greet', async () => ({ ok: true })));
+      const result = await bus.dispatch(makeCall('greet', ['a', 'b']), ctx);
+      expect(result.is_error).toBe(true);
+      expect(result.content).toMatch(/must be an object/i);
+    });
   });
 
   // ── register — duplicate name ──────────────────────────────────────────────

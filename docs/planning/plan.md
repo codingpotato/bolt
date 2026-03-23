@@ -564,13 +564,13 @@ I want to search my long-term memory by keyword,
 so that I can recall relevant facts and summaries from past sessions.
 
 Acceptance Criteria:
-- [ ] memory_search({ query, limit?, taskId?, dateFrom?, dateTo? }) returns matching L3 entries
-- [ ] Default limit is 5; results are ranked by relevance (BM25-style over summary and tags)
-- [ ] taskId filter restricts results to entries from a specific task
-- [ ] dateFrom / dateTo filters restrict results by the date field (YYYY-MM-DD)
-- [ ] memory_search is registered as a built-in tool
-- [ ] Returns empty results (not an error) when no matches found
-- [ ] Unit tests cover: keyword match, taskId filter, date filter, empty results
+- [x] memory_search({ query, limit?, taskId?, dateFrom?, dateTo? }) returns matching L3 entries
+- [x] Default limit is 5; results are ranked by relevance (BM25-style over summary and tags)
+- [x] taskId filter restricts results to entries from a specific task
+- [x] dateFrom / dateTo filters restrict results by the date field (YYYY-MM-DD)
+- [x] memory_search is registered as a built-in tool
+- [x] Returns empty results (not an error) when no matches found
+- [x] Unit tests cover: keyword match, taskId filter, date filter, empty results
 ```
 
 **S5-8: memory_write tool**
@@ -580,11 +580,11 @@ I want to explicitly write facts and notes to long-term memory,
 so that I can persist cross-task knowledge that would not otherwise be compacted.
 
 Acceptance Criteria:
-- [ ] memory_write({ content, tags? }) creates a CompactEntry with type: 'agent_note' in .bolt/memory/
-- [ ] Entry carries the current sessionId and taskId (if active)
-- [ ] Returns { id } of the created entry
-- [ ] memory_write is registered as a built-in tool
-- [ ] Unit tests verify entry is written with correct fields
+- [x] memory_write({ content, tags? }) creates a CompactEntry with type: 'agent_note' in .bolt/memory/
+- [x] Entry carries the current sessionId and taskId (if active)
+- [x] Returns { id } of the created entry
+- [x] memory_write is registered as a built-in tool
+- [x] Unit tests verify entry is written with correct fields
 ```
 
 **S5-9: agent_suggest tool and suggestions CLI**

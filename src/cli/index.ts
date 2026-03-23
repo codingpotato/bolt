@@ -25,6 +25,7 @@ import { SessionStore } from '../memory/session-store';
 import { MemoryStore } from '../memory/memory-store';
 import { MemoryManager } from '../memory/memory-manager';
 import { createMemorySearchTool } from '../tools/memory-search';
+import { createMemoryWriteTool } from '../tools/memory-write';
 import { resolve, join } from 'node:path';
 
 async function main(): Promise<void> {
@@ -71,6 +72,7 @@ async function main(): Promise<void> {
   for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
   for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
   toolBus.register(createMemorySearchTool(memoryStore));
+  toolBus.register(createMemoryWriteTool(memoryStore));
 
   const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
   const ctx = {

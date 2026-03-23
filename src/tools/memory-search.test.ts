@@ -74,7 +74,7 @@ describe('memory_search tool', () => {
       makeEntry({ id: 'e3', summary: 'alpha zeta eta', tags: ['alpha'] }),
     ]);
     const result = await tool.execute({ query: 'alpha', limit: 2 }, makeCtx());
-    expect(result.entries.length).toBeLessThanOrEqual(2);
+    expect(result.entries.length).toEqual(2);
   });
 
   it('defaults to limit 5', async () => {
@@ -83,7 +83,7 @@ describe('memory_search tool', () => {
     );
     getAllSpy.mockReturnValue(entries);
     const result = await tool.execute({ query: 'apple' }, makeCtx());
-    expect(result.entries.length).toBeLessThanOrEqual(5);
+    expect(result.entries.length).toEqual(5);
   });
 
   it('filters by taskId', async () => {

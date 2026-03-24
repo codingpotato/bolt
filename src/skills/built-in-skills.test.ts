@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseSkillFile, type Skill } from './skill-loader';
+import { parseSkillFile, loadSkills, type Skill } from './skill-loader';
 import { createSkillRunTool } from '../tools/skill-run';
 import type { AuthConfig } from '../auth/auth';
 import { createNoopLogger } from '../logger';
@@ -28,6 +28,37 @@ function makeCtx(): ToolContext {
     progress: new NoopProgressReporter(),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Discoverability — loadSkills finds all built-in skills from SKILLS_DIR
+// ---------------------------------------------------------------------------
+
+describe('built-in skills discoverability', () => {
+  const EXPECTED_NAMES = [
+    'write-blog-post',
+    'draft-social-post',
+    'generate-video-script',
+    'generate-image-prompt',
+    'generate-video-prompt',
+    'summarize-url',
+    'review-code',
+  ];
+
+  it('loadSkills finds all 7 built-in skills when passed SKILLS_DIR as builtinSkillsDir', async () => {
+    const skills = await loadSkills('', '', () => {}, SKILLS_DIR);
+    const names = skills.map((s) => s.name);
+    for (const expected of EXPECTED_NAMES) {
+      expect(names).toContain(expected);
+    }
+  });
+
+  it('all built-in skills have non-empty system prompts', async () => {
+    const skills = await loadSkills('', '', () => {}, SKILLS_DIR);
+    for (const skill of skills.filter((s) => EXPECTED_NAMES.includes(s.name))) {
+      expect(skill.systemPrompt.length, `${skill.name} has empty system prompt`).toBeGreaterThan(0);
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // write-blog-post

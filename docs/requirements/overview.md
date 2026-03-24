@@ -38,6 +38,7 @@ The task-driven principle shapes the heavier subsystems:
   - Rich media preview (images, videos)
   - Interactive approval/feedback via buttons and text input
   - Real-time progress updates via WebSocket
+  - **Single active connection:** only one client may send commands at a time; additional connections are accepted as read-only observers that receive all agent messages and progress events but cannot send turns
 - **Slash commands** — CLI directives starting with `/` are intercepted before the LLM: `/exit` terminates the session, `/help` lists commands, `/session` shows the current session ID. New commands can be registered without modifying core code.
 
 ### Tools Execution
@@ -190,7 +191,7 @@ bolt must support three mutually exclusive authentication modes:
 
 ## Out of Scope (v1)
 
-- Multi-user / auth system (WebChannel uses a simple token for now)
+- Multi-user auth system — WebChannel uses a single shared token; concurrent active users are not supported (read-only observers are allowed)
 - Billing or quota management
 - Direct social media platform posting (generates content only)
 - Discord / Telegram / WeChat integration (WebChannel covers the use case; IM adapters can be added post-v1)

@@ -108,20 +108,27 @@ export function parseSkillFile(_filename: string, raw: string): Skill | null {
 }
 
 /**
- * Discover and load all `.skill.md` files from `projectSkillsDir` and
- * `userSkillsDir`. Project-local skills take priority over user-global skills
- * on name collision. Files that fail to parse are skipped with a warning.
+ * Discover and load all `.skill.md` files from up to three directories.
+ * Priority order (highest wins on name collision):
+ *   1. projectSkillsDir  — project-local skills (.bolt/skills/)
+ *   2. userSkillsDir     — user-global skills (~/.bolt/skills/)
+ *   3. builtinSkillsDir  — skills shipped with bolt (src/skills/ or dist/skills/)
+ *
+ * Files that fail to parse are skipped with a warning.
  */
 export async function loadSkills(
   projectSkillsDir: string,
   userSkillsDir: string,
   warn: (msg: string) => void = () => {},
+  builtinSkillsDir?: string,
 ): Promise<Skill[]> {
   const skillMap = new Map<string, Skill>();
 
-  // Load user-global skills first (lower priority).
+  // Load in ascending priority order — later loads overwrite on collision.
+  if (builtinSkillsDir !== undefined) {
+    await loadFromDir(builtinSkillsDir, skillMap, warn);
+  }
   await loadFromDir(userSkillsDir, skillMap, warn);
-  // Load project-local skills second (higher priority — overwrites user skills).
   await loadFromDir(projectSkillsDir, skillMap, warn);
 
   return Array.from(skillMap.values());

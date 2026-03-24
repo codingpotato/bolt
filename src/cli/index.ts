@@ -109,7 +109,9 @@ async function main(): Promise<void> {
 
   const projectSkillsDir = join(dataDir, 'skills');
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
-  const skills = await loadSkills(projectSkillsDir, userSkillsDir, (msg) => logger.warn(msg));
+  // Built-in skills are co-located with this file in src/skills/ (dev) or dist/skills/ (prod).
+  const builtinSkillsDir = join(__dirname, '../skills');
+  const skills = await loadSkills(projectSkillsDir, userSkillsDir, (msg) => logger.warn(msg), builtinSkillsDir);
   toolBus.register(createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent));
   const slashRegistry = createSlashCommandRegistry();
   slashRegistry.register(createSkillsSlashCommand(skills));

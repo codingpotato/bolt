@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { writeFile, mkdir, rename } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 
-export type TaskStatus = 'pending' | 'in_progress' | 'blocked' | 'waiting' | 'completed' | 'failed';
+export type TaskStatus = 'pending' | 'in_progress' | 'blocked' | 'waiting' | 'awaiting_approval' | 'completed' | 'failed';
 
 export interface Task {
   id: string;
@@ -11,6 +11,8 @@ export interface Task {
   status: TaskStatus;
   /** Task IDs that must be completed before this task can start. */
   dependsOn: string[];
+  /** If true, agent must present output via user_review before marking completed. */
+  requiresApproval: boolean;
   parentId?: string;
   subtaskIds: string[];
   /** Sessions that have worked on this task (appended when status → in_progress). */
@@ -71,10 +73,10 @@ export class TaskStore {
     }
 
     this.counter = parsed.counter;
-    // Cast to allow missing dependsOn from data persisted before S4-4
-    type StoredTask = Omit<Task, 'dependsOn'> & { dependsOn?: string[] };
+    // Cast to allow missing fields from data persisted before S4-4/S4-5
+    type StoredTask = Omit<Task, 'dependsOn' | 'requiresApproval'> & { dependsOn?: string[]; requiresApproval?: boolean };
     for (const task of parsed.tasks as StoredTask[]) {
-      this.taskMap.set(task.id, { dependsOn: [], ...task });
+      this.taskMap.set(task.id, { dependsOn: [], requiresApproval: false, ...task });
     }
   }
 
@@ -96,7 +98,7 @@ export class TaskStore {
     await writeFile(this.filePath, JSON.stringify(data, null, 2), 'utf-8');
   }
 
-  async create(title: string, description: string, dependsOn: string[] = []): Promise<string> {
+  async create(title: string, description: string, dependsOn: string[] = [], requiresApproval = false): Promise<string> {
     for (const depId of dependsOn) {
       if (!this.taskMap.has(depId)) {
         throw new Error(`dependency not found: ${depId}`);
@@ -120,6 +122,7 @@ export class TaskStore {
       description,
       status: dependsOn.length > 0 ? 'waiting' : 'pending',
       dependsOn,
+      requiresApproval,
       subtaskIds: [],
       sessionIds: [],
       createdAt: now,
@@ -179,6 +182,9 @@ export class TaskStore {
   ): Promise<void> {
     const task = this.taskMap.get(id);
     if (!task) throw new Error(`task not found: ${id}`);
+    if (changes.status === 'awaiting_approval' && !task.requiresApproval) {
+      throw new Error(`cannot set awaiting_approval on task ${id}: requiresApproval is false`);
+    }
     task.status = changes.status;
     task.updatedAt = new Date().toISOString();
     if (changes.result !== undefined) task.result = changes.result;

@@ -468,13 +468,13 @@ I want tasks to require user approval before completing,
 so that users can review creative output before expensive downstream work begins.
 
 Acceptance Criteria:
-- [ ] task_create accepts optional requiresApproval: boolean (default false)
-- [ ] When requiresApproval is true, agent must call user_review before marking task completed
-- [ ] task_update to 'awaiting_approval' status is valid only when requiresApproval is true
-- [ ] If user rejects (provides feedback), task returns to 'in_progress' for revision
-- [ ] If user approves, task transitions to 'completed'
-- [ ] task_list output includes requiresApproval and shows 'awaiting_approval' status
-- [ ] Unit tests cover: approval flow, rejection with feedback, direct complete (no approval needed)
+- [x] task_create accepts optional requiresApproval: boolean (default false)
+- [x] When requiresApproval is true, agent must call user_review before marking task completed
+- [x] task_update to 'awaiting_approval' status is valid only when requiresApproval is true
+- [x] If user rejects (provides feedback), task returns to 'in_progress' for revision
+- [x] If user approves, task transitions to 'completed'
+- [x] task_list output includes requiresApproval and shows 'awaiting_approval' status
+- [x] Unit tests cover: approval flow, rejection with feedback, direct complete (no approval needed)
 ```
 
 ---

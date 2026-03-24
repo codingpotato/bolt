@@ -39,6 +39,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     title: 'test task',
     description: 'test description',
     status: 'pending',
+    dependsOn: [],
     subtaskIds: [],
     sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -78,7 +79,12 @@ describe('task tools', () => {
 
     it('passes title and description to store.create', async () => {
       await getTool('task_create').execute({ title: 'T', description: 'D' }, ctx);
-      expect(store.create).toHaveBeenCalledWith('T', 'D');
+      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined);
+    });
+
+    it('passes dependsOn to store.create when provided', async () => {
+      await getTool('task_create').execute({ title: 'T', description: 'D', dependsOn: ['task-1'] }, ctx);
+      expect(store.create).toHaveBeenCalledWith('T', 'D', ['task-1']);
     });
 
     it('is not marked sequential', () => {
@@ -186,6 +192,18 @@ describe('task tools', () => {
 
       const result = (await getTool('task_list').execute({}, ctx)) as { tasks: Task[] };
       expect(result.tasks[0]?.status).toBe('in_progress');
+    });
+
+    it('includes dependsOn field in returned tasks', async () => {
+      store.list.mockReturnValue([makeTask({ dependsOn: ['task-0'] })]);
+      const result = (await getTool('task_list').execute({}, ctx)) as { tasks: Task[] };
+      expect(result.tasks[0]?.dependsOn).toEqual(['task-0']);
+    });
+
+    it('shows waiting status when task has unmet deps', async () => {
+      store.list.mockReturnValue([makeTask({ status: 'waiting', dependsOn: ['task-0'] })]);
+      const result = (await getTool('task_list').execute({}, ctx)) as { tasks: Task[] };
+      expect(result.tasks[0]?.status).toBe('waiting');
     });
   });
 });

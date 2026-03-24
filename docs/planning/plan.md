@@ -452,13 +452,13 @@ I want tasks to declare dependencies on other tasks,
 so that I can build ordered execution pipelines (e.g. video production).
 
 Acceptance Criteria:
-- [ ] task_create accepts optional dependsOn: string[] parameter
-- [ ] Tasks created with dependsOn start in 'waiting' status; tasks without deps start in 'pending'
-- [ ] When all dependencies are 'completed', task transitions waiting → pending (eligible to start)
-- [ ] If any dependency is 'failed', dependent task is auto-failed (cascade)
-- [ ] Circular dependencies are detected at creation time and rejected with ToolError
-- [ ] task_list output includes dependsOn field and shows 'waiting' status
-- [ ] Unit tests cover: linear chain, fan-in, cascade failure, circular detection
+- [x] task_create accepts optional dependsOn: string[] parameter
+- [x] Tasks created with dependsOn start in 'waiting' status; tasks without deps start in 'pending'
+- [x] When all dependencies are 'completed', task transitions waiting → pending (eligible to start)
+- [x] If any dependency is 'failed', dependent task is auto-failed (cascade)
+- [x] Circular dependencies are detected at creation time and rejected with ToolError
+- [x] task_list output includes dependsOn field and shows 'waiting' status
+- [x] Unit tests cover: linear chain, fan-in, cascade failure, circular detection
 ```
 
 **S4-5: Task approval gates**

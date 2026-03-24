@@ -31,7 +31,11 @@ import { SuggestionStore } from '../suggestions/suggestion-store';
 import { handleSuggestionsCli } from '../suggestions/suggestions-cli';
 import { createSubagentRunTool } from '../tools/subagent-run';
 import { runSubagent } from '../subagent/subagent-runner';
+import { loadSkills } from '../skills/skill-loader';
+import { createSkillsSlashCommand } from '../skills/skills-slash-command';
+import { createSlashCommandRegistry } from '../slash-commands/slash-commands';
 import { resolve, join } from 'node:path';
+import { homedir } from 'node:os';
 
 async function main(): Promise<void> {
   const config = resolveConfig();
@@ -101,6 +105,12 @@ async function main(): Promise<void> {
   const subagentScript = join(__dirname, 'subagent.js');
   toolBus.register(createSubagentRunTool(auth, config.model, subagentScript, runSubagent));
 
+  const projectSkillsDir = join(dataDir, 'skills');
+  const userSkillsDir = join(homedir(), '.bolt', 'skills');
+  const skills = await loadSkills(projectSkillsDir, userSkillsDir, (msg) => logger.warn(msg));
+  const slashRegistry = createSlashCommandRegistry();
+  slashRegistry.register(createSkillsSlashCommand(skills));
+
   const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
   const ctx = {
     cwd,
@@ -126,6 +136,7 @@ async function main(): Promise<void> {
     sessionStore,
     sessionId,
     memoryManager,
+    slashRegistry,
   );
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });

@@ -23,6 +23,7 @@ Leading whitespace before the `/` is stripped; command names are case-insensitiv
 | `/help` | — | List all available slash commands |
 | `/exit` | — | Exit the agent cleanly (same effect as Ctrl+D) |
 | `/session` | — | Show the current session ID |
+| `/skills` | — | List all discovered skills with name and description |
 
 ---
 

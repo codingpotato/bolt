@@ -121,7 +121,7 @@ async function main(): Promise<void> {
     codeWorkflows: { testFixRetries: 3 },
   };
 
-  const agent = new AgentCore(client, channel, toolBus, ctx, config, DEFAULT_SYSTEM_PROMPT);
+  const agent = new AgentCore(client, channel, toolBus, ctx, config, payload.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
   await agent.run();
 
   const result: SubagentResult = { output: channel.getOutput() };

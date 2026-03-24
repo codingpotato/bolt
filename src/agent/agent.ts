@@ -38,6 +38,13 @@ function isRetryableError(err: unknown): boolean {
   return false;
 }
 
+/** Returns true if the error is a context-size exceeded error (400). */
+function isExceedContextSizeError(err: unknown): boolean {
+  if (!(err instanceof APIError) || err.status !== 400) return false;
+  const msg = getErrorMessage(err);
+  return msg.includes('exceed_context_size_error') || msg.includes('exceeds the available context size');
+}
+
 /** Extracts a human-readable message from an unknown error value. */
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -169,7 +176,9 @@ export class AgentCore {
         });
 
         this.ctx.progress.onThinking();
-        const response = await this.callApi({
+
+        // Build stable params (messages snapshot is taken fresh each attempt).
+        const buildParams = () => ({
           model: this.config.model,
           system: this.systemPrompt,
           max_tokens: MAX_TOKENS,
@@ -179,6 +188,27 @@ export class AgentCore {
           // visible in test spy captures of the argument.
           messages: [...this.l1],
         });
+
+        let response: Anthropic.Message;
+        try {
+          response = await this.callApi(buildParams());
+        } catch (err) {
+          if (!isExceedContextSizeError(err)) throw err;
+          // The request exceeded the context window before the threshold check
+          // could fire (e.g. injected history masked the true token count).
+          // Compact now and retry once before giving up.
+          const compacted = this.memoryManager
+            ? await this.memoryManager.compact(this.l1, sessionId, this.ctx.activeTaskId, this.ctx.progress)
+            : this.compactMessages(this.l1);
+          if (compacted === null) {
+            throw new Error(
+              `Context window exceeded and cannot be compacted further.`,
+            );
+          }
+          this.l1.splice(0, this.l1.length, ...compacted);
+          this.injectedTokenEstimate = 0;
+          response = await this.callApi(buildParams());
+        }
 
         this.logger.debug('Received response from LLM', {
           model: response.model,
@@ -228,12 +258,17 @@ export class AgentCore {
             })),
           });
 
-          // Check if L1 token usage is approaching the context window limit.
-          // Subtract injected history tokens so a task with large injected
-          // context does not trigger compaction when L1 itself is small.
+          // Check if context is approaching the limit.
+          // Two checks are combined with OR:
+          //   1. l1Fraction: L1-only tokens (subtracts injected estimate) vs threshold —
+          //      avoids premature compaction when injected history is large.
+          //   2. totalFraction: absolute total tokens vs threshold — catches the case
+          //      where injectedTokenEstimate is large enough to suppress l1Fraction
+          //      even though the full request is near the context limit.
           const l1Tokens = Math.max(0, response.usage.input_tokens - this.injectedTokenEstimate);
-          const tokenFraction = l1Tokens / MODEL_CONTEXT_WINDOW;
-          if (tokenFraction > this.config.memory.compactThreshold) {
+          const l1Fraction = l1Tokens / MODEL_CONTEXT_WINDOW;
+          const totalFraction = response.usage.input_tokens / MODEL_CONTEXT_WINDOW;
+          if (l1Fraction > this.config.memory.compactThreshold || totalFraction > this.config.memory.compactThreshold) {
             const compacted = this.memoryManager
               ? await this.memoryManager.compact(this.l1, sessionId, this.ctx.activeTaskId, this.ctx.progress)
               : this.compactMessages(this.l1);

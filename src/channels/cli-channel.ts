@@ -51,14 +51,22 @@ export class CliChannel implements Channel {
     this.rl.setPrompt(this.isTTY ? `${CYAN}${BOLD}❯${RESET} ` : '> ');
     this.rl.prompt();
 
-    for await (const line of this.rl) {
-      const content = line.trim();
-      if (!content) {
-        this.rl.prompt();
-        continue;
-      }
+    try {
+      for await (const line of this.rl) {
+        const content = line.trim();
+        if (!content) {
+          this.rl.prompt();
+          continue;
+        }
 
-      yield { content };
+        yield { content };
+      }
+    } finally {
+      // Close the readline interface whenever the consumer exits the loop
+      // (EOF, /exit break, or any other early return). Without this the
+      // interface holds stdin open and the process hangs until Ctrl+C.
+      this.rl.close();
+      this.rl = null;
     }
   }
 

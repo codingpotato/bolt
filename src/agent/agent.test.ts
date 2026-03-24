@@ -179,6 +179,15 @@ function makeNetworkError(): APIConnectionError {
   return new APIConnectionError({ message: 'ECONNREFUSED' });
 }
 
+/** Build a 400 exceed_context_size_error (context window exceeded). */
+function makeExceedContextSizeError(): APIError {
+  return APIError.generate(
+    400, undefined,
+    'request (447954 tokens) exceeds the available context size (200192 tokens), try increasing it',
+    new Headers(),
+  ) as APIError;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -910,6 +919,78 @@ describe('AgentCore', () => {
 
       expect(sendSpy.mock.calls[0]?.[0]).toContain('170,000');
       expect(sendSpy.mock.calls[0]?.[0]).toContain('200,000');
+    });
+
+    it('compacts when total tokens exceed threshold even if injected estimate suppresses l1 fraction', async () => {
+      // input_tokens = 170_000, totalFraction = 0.85 > 0.8 (absolute check triggers).
+      // injectedTokenEstimate = estimateTokens({role:'user', content:'a'.repeat(40_000)})
+      //   = ceil(JSON.stringify('a'.repeat(40_000)).length / 4) = ceil(40_002 / 4) = 10_001.
+      // l1Tokens = 170_000 - 10_001 = 159_999, l1Fraction = 0.7999 < 0.8 (relative check would miss it).
+      const toolUse = makeToolUseResponseWithTokens([TOOL_CALL], 170_000);
+      const final = makeTextResponse('done');
+
+      const { client } = makeClient([toolUse, final]);
+      const { channel } = makeChannel(['go']);
+      const toolBus = makeToolBus([TOOL_RESULT]);
+
+      const compactSpy = vi.fn().mockImplementation(
+        async (msgs: Anthropic.MessageParam[]) => [
+          { role: 'user' as const, content: '[compacted]' },
+          ...msgs.slice(-2),
+        ],
+      );
+      const mockMemoryManager = {
+        // Single injected message whose content is 40_000 chars → estimateTokens = 10_001
+        assembleInjectedHistory: vi.fn().mockResolvedValue([
+          { role: 'user' as const, content: 'a'.repeat(40_000) },
+        ]),
+        compact: compactSpy,
+      };
+
+      const agent = new AgentCore(
+        client, channel, toolBus, ctx, makeOverflowConfig(),
+        undefined, noopSleep, undefined, undefined, undefined,
+        mockMemoryManager as unknown as import('../memory/memory-manager').MemoryManager,
+      );
+      await agent.run();
+
+      expect(compactSpy).toHaveBeenCalledOnce();
+    });
+
+    it('compacts reactively when API returns exceed_context_size_error on a subsequent call', async () => {
+      // First call: tool use with low token count (no threshold compaction).
+      // l1 grows to [user, assistant(tool_use), user(tool_result)] = 3 messages.
+      // Second call: exceed_context_size_error — agent compacts l1 (keepRecentMessages=2) and retries.
+      // Third call: success after compaction.
+      const toolUse = makeToolUseResponseWithTokens([TOOL_CALL], 10);
+      const exceedErr = makeExceedContextSizeError();
+      const final = makeTextResponse('recovered');
+
+      const { client, createSpy } = makeClient([toolUse, exceedErr, final]);
+      const { channel, sendSpy } = makeChannel(['go']);
+      const toolBus = makeToolBus([TOOL_RESULT]);
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeOverflowConfig(), undefined, noopSleep);
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledTimes(3);
+      expect(sendSpy).toHaveBeenCalledWith('recovered');
+    });
+
+    it('surfaces error when reactive compaction cannot reduce context further after exceed_context_size_error', async () => {
+      // keepRecentMessages=10 with only the initial user message in l1 (1 <= 10) → compactMessages returns null.
+      const overflowConfig = { ...makeConfig(), memory: { ...makeConfig().memory, keepRecentMessages: 10 } };
+      const exceedErr = makeExceedContextSizeError();
+
+      const { client, createSpy } = makeClient([exceedErr]);
+      const { channel, sendSpy } = makeChannel(['go']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, overflowConfig, undefined, noopSleep);
+      await agent.run();
+
+      expect(createSpy).toHaveBeenCalledOnce();
+      expect(sendSpy.mock.calls[0]?.[0]).toMatch(/Context window exceeded/);
     });
   });
 

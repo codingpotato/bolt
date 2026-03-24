@@ -139,7 +139,13 @@ class FakeResponse extends EventEmitter {
 // ---------------------------------------------------------------------------
 
 function makeChannel(
-  opts: { token?: string; mode?: 'http' | 'websocket'; enabled?: boolean; workspaceRoot?: string } = {}
+  opts: {
+    token?: string;
+    mode?: 'http' | 'websocket';
+    enabled?: boolean;
+    workspaceRoot?: string;
+    persistent?: boolean;
+  } = {}
 ): {
   channel: WebChannel & { _onConnection: (ws: FakeWs) => void };
   server: FakeServer;
@@ -152,6 +158,7 @@ function makeChannel(
       mode: opts.mode ?? 'websocket',
       enabled: opts.enabled,
       workspaceRoot: opts.workspaceRoot,
+      persistent: opts.persistent,
     },
     server as unknown as Server
   ) as WebChannel & { _onConnection: (ws: FakeWs) => void };
@@ -493,6 +500,69 @@ describe('WebChannel', () => {
         // expected — fake socket
       }
       expect(socket.destroy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Lifecycle — persistent mode', () => {
+    it('does NOT close receive() when all connections drop in persistent mode', async () => {
+      const { channel } = makeChannel({ persistent: true });
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+
+      const turns: string[] = [];
+      let completed = false;
+      const done = (async () => {
+        for await (const turn of channel.receive()) {
+          turns.push(turn.content);
+        }
+        completed = true;
+      })();
+
+      // Enqueue a turn then close the only connection
+      ws.simulateMessage({ type: 'message', content: 'hello' });
+      ws.simulateClose();
+
+      // Give the loop a chance to process
+      await new Promise((r) => setTimeout(r, 10));
+
+      // receive() must still be running — not completed
+      expect(completed).toBe(false);
+      expect(turns).toEqual(['hello']);
+
+      // Cleanup: stop() should terminate it
+      await channel.stop();
+      await done;
+      expect(completed).toBe(true);
+    });
+
+    it('closes receive() normally when all connections drop in non-persistent mode', async () => {
+      const { channel } = makeChannel({ persistent: false });
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+
+      let completed = false;
+      const done = (async () => {
+        for await (const _turn of channel.receive()) { /* consume */ }
+        completed = true;
+      })();
+
+      ws.simulateClose();
+      await done;
+      expect(completed).toBe(true);
+    });
+
+    it('stop() terminates receive() even in persistent mode', async () => {
+      const { channel } = makeChannel({ persistent: true });
+
+      let completed = false;
+      const done = (async () => {
+        for await (const _turn of channel.receive()) { /* consume */ }
+        completed = true;
+      })();
+
+      await channel.stop();
+      await done;
+      expect(completed).toBe(true);
     });
   });
 

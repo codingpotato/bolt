@@ -39,12 +39,129 @@ import { createSlashCommandRegistry } from '../slash-commands/slash-commands';
 import { createSearchProvider, validateSearchProvider } from '../search';
 import { createWebSearchTool } from '../tools/web-search';
 import { createUserReviewTool } from '../tools/user-review';
+import { WebChannel } from '../channels/web-channel';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
+
+async function serve(serveArgs: string[]): Promise<void> {
+  const config = resolveConfig();
+
+  // Parse --port and --token overrides
+  const portFlagIndex = serveArgs.indexOf('--port');
+  const port = portFlagIndex !== -1
+    ? parseInt(serveArgs[portFlagIndex + 1] ?? String(config.channels.web.port), 10)
+    : config.channels.web.port;
+  const tokenFlagIndex = serveArgs.indexOf('--token');
+  const token = tokenFlagIndex !== -1 ? (serveArgs[tokenFlagIndex + 1] ?? undefined) : config.channels.web.token;
+
+  const auth = resolveAuth();
+  const client = createAnthropicClient(auth);
+
+  const cwd = process.cwd();
+  const dataDir = resolve(cwd, config.dataDir);
+
+  const log = createAuditLogger(dataDir);
+  const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
+
+  const todoStore = new TodoStore();
+  const taskStore = new TaskStore(dataDir);
+
+  const sessionsDir = join(dataDir, config.memory.sessionPath);
+  const sessionStore = new SessionStore(sessionsDir, logger);
+  const memoryStoreDir = join(dataDir, config.memory.storePath);
+  const corruptedDir = join(dataDir, 'corrupted');
+  const memoryStore = new MemoryStore(memoryStoreDir, corruptedDir, logger);
+  await memoryStore.loadAll();
+  const memoryManager = new MemoryManager(sessionStore, config.memory, logger, memoryStore, client, config.model);
+
+  const toolBus = new ToolBus();
+  toolBus.register(bashTool);
+  toolBus.register(fileReadTool);
+  toolBus.register(fileWriteTool);
+  toolBus.register(fileEditTool);
+  toolBus.register(webFetchTool);
+  for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
+  for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
+  toolBus.register(createMemorySearchTool(memoryStore));
+  toolBus.register(createMemoryWriteTool(memoryStore));
+  const suggestionsDir = resolve(cwd, config.agentPrompt.suggestionsPath);
+  const suggestionStore = new SuggestionStore(suggestionsDir, logger);
+  toolBus.register(createAgentSuggestTool(suggestionStore, suggestionsDir));
+  const subagentScript = join(__dirname, 'subagent.js');
+  toolBus.register(createSubagentRunTool(auth, config.model, subagentScript, runSubagent));
+
+  const projectSkillsDir = join(dataDir, 'skills');
+  const userSkillsDir = join(homedir(), '.bolt', 'skills');
+  const builtinSkillsDir = join(__dirname, '../skills');
+  const skills = await loadSkills(projectSkillsDir, userSkillsDir, (msg) => logger.warn(msg), builtinSkillsDir);
+  toolBus.register(createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent));
+  const slashRegistry = createSlashCommandRegistry();
+  slashRegistry.register(createSkillsSlashCommand(skills));
+  slashRegistry.register(createRunSkillSlashCommand(skills, auth, config.model, subagentScript, runSubagent));
+
+  const channel = new WebChannel({
+    port,
+    token,
+    mode: config.channels.web.mode,
+    enabled: true,
+    workspaceRoot: cwd,
+    persistent: true,
+  });
+
+  const progress = new CliProgressReporter(process.stdout, false, true);
+  const ctx = {
+    cwd,
+    log,
+    logger,
+    progress,
+    channel,
+  };
+
+  const systemPrompt = await loadAgentPrompt(config);
+  const agent = new AgentCore(
+    client,
+    channel,
+    toolBus,
+    ctx,
+    config,
+    systemPrompt,
+    undefined,
+    logger,
+    sessionStore,
+    undefined,
+    memoryManager,
+    slashRegistry,
+  );
+
+  const searchProvider = createSearchProvider(config);
+  await validateSearchProvider(searchProvider, logger);
+  toolBus.register(createWebSearchTool(searchProvider, config.search.maxResults));
+  toolBus.register(createUserReviewTool());
+
+  const shutdown = async (): Promise<void> => {
+    process.stderr.write('\nbolt serve: shutting down gracefully...\n');
+    await channel.stop();
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => void shutdown());
+  process.on('SIGINT', () => void shutdown());
+
+  await channel.listen();
+  logger.info('bolt serve started', { port, model: config.model, auth: auth.mode });
+  process.stderr.write(`bolt serve: listening on http://localhost:${port} (model: ${config.model})\n`);
+
+  await agent.run();
+}
 
 async function main(): Promise<void> {
   const config = resolveConfig();
   const args = process.argv.slice(2);
+
+  // Dispatch 'bolt serve [...]' sub-command — daemon mode with WebChannel.
+  if (args[0] === 'serve') {
+    await serve(args.slice(1));
+    return;
+  }
 
   // Dispatch 'bolt suggestions [...]' sub-command before starting the agent.
   if (args[0] === 'suggestions') {

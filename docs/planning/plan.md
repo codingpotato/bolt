@@ -836,11 +836,11 @@ I want bolt to stay running as a background service,
 so that I can connect to it from my phone at any time.
 
 Acceptance Criteria:
-- [ ] bolt serve CLI command starts bolt in daemon mode with WebChannel
-- [ ] Agent stays alive between conversations, listening for new WebSocket connections
-- [ ] Only one connection may send commands at a time; additional connections are read-only observers (see S8-1)
-- [ ] Graceful shutdown on SIGTERM/SIGINT
-- [ ] Session state is preserved between conversations
+- [x] bolt serve CLI command starts bolt in daemon mode with WebChannel
+- [x] Agent stays alive between conversations, listening for new WebSocket connections
+- [x] Only one connection may send commands at a time; additional connections are read-only observers (see S8-1)
+- [x] Graceful shutdown on SIGTERM/SIGINT
+- [x] Session state is preserved between conversations
 ```
 
 ---

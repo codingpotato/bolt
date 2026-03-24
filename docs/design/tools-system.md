@@ -49,9 +49,13 @@ interface ToolContext {
   /**
    * Channel reference for tools that need user interaction (user_review).
    * When absent, user_review falls back to confirm-style interaction.
+   * See Channel interface in docs/design/architecture.md.
    */
   channel?: Channel;
-  /** MCP Client for dispatching mcp_call requests */
+  /**
+   * MCP Client for dispatching mcp_call requests.
+   * See McpClient interface in docs/design/architecture.md.
+   */
   mcpClient?: McpClient;
 }
 ```
@@ -177,6 +181,7 @@ interface UserReviewOutput {
 **Channel-specific behavior:**
 - **CliChannel**: Renders content as text, prompts with `[approve/reject/feedback]:`
 - **WebChannel**: Renders rich preview (markdown, images, video player), shows approve/reject buttons with a feedback text box
+- **Disconnect handling**: If the WebSocket client disconnects while `user_review` is waiting, the tool throws a retryable `ToolError("client disconnected during review")`. The agent loop surfaces this to the model, which can re-call `user_review` once the client reconnects.
 
 ### mcp_call
 

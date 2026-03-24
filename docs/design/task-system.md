@@ -11,7 +11,7 @@
 ## Task Model
 
 ```ts
-type TaskStatus = 'pending' | 'in_progress' | 'blocked' | 'awaiting_approval' | 'completed' | 'failed';
+type TaskStatus = 'pending' | 'waiting' | 'in_progress' | 'blocked' | 'awaiting_approval' | 'completed' | 'failed';
 
 interface Task {
   id: string;
@@ -40,27 +40,30 @@ interface Task {
 
 ```
 pending ──────────► in_progress ──────────► completed
-   │                     │                      ▲
-   │                     │                      │
-   │                     ├──► awaiting_approval ─┘  (user approves)
-   │                     │          │
-   │                     │          └──► in_progress  (user requests changes)
-   │                     │
-   │                     └──► failed
-   │
-   └──► blocked  (dependency not met)
-           │
-           └──► pending  (dependency completed)
+                         │                      ▲
+                         │                      │
+                         ├──► awaiting_approval ─┘  (user approves)
+                         │          │
+                         │          └──► in_progress  (user requests changes)
+                         │
+                         └──► blocked  (external condition — agent set)
+                                  │
+                                  └──► in_progress  (condition resolved)
+
+[created with unmet deps] ──► waiting ──► pending  (all deps completed)
+                                    │
+                                    └──► failed  (any dep failed — cascade)
 ```
 
 ### Status Definitions
 
 | Status | Meaning |
 |--------|---------|
-| `pending` | Task created but not yet started (may be waiting for dependencies) |
+| `pending` | Task is ready to start — all dependencies met, not yet picked up by the execution loop |
+| `waiting` | Task has unmet `dependsOn` dependencies; will transition to `pending` when all complete |
 | `in_progress` | Agent is actively working on this task |
-| `blocked` | Task cannot proceed — either a dependency is not met, or an external condition is blocking |
-| `awaiting_approval` | Task output is ready and presented to the user for review |
+| `blocked` | Agent explicitly set this — task is running but cannot proceed due to an external condition (not a dependency). Transitions back to `in_progress` when resolved. |
+| `awaiting_approval` | Task output is ready and presented to the user for review via `user_review` |
 | `completed` | Task finished successfully; `result` contains the output |
 | `failed` | Task failed; `error` contains the reason |
 
@@ -90,17 +93,22 @@ Typical pattern: the agent breaks a goal into **tasks** (the plan), then works t
 
 ## Dependency Resolution
 
-When the agent picks the next task to execute, the execution loop applies this logic:
+When a task is created with `dependsOn`, it starts in `waiting` status. The execution loop monitors waiting tasks and advances them:
 
 ```
-For each task with status == 'pending':
-  If task.dependsOn is empty or all dependencies are 'completed':
-    → eligible to start (mark in_progress)
-  Else if any dependency is 'failed':
-    → mark this task as 'failed' (cascade failure)
+For each task with status == 'waiting':
+  If any dependency is 'failed':
+    → mark this task 'failed' (cascade failure)
+  Else if all dependencies are 'completed':
+    → mark this task 'pending' (now eligible to execute)
   Else:
-    → skip (dependencies not yet met)
+    → remain 'waiting'
+
+For each task with status == 'pending':
+  → eligible to start (mark in_progress)
 ```
+
+Tasks created with no `dependsOn` start directly in `pending` status.
 
 Dependencies form a DAG (directed acyclic graph). Circular dependencies are detected at `task_create` time and rejected with a ToolError.
 
@@ -161,9 +169,12 @@ All tasks are persisted to `.bolt/tasks.json` after every mutation. This allows 
 Load task list
         │
         ▼
+Advance waiting tasks:
+  - 'waiting' + all deps completed → 'pending'
+  - 'waiting' + any dep failed → 'failed' (cascade)
+
 Find next eligible task:
   - status == 'pending'
-  - all dependsOn tasks are 'completed'
         │
         ▼
 Mark as in_progress → execute
@@ -188,34 +199,34 @@ Repeat until all tasks are completed or failed
 
 ```
 ┌──────────────────┐
-│ analyze-trends   │  (no deps)
+│ analyze-trends   │  status: pending (no deps)
 │ requiresApproval │
 └────────┬─────────┘
-         │
+         │ completes
 ┌────────▼─────────┐
-│ generate-script  │  (depends on: analyze-trends)
+│ generate-script  │  status: waiting → pending
 │ requiresApproval │
 └────────┬─────────┘
-         │
+         │ completes
 ┌────────▼─────────┐
-│ generate-image-  │  (depends on: generate-script)
+│ generate-image-  │  status: waiting → pending
 │ prompts          │
 │ requiresApproval │
 └────────┬─────────┘
-         │
+         │ completes
 ┌────────▼─────────┐
-│ generate-images  │  (depends on: generate-image-prompts)
+│ generate-images  │  status: waiting → pending
 │ requiresApproval │  ← calls ComfyUI via MCP
 └────────┬─────────┘
-         │
+         │ completes
 ┌────────▼─────────┐
-│ generate-video-  │  (depends on: generate-images)
+│ generate-video-  │  status: waiting → pending
 │ prompts          │
 │ requiresApproval │
 └────────┬─────────┘
-         │
+         │ completes
 ┌────────▼─────────┐
-│ generate-videos  │  (depends on: generate-video-prompts)
+│ generate-videos  │  status: waiting → pending
 │ requiresApproval │  ← calls ComfyUI via MCP
 └──────────────────┘
 ```

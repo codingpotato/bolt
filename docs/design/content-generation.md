@@ -144,6 +144,15 @@ interface Scene {
 
 Image and video generation are handled by an external ComfyUI MCP server (separate project).
 
+### File Path Mapping
+
+ComfyUI runs on a separate machine (GPU server) and returns paths on its own filesystem. The ComfyUI MCP Server is responsible for making generated files accessible to bolt:
+
+- The MCP server copies completed files to a shared location accessible from bolt's machine (e.g. via NFS, scp, or HTTP download), or
+- The MCP server returns an HTTP URL and bolt downloads the file using `web_fetch`
+
+Either way, the ComfyUI MCP server's tool response must include a path or URL that bolt can use to store the file locally. bolt saves incoming media to `.bolt/media/<filename>` (within its workspace) before passing paths to subsequent tools or `user_review`. The workflow agent is responsible for calling `file_write` or a download helper to land the file locally before referencing it downstream.
+
 ### text2img
 
 ```ts
@@ -161,10 +170,10 @@ Image and video generation are handled by an external ComfyUI MCP server (separa
   }
 }
 
-// mcp_call result
+// mcp_call result (MCP server returns a URL or network path)
 {
   result: {
-    imagePath: "/output/img_001.png",
+    downloadUrl: "http://gpu-server:8188/output/img_001.png",  // fetched by bolt → .bolt/media/img_001.png
     seed: 42,
     durationMs: 45000
   }
@@ -186,10 +195,10 @@ Image and video generation are handled by an external ComfyUI MCP server (separa
   }
 }
 
-// mcp_call result
+// mcp_call result (MCP server returns a URL or network path)
 {
   result: {
-    videoPath: "/output/vid_001.mp4",
+    downloadUrl: "http://gpu-server:8188/output/vid_001.mp4",  // fetched by bolt → .bolt/media/vid_001.mp4
     durationMs: 120000
   }
 }

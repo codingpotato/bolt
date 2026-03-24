@@ -22,6 +22,7 @@ Configuration is resolved from three sources, in order of precedence (highest fi
 | `BOLT_DATA_DIR` | No | `.bolt` | Runtime data directory |
 | `BOLT_LOG_LEVEL` | No | `info` | Log verbosity for `.bolt/bolt.log`: `debug` \| `info` \| `warn` \| `error`. Entries below this level are dropped. `error`-level entries are also written to stderr. See `docs/design/logging.md`. |
 | `BOLT_SEARCH_API_KEY` | No | — | API key for web search provider (Brave, Serper). Not needed for SearXNG. |
+| `BOLT_WEB_TOKEN` | No | — | Authentication token for WebChannel. Required when `channels.web.enabled` is true. |
 
 ¹ Exactly one of `ANTHROPIC_API_KEY`, `ANTHROPIC_SESSION_TOKEN`, or `BOLT_LOCAL_ENDPOINT` must be set. Precedence when multiple are set: API Key > Subscription > Local.
 
@@ -176,6 +177,8 @@ Error: config.search.provider must be one of: searxng, brave, serper
 
 ## Sensitive Values
 
-Credentials (`ANTHROPIC_API_KEY`, `ANTHROPIC_SESSION_TOKEN`, `BOLT_LOCAL_API_KEY`, `BOLT_SEARCH_API_KEY`) must only be set via environment variables — never written to `.bolt/config.json`. bolt rejects config files that contain credential fields.
+Credentials (`ANTHROPIC_API_KEY`, `ANTHROPIC_SESSION_TOKEN`, `BOLT_LOCAL_API_KEY`, `BOLT_SEARCH_API_KEY`, `BOLT_WEB_TOKEN`) must only be set via environment variables — never written to `.bolt/config.json`. bolt rejects config files that contain credential fields.
+
+Note: `channels.web.token` in `.bolt/config.json` is provided as a convenience for local development only. Production deployments must use `BOLT_WEB_TOKEN`.
 
 `BOLT_LOCAL_ENDPOINT` is not a credential and may be set in `.bolt/config.json` under `local.endpoint`.

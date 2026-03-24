@@ -453,11 +453,11 @@ so that I can build ordered execution pipelines (e.g. video production).
 
 Acceptance Criteria:
 - [ ] task_create accepts optional dependsOn: string[] parameter
-- [ ] Tasks with unmet dependencies remain in 'pending' status
-- [ ] When all dependencies are 'completed', task becomes eligible to start
+- [ ] Tasks created with dependsOn start in 'waiting' status; tasks without deps start in 'pending'
+- [ ] When all dependencies are 'completed', task transitions waiting → pending (eligible to start)
 - [ ] If any dependency is 'failed', dependent task is auto-failed (cascade)
 - [ ] Circular dependencies are detected at creation time and rejected with ToolError
-- [ ] task_list output includes dependsOn field
+- [ ] task_list output includes dependsOn field and shows 'waiting' status
 - [ ] Unit tests cover: linear chain, fan-in, cascade failure, circular detection
 ```
 
@@ -706,9 +706,9 @@ Acceptance Criteria:
 - [ ] generate-video-prompt skill returns a motion/animation prompt
 - [ ] summarize-url skill fetches a URL and returns a structured summary
 - [ ] draft-social-post skill returns a short-form post for a given platform
-- [ ] analyze-trends skill searches the web and returns a structured trend report
 - [ ] Each skill has an input schema, output schema, and system prompt
 - [ ] Each skill has unit tests that mock the sub-agent execution
+- [ ] Note: analyze-trends skill is NOT included here — it depends on web_search (S7-2) and is implemented in S9-1
 ```
 
 ---

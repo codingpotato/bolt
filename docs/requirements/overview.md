@@ -90,7 +90,7 @@ The task-driven principle shapes the heavier subsystems:
 - Serialize task state to disk so sessions can be paused, resumed, or handed off after a crash
 - Delegate subtasks to sub-agents; parent/child contexts are fully isolated
 - Task results are persisted alongside status for auditability
-- **Task dependencies** — tasks can declare `dependsOn` relationships; dependent tasks are not started until all dependencies are completed
+- **Task dependencies** — tasks can declare `dependsOn` relationships; dependent tasks start in `waiting` status and transition to `pending` only when all dependencies complete
 - **Approval gates** — tasks can be marked `requiresApproval`; the agent must call `user_review` and receive approval before marking the task as completed
 
 ### CLI Progress Output

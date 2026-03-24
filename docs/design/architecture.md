@@ -208,5 +208,5 @@ Spawns isolated child agent processes. Each sub-agent gets its own context — n
 - Corrupt entries are moved to `.bolt/corrupted/` for inspection
 
 ### Channel Disconnection
-- `WebChannel`: WebSocket clients that disconnect mid-response are silently dropped; pending review requests are cancelled. Clients can reconnect and resume the session.
+- `WebChannel`: WebSocket clients that disconnect mid-response are silently dropped. If a `user_review` tool call is in-flight when the client disconnects, it returns a retryable `ToolError("client disconnected during review")` so the agent can re-present the review request when the client reconnects. Clients can reconnect and resume the session via the same session ID.
 - `CliChannel`: EOF on stdin causes a clean shutdown

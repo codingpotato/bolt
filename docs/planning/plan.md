@@ -685,11 +685,11 @@ I want to invoke a named skill with typed arguments,
 so that I can use composable capabilities during task execution.
 
 Acceptance Criteria:
-- [ ] skill_run({ name, args }) validates args against inputSchema; ToolError on invalid args
-- [ ] Skill runs as an isolated sub-agent with skill.systemPrompt as system turn
-- [ ] Effective tool allowlist is intersection of skill.allowedTools and agent allowedTools
-- [ ] Result is validated against outputSchema; ToolError on invalid output
-- [ ] skill_run can be called from CLI: bolt run-skill <name> --<arg> <value>
+- [x] skill_run({ name, args }) validates args against inputSchema; ToolError on invalid args
+- [x] Skill runs as an isolated sub-agent with skill.systemPrompt as system turn
+- [x] Effective tool allowlist is intersection of skill.allowedTools and agent allowedTools
+- [x] Result is validated against outputSchema; ToolError on invalid output
+- [x] skill_run can be called from CLI: bolt run-skill <name> --<arg> <value>
 ```
 
 **S6-4: Built-in skills**

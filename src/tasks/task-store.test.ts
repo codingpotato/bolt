@@ -216,6 +216,147 @@ describe('TaskStore', () => {
     });
   });
 
+  // ── dependencies ─────────────────────────────────────────────────────────────
+
+  describe('dependencies', () => {
+    it('task with no deps starts as pending', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc');
+      expect(store.list().find((t) => t.id === id)?.status).toBe('pending');
+    });
+
+    it('task with deps starts as waiting', async () => {
+      const store = new TaskStore(dataDir);
+      const depId = await store.create('dep', 'desc');
+      const id = await store.create('task', 'desc', [depId]);
+      expect(store.list().find((t) => t.id === id)?.status).toBe('waiting');
+    });
+
+    it('task_list includes dependsOn field', async () => {
+      const store = new TaskStore(dataDir);
+      const depId = await store.create('dep', 'desc');
+      await store.create('task', 'desc', [depId]);
+      const tasks = store.list();
+      const withDeps = tasks.find((t) => t.dependsOn.length > 0);
+      expect(withDeps?.dependsOn).toEqual([depId]);
+    });
+
+    it('linear chain: waiting task becomes pending when its dep completes', async () => {
+      const store = new TaskStore(dataDir);
+      const depId = await store.create('dep', 'desc');
+      const taskId = await store.create('task', 'desc', [depId]);
+
+      await store.update(depId, { status: 'completed', result: 'done' });
+
+      expect(store.list().find((t) => t.id === taskId)?.status).toBe('pending');
+    });
+
+    it('fan-in: task stays waiting until all deps complete', async () => {
+      const store = new TaskStore(dataDir);
+      const dep1 = await store.create('dep1', 'desc');
+      const dep2 = await store.create('dep2', 'desc');
+      const taskId = await store.create('task', 'desc', [dep1, dep2]);
+
+      await store.update(dep1, { status: 'completed' });
+      expect(store.list().find((t) => t.id === taskId)?.status).toBe('waiting');
+
+      await store.update(dep2, { status: 'completed' });
+      expect(store.list().find((t) => t.id === taskId)?.status).toBe('pending');
+    });
+
+    it('cascade failure: failing a dep auto-fails its waiting dependent', async () => {
+      const store = new TaskStore(dataDir);
+      const depId = await store.create('dep', 'desc');
+      const taskId = await store.create('task', 'desc', [depId]);
+
+      await store.update(depId, { status: 'failed', error: 'oops' });
+
+      const task = store.list().find((t) => t.id === taskId);
+      expect(task?.status).toBe('failed');
+      expect(task?.error).toContain(depId);
+    });
+
+    it('cascade failure propagates transitively', async () => {
+      const store = new TaskStore(dataDir);
+      const a = await store.create('a', 'desc');
+      const b = await store.create('b', 'desc', [a]);
+      const c = await store.create('c', 'desc', [b]);
+
+      await store.update(a, { status: 'failed', error: 'root failure' });
+
+      expect(store.list().find((t) => t.id === b)?.status).toBe('failed');
+      expect(store.list().find((t) => t.id === c)?.status).toBe('failed');
+    });
+
+    it('circular detection: rejects deps that would create a cycle', async () => {
+      // Pre-load a store where task-1 already lists task-2 in its dependsOn.
+      // The counter is set to 1 so the next create() will produce task-2.
+      // Creating task-2 with deps [task-1] then forms: task-2 → task-1 → task-2.
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({
+          tasks: [
+            {
+              id: 'task-1',
+              title: 'A',
+              description: 'desc',
+              status: 'waiting',
+              dependsOn: ['task-2'],
+              subtaskIds: [],
+              sessionIds: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          counter: 1,
+        }),
+      );
+
+      const store = new TaskStore(dataDir);
+      await expect(store.create('B', 'desc', ['task-1'])).rejects.toThrow(/circular/i);
+    });
+
+    it('rejects deps referencing non-existent task IDs', async () => {
+      const store = new TaskStore(dataDir);
+      await expect(store.create('task', 'desc', ['nonexistent'])).rejects.toThrow(/dependency not found/i);
+    });
+
+    it('does not advance the counter when dep validation fails', async () => {
+      const store = new TaskStore(dataDir);
+      await expect(store.create('bad', 'desc', ['nonexistent'])).rejects.toThrow();
+      // Next successful create should still get task-1, not task-2
+      const id = await store.create('good', 'desc');
+      expect(id).toBe('task-1');
+    });
+
+    it('does not advance the counter when cycle detection fails', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({
+          tasks: [
+            {
+              id: 'task-1',
+              title: 'A',
+              description: 'desc',
+              status: 'waiting',
+              dependsOn: ['task-2'],
+              subtaskIds: [],
+              sessionIds: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          counter: 1,
+        }),
+      );
+      const store = new TaskStore(dataDir);
+      await expect(store.create('B', 'desc', ['task-1'])).rejects.toThrow(/circular/i);
+      // Next successful create should get task-2, not task-3
+      const id = await store.create('C', 'desc');
+      expect(id).toBe('task-2');
+    });
+  });
+
   // ── list ─────────────────────────────────────────────────────────────────────
 
   describe('list', () => {

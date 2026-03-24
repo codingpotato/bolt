@@ -10,6 +10,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     title: 'test task',
     description: 'do something',
     status: 'pending',
+    dependsOn: [],
     subtaskIds: [],
     sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -155,6 +156,61 @@ describe('TaskRunner', () => {
       await runner.run();
 
       expect(executor).toHaveBeenCalledTimes(1);
+      expect(executor).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-2' }));
+    });
+  });
+
+  // ── waiting tasks ─────────────────────────────────────────────────────────────
+
+  describe('waiting tasks', () => {
+    it('skips waiting tasks — does not mark them in_progress or execute them', async () => {
+      const waiting = makeTask({ id: 'task-1', status: 'waiting', dependsOn: ['task-0'] });
+      const store = makeStore([waiting]);
+      const runner = new TaskRunner(store as never, executor);
+
+      await runner.run();
+
+      expect(executor).not.toHaveBeenCalled();
+      expect(store.update).not.toHaveBeenCalled();
+    });
+
+    it('executes a pending task even when a waiting task is also present', async () => {
+      const waiting = makeTask({ id: 'task-1', status: 'waiting', dependsOn: ['task-0'] });
+      const pending = makeTask({ id: 'task-2', status: 'pending' });
+      const store = makeStore([waiting, pending]);
+      const runner = new TaskRunner(store as never, executor);
+
+      await runner.run();
+
+      expect(executor).toHaveBeenCalledTimes(1);
+      expect(executor).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-2' }));
+    });
+
+    it('picks up a newly-unlocked task when it transitions waiting → pending during the run', async () => {
+      const dep = makeTask({ id: 'task-1', status: 'pending' });
+      const dependent = makeTask({ id: 'task-2', status: 'waiting', dependsOn: ['task-1'] });
+      const state = [dep, dependent];
+      // Simulate the store unlocking task-2 when task-1 completes
+      const store = {
+        list: vi.fn(() => [...state]),
+        update: vi.fn(async (id: string, changes: { status: string; result?: string; error?: string }) => {
+          const task = state.find((t) => t.id === id);
+          if (!task) throw new Error(`not found: ${id}`);
+          task.status = changes.status as Task['status'];
+          if (changes.result !== undefined) task.result = changes.result;
+          if (changes.error !== undefined) task.error = changes.error;
+          // Simulate store auto-unlocking dependent when dep completes
+          if (id === 'task-1' && changes.status === 'completed') {
+            dependent.status = 'pending';
+          }
+        }),
+      };
+      const runner = new TaskRunner(store as never, executor);
+
+      await runner.run();
+
+      expect(executor).toHaveBeenCalledTimes(2);
+      expect(executor).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }));
       expect(executor).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-2' }));
     });
   });

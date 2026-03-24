@@ -5,6 +5,7 @@ import type { Task, TaskStatus, TaskStore } from './task-store';
 interface TaskCreateInput {
   title: string;
   description: string;
+  dependsOn?: string[];
 }
 
 interface TaskCreateOutput {
@@ -35,12 +36,21 @@ export function createTaskTools(store: TaskStore): Tool[] {
       properties: {
         title: { type: 'string', description: 'Short title for the task.' },
         description: { type: 'string', description: 'Full description of the task and its success criteria.' },
+        dependsOn: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional list of task IDs that must complete before this task can start. Tasks with deps start in waiting status.',
+        },
       },
       required: ['title', 'description'],
     },
     async execute(input: TaskCreateInput, _ctx: ToolContext): Promise<TaskCreateOutput> {
-      const id = await store.create(input.title, input.description);
-      return { id };
+      try {
+        const id = await store.create(input.title, input.description, input.dependsOn);
+        return { id };
+      } catch (err) {
+        throw new ToolError(err instanceof Error ? err.message : String(err));
+      }
     },
   };
 
@@ -54,8 +64,8 @@ export function createTaskTools(store: TaskStore): Tool[] {
         id: { type: 'string', description: 'Id of the task to update.' },
         status: {
           type: 'string',
-          enum: ['pending', 'in_progress', 'blocked', 'completed', 'failed'],
-          description: 'New status.',
+          enum: ['pending', 'in_progress', 'blocked', 'waiting', 'completed', 'failed'],
+          description: 'New status. Tasks start as pending (no deps) or waiting (has unmet deps). waiting → pending is managed automatically by the store when deps complete.',
         },
         result: { type: 'string', description: 'Output of the task when completed.' },
         error: { type: 'string', description: 'Reason for failure when status is failed.' },

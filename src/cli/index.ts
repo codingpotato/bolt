@@ -51,6 +51,10 @@ async function serve(serveArgs: string[]): Promise<void> {
   const port = portFlagIndex !== -1
     ? parseInt(serveArgs[portFlagIndex + 1] ?? String(config.channels.web.port), 10)
     : config.channels.web.port;
+  if (isNaN(port)) {
+    process.stderr.write('bolt serve: --port must be a number\n');
+    process.exit(1);
+  }
   const tokenFlagIndex = serveArgs.indexOf('--token');
   const token = tokenFlagIndex !== -1 ? (serveArgs[tokenFlagIndex + 1] ?? undefined) : config.channels.web.token;
 
@@ -143,8 +147,14 @@ async function serve(serveArgs: string[]): Promise<void> {
     await channel.stop();
     process.exit(0);
   };
-  process.on('SIGTERM', () => void shutdown());
-  process.on('SIGINT', () => void shutdown());
+  const handleSignal = (): void => {
+    shutdown().catch((err: unknown) => {
+      process.stderr.write(`bolt serve: shutdown error: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exit(1);
+    });
+  };
+  process.on('SIGTERM', handleSignal);
+  process.on('SIGINT', handleSignal);
 
   await channel.listen();
   logger.info('bolt serve started', { port, model: config.model, auth: auth.mode });

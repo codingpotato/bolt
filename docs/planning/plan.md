@@ -699,15 +699,15 @@ I want the built-in skills shipped with bolt,
 so that common capabilities are available without user configuration.
 
 Acceptance Criteria:
-- [ ] write-blog-post skill is discoverable and invokable
-- [ ] review-code skill returns a CodeReviewResult (summary, issues[], approved)
-- [ ] generate-image-prompt skill returns a plain text prompt
-- [ ] generate-video-script skill returns a structured storyboard (script + scenes)
-- [ ] generate-video-prompt skill returns a motion/animation prompt
-- [ ] summarize-url skill fetches a URL and returns a structured summary
-- [ ] draft-social-post skill returns a short-form post for a given platform
-- [ ] Each skill has an input schema, output schema, and system prompt
-- [ ] Each skill has unit tests that mock the sub-agent execution
+- [x] write-blog-post skill is discoverable and invokable
+- [x] review-code skill returns a CodeReviewResult (summary, issues[], approved)
+- [x] generate-image-prompt skill returns a plain text prompt
+- [x] generate-video-script skill returns a structured storyboard (script + scenes)
+- [x] generate-video-prompt skill returns a motion/animation prompt
+- [x] summarize-url skill fetches a URL and returns a structured summary
+- [x] draft-social-post skill returns a short-form post for a given platform
+- [x] Each skill has an input schema, output schema, and system prompt
+- [x] Each skill has unit tests that mock the sub-agent execution
 - [ ] Note: analyze-trends skill is NOT included here — it depends on web_search (S7-2) and is implemented in S9-1
 ```
 
@@ -790,6 +790,8 @@ Acceptance Criteria:
 - [ ] HTTP mode: POST /chat for user turns, SSE for streaming responses
 - [ ] Simple token authentication via BOLT_WEB_TOKEN or config.channels.web.token
 - [ ] Server only starts when config.channels.web.enabled is true
+- [ ] Only one active (read-write) WebSocket connection is allowed at a time; a second connection is accepted but immediately put into read-only mode — it receives all agent messages and progress events but its send attempts are rejected with a "read-only" error
+- [ ] When the active connection closes, the oldest read-only connection is promoted to active
 - [ ] Unit tests mock the HTTP server
 ```
 
@@ -807,6 +809,8 @@ Acceptance Criteria:
 - [ ] WebSocket connection with auto-reconnect
 - [ ] Progress indicators for agent thinking and tool execution
 - [ ] No build tools required — served directly by the HTTP server
+- [ ] Read-only mode: when the connection is not the active one, the input is disabled and a banner reads "Observing — another session is active"
+- [ ] When the client is promoted from read-only to active, the banner is removed and input is enabled automatically
 ```
 
 **S8-3: Rich review UI in WebChannel**
@@ -834,7 +838,7 @@ so that I can connect to it from my phone at any time.
 Acceptance Criteria:
 - [ ] bolt serve CLI command starts bolt in daemon mode with WebChannel
 - [ ] Agent stays alive between conversations, listening for new WebSocket connections
-- [ ] Multiple sequential conversations are supported (not concurrent — single-user v1)
+- [ ] Only one connection may send commands at a time; additional connections are read-only observers (see S8-1)
 - [ ] Graceful shutdown on SIGTERM/SIGINT
 - [ ] Session state is preserved between conversations
 ```

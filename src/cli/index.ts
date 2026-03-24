@@ -38,6 +38,7 @@ import { createRunSkillSlashCommand } from '../skills/run-skill-slash-command';
 import { createSlashCommandRegistry } from '../slash-commands/slash-commands';
 import { createSearchProvider, validateSearchProvider } from '../search';
 import { createWebSearchTool } from '../tools/web-search';
+import { createUserReviewTool } from '../tools/user-review';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -125,6 +126,7 @@ async function main(): Promise<void> {
     log,
     logger,
     progress,
+    channel,
     confirm: (message: string) =>
       channel.question(`\n${message}\nType "y" to confirm: `).then((a) => {
         const answer = a.trim().toLowerCase();
@@ -150,6 +152,7 @@ async function main(): Promise<void> {
   const searchProvider = createSearchProvider(config);
   await validateSearchProvider(searchProvider, logger);
   toolBus.register(createWebSearchTool(searchProvider, config.search.maxResults));
+  toolBus.register(createUserReviewTool());
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });
 

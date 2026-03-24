@@ -1,6 +1,7 @@
 import type { ToolLogger } from '../audit/audit-logger';
 import type { Logger } from '../logger';
 import type { ProgressReporter } from '../progress';
+import type { Channel } from '../channels';
 
 export type { ToolLogger };
 
@@ -42,6 +43,11 @@ export interface ToolContext {
    * When absent (sub-agents, non-interactive mode) the operation is auto-denied.
    */
   confirm?: (message: string) => Promise<boolean>;
+  /**
+   * Channel reference for tools that need user interaction (user_review).
+   * When absent, user_review falls back to confirm-style interaction.
+   */
+  channel?: Channel;
 }
 
 /** A tool registered with the Tool Bus. */

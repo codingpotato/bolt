@@ -1,2 +1,2 @@
-export type { UserTurn, Channel } from './channel';
+export type { UserTurn, Channel, ContentType, UserReviewRequest, UserReviewResponse } from './channel';
 export { CliChannel } from './cli-channel';

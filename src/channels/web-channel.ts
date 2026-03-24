@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { createReadStream } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Channel, UserTurn, UserReviewRequest, UserReviewResponse } from './channel';
 
@@ -14,11 +15,13 @@ interface ClientMessage {
 
 /** Shape of messages sent from server → client. */
 export interface ServerMessage {
-  type: 'response' | 'review' | 'error' | 'status';
+  type: 'response' | 'review' | 'error' | 'status' | 'media';
   content?: string;
   reviewId?: string;
   reviewRequest?: UserReviewRequest;
   readOnly?: boolean;
+  mediaUrl?: string;
+  caption?: string;
 }
 
 /** Shape of the client's reply to a review request. */
@@ -58,7 +61,20 @@ export interface WebChannelOptions {
   token?: string;
   mode: 'http' | 'websocket';
   enabled?: boolean;
+  /** Absolute path to the workspace root — used to serve media files safely. */
+  workspaceRoot?: string;
 }
+
+const MEDIA_CONTENT_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+};
 
 /**
  * Channel implementation for web-based interaction.
@@ -228,6 +244,11 @@ export class WebChannel implements Channel {
       return;
     }
 
+    if (req.method === 'GET' && url.pathname.startsWith('/media/')) {
+      this.handleMedia(url.pathname, res);
+      return;
+    }
+
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'not found' }));
   }
@@ -281,6 +302,39 @@ export class WebChannel implements Channel {
     res.on('close', () => {
       this.sseStreams = this.sseStreams.filter((s) => s !== res);
     });
+  }
+
+  private handleMedia(pathname: string, res: ServerResponse): void {
+    const root = this.opts.workspaceRoot;
+    if (!root) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'media serving not configured' }));
+      return;
+    }
+
+    // Strip leading /media/ prefix to get the relative path
+    const relative = decodeURIComponent(pathname.slice('/media/'.length));
+    const resolved = path.resolve(root, relative);
+
+    // Workspace confinement: resolved path must stay within root
+    if (!resolved.startsWith(path.resolve(root) + path.sep) && resolved !== path.resolve(root)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'forbidden' }));
+      return;
+    }
+
+    const ext = path.extname(resolved).toLowerCase();
+    const contentType = MEDIA_CONTENT_TYPES[ext] ?? 'application/octet-stream';
+
+    stat(resolved)
+      .then(() => {
+        res.writeHead(200, { 'Content-Type': contentType });
+        createReadStream(resolved).pipe(res);
+      })
+      .catch(() => {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'not found' }));
+      });
   }
 
   // ---------------------------------------------------------------------------
@@ -356,6 +410,15 @@ export class WebChannel implements Channel {
     return new Promise<UserReviewResponse>((resolve, reject) => {
       this.pendingReviews.set(reviewId, { resolve, reject });
     });
+  }
+
+  async sendMedia(filePath: string, caption?: string): Promise<void> {
+    const root = this.opts.workspaceRoot ?? '';
+    const relative = root ? path.relative(root, path.resolve(root, filePath)) : filePath;
+    const mediaUrl = `/media/${relative.split('/').map(encodeURIComponent).join('/')}`;
+    const msg: ServerMessage = { type: 'media', mediaUrl, caption };
+    this.broadcastWs(msg);
+    this.broadcastSse(msg);
   }
 
   // ---------------------------------------------------------------------------

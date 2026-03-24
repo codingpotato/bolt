@@ -820,13 +820,13 @@ I want to review content with approve/reject buttons and see image/video preview
 so that I can make creative decisions from my phone.
 
 Acceptance Criteria:
-- [ ] WebChannel.requestReview() sends a rich message with content, media previews, and action buttons
-- [ ] Approve button sends { approved: true } back to the agent
-- [ ] Reject button shows a text input for feedback, then sends { approved: false, feedback }
-- [ ] Image files are served via static file endpoint and displayed inline
-- [ ] Video files are served via static file endpoint and playable inline
-- [ ] Markdown content is rendered as formatted HTML
-- [ ] WebChannel.sendMedia() sends image/video with optional caption
+- [x] WebChannel.requestReview() sends a rich message with content, media previews, and action buttons
+- [x] Approve button sends { approved: true } back to the agent
+- [x] Reject button shows a text input for feedback, then sends { approved: false, feedback }
+- [x] Image files are served via static file endpoint and displayed inline
+- [x] Video files are served via static file endpoint and playable inline
+- [x] Markdown content is rendered as formatted HTML
+- [x] WebChannel.sendMedia() sends image/video with optional caption
 ```
 
 **S8-4: WebChannel daemon mode**

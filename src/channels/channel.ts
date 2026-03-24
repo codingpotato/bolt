@@ -42,4 +42,9 @@ export interface Channel {
    * The user_review tool falls back to ctx.confirm when this is absent.
    */
   requestReview?(request: UserReviewRequest): Promise<UserReviewResponse>;
+  /**
+   * Send a media file (image or video) to the user with an optional caption.
+   * Optional — channels without media support may omit this.
+   */
+  sendMedia?(filePath: string, caption?: string): Promise<void>;
 }

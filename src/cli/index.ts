@@ -36,6 +36,7 @@ import { loadSkills } from '../skills/skill-loader';
 import { createSkillsSlashCommand } from '../skills/skills-slash-command';
 import { createRunSkillSlashCommand } from '../skills/run-skill-slash-command';
 import { createSlashCommandRegistry } from '../slash-commands/slash-commands';
+import { createSearchProvider, validateSearchProvider } from '../search';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -144,6 +145,9 @@ async function main(): Promise<void> {
     memoryManager,
     slashRegistry,
   );
+
+  const searchProvider = createSearchProvider(config);
+  await validateSearchProvider(searchProvider, logger);
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });
 

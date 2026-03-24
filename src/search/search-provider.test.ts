@@ -372,6 +372,42 @@ describe('createSearchProvider', () => {
     const provider = createSearchProvider({ ...baseConfig, search: { provider: 'serper', maxResults: 10 } });
     expect(provider).toBeInstanceOf(SerperProvider);
   });
+
+  it('passes custom endpoint to SearXNG provider', async () => {
+    fetchMock.mockResolvedValue(makeOkResponse({ results: [] }));
+    const provider = createSearchProvider({
+      ...baseConfig,
+      search: { provider: 'searxng', endpoint: 'http://custom:9999', maxResults: 10 },
+    });
+    await provider.search('test');
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('http://custom:9999'));
+  });
+
+  it('passes custom endpoint to Brave provider', async () => {
+    fetchMock.mockResolvedValue(makeOkResponse({ web: { results: [] } }));
+    const provider = createSearchProvider({
+      ...baseConfig,
+      search: { provider: 'brave', endpoint: 'http://brave-proxy:8080', maxResults: 10 },
+    });
+    await provider.search('test');
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('http://brave-proxy:8080'),
+      expect.any(Object),
+    );
+  });
+
+  it('passes custom endpoint to Serper provider', async () => {
+    fetchMock.mockResolvedValue(makeOkResponse({ organic: [] }));
+    const provider = createSearchProvider({
+      ...baseConfig,
+      search: { provider: 'serper', endpoint: 'http://serper-proxy:7070', maxResults: 10 },
+    });
+    await provider.search('test');
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('http://serper-proxy:7070'),
+      expect.any(Object),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

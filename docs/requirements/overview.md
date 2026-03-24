@@ -1,6 +1,16 @@
 # Requirements
 
-bolt is an autonomous AI CLI agent built with TypeScript and the Anthropic SDK. It operates independently from the command line and can complete complex, multi-step tasks by combining tools, memory, skills, and sub-agent delegation.
+bolt is an autonomous AI agent built for **social media content creators**. It helps bloggers research trends, generate posts, articles, images, and short videos — all from a CLI or a web-based chat interface accessible from a phone. It is built with TypeScript and the Anthropic SDK.
+
+## Product Vision
+
+bolt automates the end-to-end content creation workflow for social media bloggers:
+
+1. **Trend research** — search and analyse what is trending on social media platforms
+2. **Content planning** — generate scripts, storyboards, and prompts based on viral content patterns
+3. **Interactive review** — present drafts to the user for approval/feedback before expensive operations
+4. **Media generation** — call external services (ComfyUI) for text-to-image and image-to-video via MCP
+5. **Automation** — for tasks with clear feedback loops, run fully autonomously; for open-ended creative work, keep the human in the loop
 
 ## Core Design Principle: Task-Driven
 
@@ -22,10 +32,13 @@ The task-driven principle shapes the heavier subsystems:
 ## Functional Requirements
 
 ### Interface
-- Operated entirely via the command line
-- Can connect to and interact with Discord channels
+- Operated via the command line (primary development/debug interface)
+- **WebChannel** — HTTP/WebSocket web chat interface accessible from phone or desktop browser, enabling:
+  - Remote control of the agent without a terminal
+  - Rich media preview (images, videos)
+  - Interactive approval/feedback via buttons and text input
+  - Real-time progress updates via WebSocket
 - **Slash commands** — CLI directives starting with `/` are intercepted before the LLM: `/exit` terminates the session, `/help` lists commands, `/session` shows the current session ID. New commands can be registered without modifying core code.
-- **Planned:** web interface via `WebChannel` (HTTP/WebSocket) — not in v1 scope
 
 ### Tools Execution
 - The agent must be able to call tools during its reasoning loop using the Anthropic tool-use API
@@ -37,19 +50,30 @@ The task-driven principle shapes the heavier subsystems:
   - **file_write** — write or overwrite a file on disk
   - **file_edit** — apply a targeted string replacement to a file
   - **web_fetch** — fetch a URL and return the response body
+  - **web_search** — search the web using a configurable search provider (SearXNG for development, Brave/Serper for production); returns structured results with titles, URLs, snippets, and dates
+  - **user_review** — present content to the user for approval or feedback; supports rich content preview (text, storyboards, image prompts) and collects approval/rejection with optional modification notes
+  - **mcp_call** — invoke a tool on a registered MCP server; enables integration with external services like ComfyUI for image/video generation
   - **todo_create / todo_update / todo_list / todo_delete** — manage the todo list
   - **task_create / task_update / task_list** — manage serialized tasks
   - **skill_run** — invoke a named skill as an isolated sub-agent
   - **subagent_run** — delegate a free-form task to an isolated child agent
   - **memory_search** — query the long-term memory store (L3) by keyword or embedding
   - **memory_write** — explicitly write a fact or note to the long-term memory store (L3)
+  - **agent_suggest** — propose a change to AGENT.md; written to `.bolt/suggestions/` for human review
 - New tools can be registered at runtime without restarting the agent
 - Tools may be restricted per skill or sub-agent (allowlist model)
 - All tool calls and their results must be logged for auditability
 
+### MCP Client
+- bolt must support connecting to external MCP (Model Context Protocol) servers
+- MCP servers are registered in `.bolt/config.json` with a name, URL, and optional tool list
+- The `mcp_call` tool dispatches tool calls to the appropriate MCP server
+- Primary use case: ComfyUI MCP server for text-to-image and image-to-video generation
+- MCP server implementations are maintained as separate projects
+
 ### Skills System
 - Support loadable, composable skills that extend agent capabilities
-- Skills are discrete, reusable capability modules (e.g. "write a blog post", "review a PR", "generate a diagram")
+- Skills are discrete, reusable capability modules (e.g. "write a blog post", "analyse trends", "generate a video storyboard")
 - Skills can be invoked by name from the CLI or by the agent itself during task execution
 - Skills can be chained — the output of one skill feeds into the next
 - Skills are defined as structured prompts with typed inputs and outputs
@@ -66,6 +90,8 @@ The task-driven principle shapes the heavier subsystems:
 - Serialize task state to disk so sessions can be paused, resumed, or handed off after a crash
 - Delegate subtasks to sub-agents; parent/child contexts are fully isolated
 - Task results are persisted alongside status for auditability
+- **Task dependencies** — tasks can declare `dependsOn` relationships; dependent tasks start in `waiting` status and transition to `pending` only when all dependencies complete
+- **Approval gates** — tasks can be marked `requiresApproval`; the agent must call `user_review` and receive approval before marking the task as completed
 
 ### CLI Progress Output
 
@@ -80,7 +106,7 @@ Events that must be shown:
 - Memory compaction (how many messages were evicted)
 - API retries (attempt number and reason)
 
-Progress output is suppressed in non-TTY environments (pipes, CI) unless `--verbose` is passed. The `--quiet` flag suppresses it even on a TTY. A `ProgressReporter` interface decouples progress emission from the channel and agent loop — the CLI implementation writes to stdout; sub-agents and Discord use a no-op implementation.
+Progress output is suppressed in non-TTY environments (pipes, CI) unless `--verbose` is passed. The `--quiet` flag suppresses it even on a TTY. A `ProgressReporter` interface decouples progress emission from the channel and agent loop — the CLI implementation writes to stdout; sub-agents use a no-op implementation.
 
 ### Agent Prompt System
 
@@ -115,7 +141,28 @@ Key requirements:
 - Write code, write tests, run tests, perform code review
 
 ### Content Generation
-- Generate social media content: articles, images, short videos
+
+bolt must be able to generate content for social media platforms:
+
+| Content Type | Description | Output |
+|-------------|-------------|--------|
+| **Trend analysis** | Search and analyse trending topics on social media | Structured report with trends, angles, and recommendations |
+| **Social post** | Short-form posts for Twitter/X, LinkedIn, Xiaohongshu, etc. | Platform-optimised copy |
+| **Article** | Long-form written content (blog post, thread, newsletter) | Markdown text |
+| **Video script + storyboard** | Script with shot-by-shot breakdown for short-form video | Structured Markdown with scene descriptions |
+| **Image prompt** | Detailed prompt for image generation (ComfyUI) | Plain text prompt optimised for the target model |
+| **Video prompt** | Motion/animation prompt for image-to-video generation | Plain text prompt optimised for the target model |
+
+The content generation workflow supports an **interactive review loop**:
+- For fast, low-cost operations (text generation): run autonomously
+- For expensive operations (image/video generation): present intermediate results for user approval before proceeding
+- Users can provide feedback at any approval gate; the agent adjusts and re-presents
+
+### Notifications
+
+For long-running tasks (image/video generation), bolt must notify the user when results are ready:
+- **WebChannel**: real-time updates via WebSocket (primary)
+- **System notification**: macOS/Linux desktop notification as fallback when running locally
 
 ### Authentication
 
@@ -139,9 +186,11 @@ bolt must support three mutually exclusive authentication modes:
 - **Isolation:** Sub-agents must not share or pollute parent agent context
 - **Durability:** All task and memory state must survive process restarts
 - **Extensibility:** New skills and tools can be added without modifying core agent code
+- **Daemon mode:** bolt must support running as a long-lived process (required for WebChannel)
 
 ## Out of Scope (v1)
 
-- Web interface (planned for a future version as `WebChannel`)
-- Multi-user / auth system
+- Multi-user / auth system (WebChannel uses a simple token for now)
 - Billing or quota management
+- Direct social media platform posting (generates content only)
+- Discord / Telegram / WeChat integration (WebChannel covers the use case; IM adapters can be added post-v1)

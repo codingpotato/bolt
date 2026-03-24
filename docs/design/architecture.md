@@ -6,14 +6,14 @@
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                            Input Channels                                │
 │                                                                          │
-│  ┌─────────────────┐   ┌──────────────────────────┐   ┌───────────────┐ │
-│  │   CLI Channel   │   │    Discord Channel       │   │  Web Channel  │ │
-│  │ (stdin / args)  │   │  (Gateway → user turns)  │   │(HTTP/WebSocket│ │
-│  └────────┬────────┘   └────────────┬─────────────┘   └──────┬────────┘ │
-└───────────┼────────────────────────────────────────────────────┼─────────┘
-            │               Channel interface                     │
-            └──────────────────────┬──────────────────────────────┘
-                                   │  receive() / send()
+│  ┌─────────────────┐                                 ┌───────────────┐  │
+│  │   CLI Channel   │                                 │  Web Channel  │  │
+│  │ (stdin / args)  │                                 │(HTTP/WebSocket│  │
+│  └────────┬────────┘                                 └──────┬────────┘  │
+└───────────┼──────────────────────────────────────────────────┼──────────┘
+            │               Channel interface                   │
+            └──────────────────────┬────────────────────────────┘
+                                   │  receive() / send() / sendMedia() / requestReview()
                  ┌─────────▼──────────┐
                  │    Agent Core      │
                  │  (Anthropic SDK)   │◄──── tool_use / tool_result loop
@@ -31,13 +31,18 @@
        │  - file_read/write│    │    current session messages
        │  - file_edit      │    │
        │  - web_fetch      │    ├──► L2 Session Store (.bolt/sessions/)
-       │  - todo_*         │    │    append-only JSONL, written every turn
-       │  - task_*         │    │    keyed by sessionId + taskId
-       │  - skill_run      │    │
-       │  - subagent_run   │    └──► L3 Long-term Memory (.bolt/memory/)
-       │  - memory_search  │         compact entries + agent notes
-       │  - memory_write   │         queried via memory_search
-       └───────────────────┘
+       │  - web_search     │    │    append-only JSONL, written every turn
+       │  - user_review    │    │    keyed by sessionId + taskId
+       │  - mcp_call       │    │
+       │  - todo_*         │    └──► L3 Long-term Memory (.bolt/memory/)
+       │  - task_*         │         compact entries + agent notes
+       │  - skill_run      │         queried via memory_search
+       │  - subagent_run   │
+       │  - memory_search  │    ┌────────────────────────────────┐
+       │  - memory_write   │    │       MCP Client               │
+       └───────────────────┘    │  Connects to external servers  │
+                                │  (ComfyUI, etc.)               │
+                                └────────────────────────────────┘
 ```
 
 ## Components
@@ -52,7 +57,7 @@ interface UserTurn {
   content: string;
   /**
    * Transport-specific metadata — not passed to the model.
-   * Examples: { userId, channelId } for Discord; empty for CLI.
+   * Examples: empty for CLI; { sessionToken } for WebChannel.
    */
   metadata?: Record<string, string>;
 }
@@ -60,8 +65,32 @@ interface UserTurn {
 interface Channel {
   /** Yields inbound user turns; completes when the channel closes */
   receive(): AsyncIterable<UserTurn>;
-  /** Sends the agent's final response back to the user */
+  /** Sends the agent's final text response back to the user */
   send(response: string): Promise<void>;
+  /** Sends a media file (image/video) to the user with an optional caption */
+  sendMedia?(type: 'image' | 'video', path: string, caption?: string): Promise<void>;
+  /**
+   * Presents content for user review and collects feedback.
+   * Returns approval status and optional modification notes.
+   * Falls back to simple text confirm on channels that don't support rich review.
+   */
+  requestReview?(request: ReviewRequest): Promise<ReviewResponse>;
+}
+
+interface ReviewRequest {
+  /** Content to present for review */
+  content: string;
+  /** Type hint for rendering */
+  contentType: 'script' | 'storyboard' | 'image_prompt' | 'video_prompt' | 'image' | 'video' | 'text';
+  /** Question or instruction for the reviewer */
+  question: string;
+  /** Optional file paths for media preview */
+  mediaFiles?: string[];
+}
+
+interface ReviewResponse {
+  approved: boolean;
+  feedback?: string;
 }
 ```
 
@@ -69,15 +98,10 @@ Implementations:
 
 | Channel | Status | Description |
 |---------|--------|-------------|
-| `CliChannel` | built-in | Reads from stdin / CLI args; writes to stdout |
-| `DiscordChannel` | built-in | Listens to a configured Discord channel via the Gateway; posts responses back |
-| `WebChannel` | planned | Accepts connections over HTTP (REST) or WebSocket; streams responses back to the browser client |
+| `CliChannel` | built-in | Reads from stdin / CLI args; writes to stdout. Review requests are rendered as text with y/n/feedback prompt. |
+| `WebChannel` | v1 | HTTP/WebSocket server. Supports rich media preview, inline approval buttons, and text feedback. Preferred for mobile use. |
 
-**`WebChannel` design notes:**
-- **HTTP mode** — each POST to `/chat` is a user turn; the response is held open until `send()` resolves it
-- **WebSocket mode** — preferred; connection stays open, enabling token-by-token streaming and multi-turn sessions without reconnection overhead
-
-Adding a new transport (e.g. Slack, SMS) means implementing `Channel` — no changes to Agent Core are required.
+Adding a new transport (e.g. Telegram, WeChat) means implementing `Channel` — no changes to Agent Core are required.
 
 ### Slash Command Registry
 
@@ -88,11 +112,38 @@ The central loop that drives bolt. At startup it assembles the system prompt fro
 
 AgentCore holds a `ProgressReporter` and emits `onSessionStart`, `onThinking`, and `onRetry` events. Tool call events (`onToolCall`, `onToolResult`) are emitted by the Tool Bus. Memory events (`onContextInjection`, `onMemoryCompaction`) are emitted by the Memory Manager.
 
+When running in daemon mode (for WebChannel), AgentCore stays alive between conversations, listening for new user turns from the channel.
+
 ### ProgressReporter
-An interface injected into AgentCore, ToolBus (via ToolContext), and MemoryManager. Emits real-time events at each significant step. `CliProgressReporter` writes formatted lines to stdout (TTY-guarded); `NoopProgressReporter` is used for sub-agents, Discord, and tests. See `docs/design/cli-progress.md`.
+An interface injected into AgentCore, ToolBus (via ToolContext), and MemoryManager. Emits real-time events at each significant step. `CliProgressReporter` writes formatted lines to stdout (TTY-guarded); `NoopProgressReporter` is used for sub-agents and tests; `WebProgressReporter` emits events over WebSocket. See `docs/design/cli-progress.md`.
 
 ### Tool Bus
 Registers and dispatches tool calls from the model. Each tool is a standalone module with a JSON schema definition (used by the API) and an `execute` function.
+
+### MCP Client
+
+Connects to external MCP (Model Context Protocol) servers registered in `.bolt/config.json`. The `mcp_call` tool dispatches calls through this client.
+
+```ts
+interface McpServerConfig {
+  name: string;          // e.g. "comfyui"
+  url: string;           // e.g. "http://gpu-server:8188/mcp"
+  tools?: string[];      // optional whitelist; if omitted, all server tools are available
+}
+
+class McpClient {
+  /** Discover available tools from all registered servers */
+  listTools(): McpToolDefinition[];
+  /** Call a tool on the appropriate server */
+  call(server: string, tool: string, input: unknown): Promise<unknown>;
+}
+```
+
+The MCP Client handles:
+- Server discovery and health checks at startup
+- Tool call routing to the correct server
+- Timeout and retry for long-running operations (e.g. image generation)
+- Progress polling for async operations (ComfyUI workflow execution)
 
 ### Memory Manager
 Manages the three-level memory system and assembles the context sent to the LLM on each turn. Responsibilities:
@@ -124,9 +175,11 @@ Spawns isolated child agent processes. Each sub-agent gets its own context — n
 5. Model responds with text and/or tool calls
 6. Memory Manager appends the assistant response (and each tool call/result) to L2 as they occur
 7. Tool Bus executes tool calls; results are appended to L1 and L2
-8. Memory Manager checks token budget; triggers compaction (L1 → L3) if needed
-9. Loop continues until the model returns a final text response with no tool calls
-10. Agent Core calls `channel.send(response)` to deliver the reply
+8. For `user_review` calls: the request is forwarded to the active Channel's `requestReview()` method; the user's response is returned as the tool result
+9. For `mcp_call` calls: the request is forwarded to the MCP Client, which routes to the appropriate server
+10. Memory Manager checks token budget; triggers compaction (L1 → L3) if needed
+11. Loop continues until the model returns a final text response with no tool calls
+12. Agent Core calls `channel.send(response)` to deliver the reply
 
 ## Error Handling and Recovery
 
@@ -141,6 +194,11 @@ Spawns isolated child agent processes. Each sub-agent gets its own context — n
 - 4xx errors (bad request, auth failure): fail immediately with a clear error message
 - Context window exceeded: trigger compaction first, then retry the API call
 
+### MCP Server Failures
+- Connection failures: retryable ToolError with the server name and error message
+- Timeout: configurable per-server timeout (default 300s for image/video generation)
+- Server unavailable at startup: logged as warning; `mcp_call` to that server returns ToolError
+
 ### Sub-agent Crashes
 - If a sub-agent process exits with a non-zero code, the parent marks the delegated task as `failed` with the stderr as the error reason
 - The parent agent decides whether to retry delegation or surface the failure to the user
@@ -150,6 +208,5 @@ Spawns isolated child agent processes. Each sub-agent gets its own context — n
 - Corrupt entries are moved to `.bolt/corrupted/` for inspection
 
 ### Channel Disconnection
-- `DiscordChannel`: reconnects automatically with backoff on gateway disconnect
-- `WebChannel`: WebSocket clients that disconnect mid-response are silently dropped; HTTP connections time out after `tools.timeoutMs`
+- `WebChannel`: WebSocket clients that disconnect mid-response are silently dropped. If a `user_review` tool call is in-flight when the client disconnects, it returns a retryable `ToolError("client disconnected during review")` so the agent can re-present the review request when the client reconnects. Clients can reconnect and resume the session via the same session ID.
 - `CliChannel`: EOF on stdin causes a clean shutdown

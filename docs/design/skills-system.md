@@ -54,11 +54,12 @@ output:
     description: The finished blog post in Markdown
 allowedTools:
   - web_fetch
+  - web_search
 ---
 
 You are a skilled content writer. Given a topic and tone, write a complete,
-well-structured blog post in Markdown. Use the web_fetch tool to research
-the topic before writing if needed.
+well-structured blog post in Markdown. Use the web_search and web_fetch tools
+to research the topic before writing if needed.
 ```
 
 ## Skill Discovery
@@ -138,14 +139,33 @@ Return result to caller
 
 ## Built-in Skills
 
-| Skill | Description |
-|-------|-------------|
-| `write-blog-post` | Draft a long-form Markdown blog post |
-| `review-code` | Perform a code review on a diff or file |
-| `generate-image-prompt` | Create a detailed image generation prompt |
-| `generate-video-script` | Write a short-form video script and shot list (Reels, TikTok) |
-| `summarize-url` | Fetch a URL and return a structured summary |
-| `draft-social-post` | Write a short-form social media post |
+### Content Research & Analysis
+
+| Skill | Description | Allowed Tools |
+|-------|-------------|---------------|
+| `analyze-trends` | Search trending topics on social media, analyse viral patterns, produce a structured trend report with content angles and recommendations | `web_search`, `web_fetch` |
+| `summarize-url` | Fetch a URL and return a structured summary | `web_fetch` |
+
+### Text Content Generation
+
+| Skill | Description | Allowed Tools |
+|-------|-------------|---------------|
+| `write-blog-post` | Draft a long-form Markdown blog post given topic + tone | `web_fetch`, `web_search` |
+| `draft-social-post` | Write a short-form social media post for a given platform and topic | — |
+
+### Video Production
+
+| Skill | Description | Allowed Tools |
+|-------|-------------|---------------|
+| `generate-video-script` | Write a short-form video script with structured storyboard (scene-by-scene breakdown including camera, dialogue, transitions) | `web_fetch`, `web_search` |
+| `generate-image-prompt` | Create a detailed image generation prompt optimised for the target model (e.g. SDXL, Flux) from a scene description | — |
+| `generate-video-prompt` | Create a motion/animation prompt for image-to-video generation from a scene description and source image | — |
+
+### Code Workflows
+
+| Skill | Description | Allowed Tools |
+|-------|-------------|---------------|
+| `review-code` | Perform a code review on a diff or file; returns structured report | `file_read` |
 
 ## Adding a Custom Skill
 

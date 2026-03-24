@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>bolt</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
   <style>
     :root {
       --bg: #0f0f0f;
@@ -551,7 +552,8 @@
       const MARKDOWN_TYPES = ['text', 'script', 'storyboard', 'image_prompt', 'video_prompt'];
       if (MARKDOWN_TYPES.includes(request.contentType) && typeof marked !== 'undefined') {
         contentEl.className = 'review-content markdown';
-        contentEl.innerHTML = marked.parse(request.content);
+        const raw = marked.parse(request.content);
+        contentEl.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(raw) : raw;
       } else {
         contentEl.className = 'review-content';
         contentEl.textContent = request.content;

@@ -415,7 +415,7 @@ export class WebChannel implements Channel {
   async sendMedia(filePath: string, caption?: string): Promise<void> {
     const root = this.opts.workspaceRoot ?? '';
     const relative = root ? path.relative(root, path.resolve(root, filePath)) : filePath;
-    const mediaUrl = `/media/${encodeURIComponent(relative)}`;
+    const mediaUrl = `/media/${relative.split('/').map(encodeURIComponent).join('/')}`;
     const msg: ServerMessage = { type: 'media', mediaUrl, caption };
     this.broadcastWs(msg);
     this.broadcastSse(msg);

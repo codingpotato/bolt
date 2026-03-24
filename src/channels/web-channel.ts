@@ -53,6 +53,7 @@ export interface WebChannelOptions {
   port: number;
   token?: string;
   mode: 'http' | 'websocket';
+  enabled?: boolean;
 }
 
 /**
@@ -100,7 +101,7 @@ export class WebChannel implements Channel {
 
     this.httpServer.on('request', (req, res) => this.handleRequest(req, res));
     this.httpServer.on('upgrade', (req, socket, head) => {
-      if (!this.authenticate(req.headers['authorization'] ?? req.url ?? '')) {
+      if (!this.authFromRequest(req)) {
         socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
         socket.destroy();
         return;
@@ -135,9 +136,7 @@ export class WebChannel implements Channel {
   // ---------------------------------------------------------------------------
 
   private onConnection(ws: WebSocket): void {
-    const isReadOnly = this.activeWs !== null;
-
-    if (isReadOnly) {
+    if (this.activeWs !== null) {
       this.readOnlyWs.push(ws);
       const msg: ServerMessage = { type: 'status', readOnly: true, content: 'read-only' };
       ws.send(JSON.stringify(msg));
@@ -148,7 +147,7 @@ export class WebChannel implements Channel {
     }
 
     ws.on('message', (data) => {
-      if (isReadOnly || ws !== this.activeWs) {
+      if (ws !== this.activeWs) {
         // read-only connections cannot send turns
         ws.send(JSON.stringify({ type: 'error', content: 'read-only' } satisfies ServerMessage));
         return;
@@ -285,6 +284,7 @@ export class WebChannel implements Channel {
   private enqueueTurn(turn: UserTurn): void {
     if (this.turnWaiters.length > 0) {
       const waiter = this.turnWaiters.shift()!;
+      this.closeWaiters.shift(); // remove the paired close waiter to avoid a leak
       waiter(turn);
     } else {
       this.turnQueue.push(turn);
@@ -341,8 +341,11 @@ export class WebChannel implements Channel {
   // Lifecycle
   // ---------------------------------------------------------------------------
 
-  /** Start listening. */
+  /** Start listening. Throws if `enabled` is explicitly set to false. */
   listen(): Promise<void> {
+    if (this.opts.enabled === false) {
+      return Promise.reject(new Error('WebChannel is disabled (enabled: false)'));
+    }
     return new Promise((resolve) => {
       this.httpServer.listen(this.opts.port, () => resolve());
     });

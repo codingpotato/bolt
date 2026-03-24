@@ -119,13 +119,13 @@ class FakeResponse extends EventEmitter {
 // Helper: build a WebChannel with a FakeServer and expose onConnection
 // ---------------------------------------------------------------------------
 
-function makeChannel(opts: { token?: string; mode?: 'http' | 'websocket' } = {}): {
+function makeChannel(opts: { token?: string; mode?: 'http' | 'websocket'; enabled?: boolean } = {}): {
   channel: WebChannel & { _onConnection: (ws: FakeWs) => void };
   server: FakeServer;
 } {
   const server = new FakeServer();
   const channel = new WebChannel(
-    { port: 3000, token: opts.token, mode: opts.mode ?? 'websocket' },
+    { port: 3000, token: opts.token, mode: opts.mode ?? 'websocket', enabled: opts.enabled },
     server as unknown as Server
   ) as WebChannel & { _onConnection: (ws: FakeWs) => void };
 
@@ -398,6 +398,62 @@ describe('WebChannel', () => {
 
       expect(res.body).toContain('"type":"response"');
       expect(res.body).toContain('"content":"hello sse"');
+    });
+  });
+
+  describe('WebSocket mode — promoted connection can send messages', () => {
+    it('allows the promoted connection to send messages after active disconnects', async () => {
+      const { channel } = makeChannel();
+      const ws1 = new FakeWs();
+      const ws2 = new FakeWs();
+      channel['_onConnection'](ws1);
+      channel['_onConnection'](ws2);
+
+      // ws1 disconnects → ws2 is promoted to active
+      ws1.simulateClose();
+
+      const iter = channel.receive()[Symbol.asyncIterator]();
+      ws2.simulateMessage({ type: 'message', content: 'from promoted' });
+
+      const { value } = await iter.next();
+      expect(value).toEqual({ content: 'from promoted' });
+    });
+  });
+
+  describe('WebSocket upgrade — token auth via ?token= query param', () => {
+    it('rejects upgrade when token in query param does not match', () => {
+      const { channel } = makeChannel({ token: 'secret' });
+      const socket = { write: vi.fn(), destroy: vi.fn(), on: vi.fn() };
+      const req = Object.assign(new EventEmitter(), {
+        headers: {},
+        url: '/?token=wrong',
+      }) as unknown as IncomingMessage;
+      channel['httpServer'].emit('upgrade', req, socket, Buffer.alloc(0));
+      expect(socket.destroy).toHaveBeenCalled();
+    });
+
+    it('allows upgrade when ?token= matches', () => {
+      const { channel } = makeChannel({ token: 'secret' });
+      const socket = { write: vi.fn(), destroy: vi.fn(), on: vi.fn() };
+      const req = Object.assign(new EventEmitter(), {
+        headers: {},
+        url: '/?token=secret',
+      }) as unknown as IncomingMessage;
+      // wss.handleUpgrade will throw since this is a fake socket, but
+      // destroy() should NOT have been called (auth passed).
+      try {
+        channel['httpServer'].emit('upgrade', req, socket, Buffer.alloc(0));
+      } catch {
+        // expected — fake socket
+      }
+      expect(socket.destroy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Lifecycle — enabled flag', () => {
+    it('listen() rejects when enabled is false', async () => {
+      const { channel } = makeChannel({ enabled: false } as Parameters<typeof makeChannel>[0]);
+      await expect(channel.listen()).rejects.toThrow('disabled');
     });
   });
 

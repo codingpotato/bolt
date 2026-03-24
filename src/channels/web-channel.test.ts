@@ -1,0 +1,435 @@
+import { describe, it, expect, vi } from 'vitest';
+import { type IncomingMessage, type ServerResponse, type Server } from 'node:http';
+import { EventEmitter } from 'node:events';
+import { WebChannel, type ServerMessage } from './web-channel';
+import type { UserReviewRequest } from './channel';
+
+// ---------------------------------------------------------------------------
+// WebSocket stub
+// ---------------------------------------------------------------------------
+
+class FakeWs extends EventEmitter {
+  sent: string[] = [];
+  readyState = 1; // OPEN
+
+  send(data: string): void {
+    this.sent.push(data);
+  }
+
+  lastSent(): ServerMessage {
+    const last = this.sent[this.sent.length - 1];
+    if (last === undefined) throw new Error('no messages sent');
+    return JSON.parse(last) as ServerMessage;
+  }
+
+  simulateMessage(msg: object): void {
+    this.emit('message', JSON.stringify(msg));
+  }
+
+  simulateClose(): void {
+    this.emit('close');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP server stub that exposes simulateUpgrade / simulateRequest helpers
+// ---------------------------------------------------------------------------
+
+class FakeServer extends EventEmitter {
+  listening = false;
+
+  listen(_port: number, cb: () => void): this {
+    this.listening = true;
+    cb();
+    return this;
+  }
+
+  close(cb: () => void): this {
+    this.listening = false;
+    cb();
+    return this;
+  }
+
+  simulateUpgrade(authHeader: string, _ws: FakeWs): void {
+    // Patch the WebSocketServer to hand back our fake WS.
+    // We emit 'upgrade' on the server — WebChannel listens for this.
+    const req = Object.assign(new EventEmitter(), {
+      headers: { authorization: authHeader },
+      url: '/',
+    }) as unknown as IncomingMessage;
+    const socket = Object.assign(new EventEmitter(), {
+      write: vi.fn(),
+      destroy: vi.fn(),
+    });
+    this.emit('upgrade', req, socket, Buffer.alloc(0));
+    // The real WebChannel calls wss.handleUpgrade; we skip that and call
+    // onConnection directly via the helper below.
+    return;
+  }
+
+  simulateRequest(
+    method: string,
+    path: string,
+    body: unknown,
+    authHeader: string
+  ): { res: FakeResponse } {
+    const req = Object.assign(new EventEmitter(), {
+      method,
+      url: path,
+      headers: { authorization: authHeader },
+    }) as unknown as IncomingMessage;
+
+    const res = new FakeResponse();
+    this.emit('request', req, res as unknown as ServerResponse);
+
+    // Emit the body after a tick so the 'data'/'end' listeners are attached.
+    process.nextTick(() => {
+      req.emit('data', Buffer.from(JSON.stringify(body)));
+      req.emit('end');
+    });
+
+    return { res };
+  }
+}
+
+class FakeResponse extends EventEmitter {
+  statusCode = 200;
+  headers: Record<string, string> = {};
+  body = '';
+
+  writeHead(code: number, headers?: Record<string, string>): this {
+    this.statusCode = code;
+    if (headers) Object.assign(this.headers, headers);
+    return this;
+  }
+
+  write(data: string): boolean {
+    this.body += data;
+    return true;
+  }
+
+  end(data?: string): this {
+    if (data) this.body += data;
+    this.emit('finish');
+    return this;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: build a WebChannel with a FakeServer and expose onConnection
+// ---------------------------------------------------------------------------
+
+function makeChannel(opts: { token?: string; mode?: 'http' | 'websocket' } = {}): {
+  channel: WebChannel & { _onConnection: (ws: FakeWs) => void };
+  server: FakeServer;
+} {
+  const server = new FakeServer();
+  const channel = new WebChannel(
+    { port: 3000, token: opts.token, mode: opts.mode ?? 'websocket' },
+    server as unknown as Server
+  ) as WebChannel & { _onConnection: (ws: FakeWs) => void };
+
+  // Expose the private onConnection so tests can simulate WS connections
+  // without going through the real WebSocketServer upgrade path.
+  channel['_onConnection'] = (ws: FakeWs) =>
+    (channel as unknown as { onConnection: (ws: FakeWs) => void }).onConnection(ws);
+
+  return { channel, server };
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('WebChannel', () => {
+  describe('WebSocket mode — connection roles', () => {
+    it('marks the first connection as active', () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+      expect(ws.lastSent()).toMatchObject({ type: 'status', readOnly: false });
+    });
+
+    it('marks the second connection as read-only', () => {
+      const { channel } = makeChannel();
+      const ws1 = new FakeWs();
+      const ws2 = new FakeWs();
+      channel['_onConnection'](ws1);
+      channel['_onConnection'](ws2);
+      expect(ws2.lastSent()).toMatchObject({ type: 'status', readOnly: true });
+    });
+
+    it('promotes the oldest read-only when active disconnects', () => {
+      const { channel } = makeChannel();
+      const ws1 = new FakeWs();
+      const ws2 = new FakeWs();
+      const ws3 = new FakeWs();
+      channel['_onConnection'](ws1);
+      channel['_onConnection'](ws2);
+      channel['_onConnection'](ws3);
+
+      ws1.simulateClose();
+
+      // ws2 is oldest read-only → should be promoted
+      const lastMsg = ws2.lastSent();
+      expect(lastMsg).toMatchObject({ type: 'status', readOnly: false });
+      // ws3 stays read-only (no additional status message)
+    });
+
+    it('rejects messages from read-only connections', () => {
+      const { channel } = makeChannel();
+      const ws1 = new FakeWs();
+      const ws2 = new FakeWs();
+      channel['_onConnection'](ws1);
+      channel['_onConnection'](ws2);
+
+      ws2.simulateMessage({ type: 'message', content: 'hello' });
+
+      expect(ws2.lastSent()).toMatchObject({ type: 'error', content: 'read-only' });
+    });
+  });
+
+  describe('WebSocket mode — messaging', () => {
+    it('enqueues turns from the active connection', async () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+
+      const iter = channel.receive()[Symbol.asyncIterator]();
+
+      ws.simulateMessage({ type: 'message', content: 'hello world' });
+
+      const { value } = await iter.next();
+      expect(value).toEqual({ content: 'hello world' });
+    });
+
+    it('broadcasts send() to all connections', async () => {
+      const { channel } = makeChannel();
+      const ws1 = new FakeWs();
+      const ws2 = new FakeWs();
+      channel['_onConnection'](ws1);
+      channel['_onConnection'](ws2);
+
+      await channel.send('great response');
+
+      const msg1 = ws1.lastSent();
+      const msg2 = ws2.lastSent();
+      expect(msg1).toMatchObject({ type: 'response', content: 'great response' });
+      expect(msg2).toMatchObject({ type: 'response', content: 'great response' });
+    });
+
+    it('ignores malformed JSON messages silently', async () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+
+      // Emit raw bad JSON — should not throw
+      ws.emit('message', 'not-json');
+
+      // One status message sent, no error
+      expect(ws.sent).toHaveLength(1);
+    });
+  });
+
+  describe('WebSocket mode — review flow', () => {
+    it('broadcasts review request and resolves when client replies', async () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+
+      const request: UserReviewRequest = {
+        content: 'My draft post',
+        contentType: 'text',
+        question: 'Does this look good?',
+      };
+
+      const reviewPromise = channel.requestReview(request);
+
+      // The last sent message should be the review broadcast
+      const reviewMsg = ws.lastSent();
+      expect(reviewMsg.type).toBe('review');
+      expect(reviewMsg.reviewId).toBeDefined();
+      expect(reviewMsg.reviewRequest).toMatchObject({ content: 'My draft post' });
+
+      // Active connection replies
+      ws.simulateMessage({
+        type: 'review_reply',
+        reviewId: reviewMsg.reviewId,
+        approved: true,
+      });
+
+      const response = await reviewPromise;
+      expect(response).toEqual({ approved: true });
+    });
+
+    it('passes feedback in review reply', async () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+
+      const reviewPromise = channel.requestReview({
+        content: 'Draft',
+        contentType: 'text',
+        question: 'OK?',
+      });
+
+      const reviewMsg = ws.lastSent();
+      ws.simulateMessage({
+        type: 'review_reply',
+        reviewId: reviewMsg.reviewId,
+        approved: false,
+        feedback: 'needs more detail',
+      });
+
+      const response = await reviewPromise;
+      expect(response).toEqual({ approved: false, feedback: 'needs more detail' });
+    });
+  });
+
+  describe('HTTP mode — POST /chat', () => {
+    it('accepts a valid message and enqueues a turn', async () => {
+      const { channel, server } = makeChannel({ mode: 'http' });
+      const iter = channel.receive()[Symbol.asyncIterator]();
+
+      const { res } = server.simulateRequest(
+        'POST',
+        '/chat',
+        { type: 'message', content: 'hi from http' },
+        ''
+      );
+
+      await new Promise((r) => process.nextTick(r));
+
+      const { value } = await iter.next();
+      expect(value).toEqual({ content: 'hi from http' });
+      expect(res.statusCode).toBe(202);
+    });
+
+    it('returns 400 for invalid JSON body', async () => {
+      const { channel } = makeChannel({ mode: 'http' });
+
+      const req = Object.assign(new EventEmitter(), {
+        method: 'POST',
+        url: '/chat',
+        headers: { authorization: '' },
+      }) as unknown as IncomingMessage;
+
+      const res = new FakeResponse();
+      channel['httpServer'].emit('request', req, res as unknown as ServerResponse);
+
+      req.emit('data', Buffer.from('not-json'));
+      req.emit('end');
+
+      await new Promise((r) => process.nextTick(r));
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 404 for unknown paths', async () => {
+      const { server } = makeChannel({ mode: 'http' });
+      const { res } = server.simulateRequest('GET', '/unknown', {}, '');
+      await new Promise((r) => process.nextTick(r));
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  describe('Authentication', () => {
+    it('rejects HTTP requests without a valid token', async () => {
+      const { server } = makeChannel({ token: 'secret' });
+      const { res } = server.simulateRequest('POST', '/chat', {}, 'Bearer wrong');
+      await new Promise((r) => process.nextTick(r));
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('accepts HTTP requests with a valid token', async () => {
+      const { channel, server } = makeChannel({ token: 'secret', mode: 'http' });
+      const iter = channel.receive()[Symbol.asyncIterator]();
+
+      const { res } = server.simulateRequest(
+        'POST',
+        '/chat',
+        { type: 'message', content: 'authorized' },
+        'Bearer secret'
+      );
+
+      await new Promise((r) => process.nextTick(r));
+      const { value } = await iter.next();
+      expect(value).toEqual({ content: 'authorized' });
+      expect(res.statusCode).toBe(202);
+    });
+
+    it('allows all requests when no token is configured', async () => {
+      const { channel, server } = makeChannel({ mode: 'http' });
+      const iter = channel.receive()[Symbol.asyncIterator]();
+
+      const { res } = server.simulateRequest(
+        'POST',
+        '/chat',
+        { type: 'message', content: 'open' },
+        ''
+      );
+
+      await new Promise((r) => process.nextTick(r));
+      await iter.next();
+      expect(res.statusCode).toBe(202);
+    });
+  });
+
+  describe('SSE — GET /events', () => {
+    it('sets correct SSE headers and sends an initial comment', () => {
+      const { server } = makeChannel({ mode: 'http' });
+      const { res } = server.simulateRequest('GET', '/events', {}, '');
+
+      expect(res.headers['Content-Type']).toBe('text/event-stream');
+      expect(res.body).toContain(':\n\n');
+    });
+
+    it('broadcasts send() to SSE streams', async () => {
+      const { channel, server } = makeChannel({ mode: 'http' });
+
+      const req = Object.assign(new EventEmitter(), {
+        method: 'GET',
+        url: '/events',
+        headers: {},
+      }) as unknown as IncomingMessage;
+      const res = new FakeResponse();
+      server.emit('request', req, res as unknown as ServerResponse);
+
+      await channel.send('hello sse');
+
+      expect(res.body).toContain('"type":"response"');
+      expect(res.body).toContain('"content":"hello sse"');
+    });
+  });
+
+  describe('Lifecycle — stop()', () => {
+    it('stop() terminates receive() iteration', async () => {
+      const { channel } = makeChannel();
+      const turns: string[] = [];
+
+      const done = (async () => {
+        for await (const turn of channel.receive()) {
+          turns.push(turn.content);
+        }
+      })();
+
+      await channel.stop();
+      await done;
+      expect(turns).toHaveLength(0);
+    });
+
+    it('stop() rejects pending reviews', async () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+
+      const reviewPromise = channel.requestReview({
+        content: 'c',
+        contentType: 'text',
+        question: 'q?',
+      });
+
+      await channel.stop();
+      await expect(reviewPromise).rejects.toThrow('WebChannel stopped');
+    });
+  });
+});

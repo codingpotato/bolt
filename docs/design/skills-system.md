@@ -75,10 +75,10 @@ Built-in skills ship with bolt under `src/skills/`.
 
 ## Invocation
 
-### From the CLI
+### From the CLI (interactive session)
 
-```bash
-bolt run-skill write-blog-post --topic "TypeScript generics" --tone technical
+```
+/run-skill write-blog-post --topic TypeScript --tone technical
 ```
 
 ### By the agent during task execution
@@ -95,13 +95,7 @@ The agent can call the `skill_run` tool:
 }
 ```
 
-### Chained skills
-
-```bash
-bolt run-skill research-topic --topic "LLM agents" | bolt run-skill write-blog-post
-```
-
-Or in a task definition:
+### Chained skills (task definition)
 
 ```ts
 const steps = [
@@ -170,7 +164,7 @@ Return result to caller
 ## Adding a Custom Skill
 
 1. Create `.bolt/skills/<skill-name>.skill.md` using the file format above
-2. Run `bolt skills list` to verify it is discovered
-3. Invoke with `bolt run-skill <skill-name> --<arg> <value>`
+2. Run `/skills` inside a bolt session to verify it is discovered
+3. Invoke with `/run-skill <skill-name> --<arg> <value>`
 
 No code changes required.

@@ -6,6 +6,8 @@ export interface SubagentPayload {
   authConfig: AuthConfig;
   model: string;
   allowedTools?: string[];
+  /** Optional system prompt override — used by skill_run to inject the skill's system prompt. */
+  systemPrompt?: string;
 }
 
 export interface SubagentResult {

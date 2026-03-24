@@ -31,6 +31,7 @@ Read these docs before making decisions in the relevant area:
 | Dev Workflow | `docs/workflow/development.md` | Setup, branching, adding tools, CI pipeline |
 | Agile Process | `docs/workflow/agile.md` | User stories, definition of done, PR checklist, sprint workflow |
 | Project Plan | `docs/planning/plan.md` | Sprint breakdown, stories, tasks, dependency graph, v1 release criteria |
+| Deploy: serve | `docs/deploy/serve.md` | Running bolt serve as a daemon, systemd/launchd, reverse proxy, token auth |
 
 ## Core Capabilities
 

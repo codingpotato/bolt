@@ -63,6 +63,12 @@ export interface WebChannelOptions {
   enabled?: boolean;
   /** Absolute path to the workspace root — used to serve media files safely. */
   workspaceRoot?: string;
+  /**
+   * When true, the channel does NOT signal close when all WebSocket connections
+   * drop — the server keeps listening for new connections. Used by daemon mode.
+   * stop() still terminates receive() unconditionally.
+   */
+  persistent?: boolean;
 }
 
 const MEDIA_CONTENT_TYPES: Record<string, string> = {
@@ -183,7 +189,7 @@ export class WebChannel implements Channel {
         this.readOnlyWs = this.readOnlyWs.filter((c) => c !== ws);
       }
 
-      if (this.activeWs === null && this.readOnlyWs.length === 0) {
+      if (this.activeWs === null && this.readOnlyWs.length === 0 && !this.opts.persistent) {
         this.signalClose();
       }
     });

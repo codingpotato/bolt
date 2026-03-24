@@ -97,18 +97,22 @@ export class TaskStore {
   }
 
   async create(title: string, description: string, dependsOn: string[] = []): Promise<string> {
-    const newId = `task-${++this.counter}`;
-    const now = new Date().toISOString();
-
     for (const depId of dependsOn) {
       if (!this.taskMap.has(depId)) {
         throw new Error(`dependency not found: ${depId}`);
       }
     }
 
-    if (dependsOn.length > 0 && this.wouldCreateCycle(newId, dependsOn)) {
-      throw new Error(`circular dependency: task ${newId} with deps [${dependsOn.join(', ')}] would create a cycle`);
+    // Compute candidate ID without committing the increment so that validation
+    // failures leave the counter unchanged (no gaps in task IDs on error).
+    const candidateId = `task-${this.counter + 1}`;
+
+    if (dependsOn.length > 0 && this.wouldCreateCycle(candidateId, dependsOn)) {
+      throw new Error(`circular dependency: task ${candidateId} with deps [${dependsOn.join(', ')}] would create a cycle`);
     }
+
+    const newId = `task-${++this.counter}`;
+    const now = new Date().toISOString();
 
     const task: Task = {
       id: newId,

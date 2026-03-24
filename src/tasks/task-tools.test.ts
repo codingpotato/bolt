@@ -90,6 +90,13 @@ describe('task tools', () => {
     it('is not marked sequential', () => {
       expect(getTool('task_create').sequential).toBeFalsy();
     });
+
+    it('throws ToolError when store.create rejects', async () => {
+      store.create.mockRejectedValue(new Error('dependency not found: bad-id'));
+      await expect(
+        getTool('task_create').execute({ title: 'T', description: 'D', dependsOn: ['bad-id'] }, ctx),
+      ).rejects.toThrow('dependency not found: bad-id');
+    });
   });
 
   // ── task_update ──────────────────────────────────────────────────────────────

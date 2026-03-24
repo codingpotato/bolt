@@ -320,6 +320,41 @@ describe('TaskStore', () => {
       const store = new TaskStore(dataDir);
       await expect(store.create('task', 'desc', ['nonexistent'])).rejects.toThrow(/dependency not found/i);
     });
+
+    it('does not advance the counter when dep validation fails', async () => {
+      const store = new TaskStore(dataDir);
+      await expect(store.create('bad', 'desc', ['nonexistent'])).rejects.toThrow();
+      // Next successful create should still get task-1, not task-2
+      const id = await store.create('good', 'desc');
+      expect(id).toBe('task-1');
+    });
+
+    it('does not advance the counter when cycle detection fails', async () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({
+          tasks: [
+            {
+              id: 'task-1',
+              title: 'A',
+              description: 'desc',
+              status: 'waiting',
+              dependsOn: ['task-2'],
+              subtaskIds: [],
+              sessionIds: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          counter: 1,
+        }),
+      );
+      const store = new TaskStore(dataDir);
+      await expect(store.create('B', 'desc', ['task-1'])).rejects.toThrow(/circular/i);
+      // Next successful create should get task-2, not task-3
+      const id = await store.create('C', 'desc');
+      expect(id).toBe('task-2');
+    });
   });
 
   // ── list ─────────────────────────────────────────────────────────────────────

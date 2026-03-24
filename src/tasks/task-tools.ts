@@ -45,8 +45,12 @@ export function createTaskTools(store: TaskStore): Tool[] {
       required: ['title', 'description'],
     },
     async execute(input: TaskCreateInput, _ctx: ToolContext): Promise<TaskCreateOutput> {
-      const id = await store.create(input.title, input.description, input.dependsOn);
-      return { id };
+      try {
+        const id = await store.create(input.title, input.description, input.dependsOn);
+        return { id };
+      } catch (err) {
+        throw new ToolError(err instanceof Error ? err.message : String(err));
+      }
     },
   };
 

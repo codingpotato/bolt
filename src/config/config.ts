@@ -60,6 +60,7 @@ export interface Config {
       enabled: boolean;
       port: number;
       mode: 'http' | 'websocket';
+      token?: string;
     };
   };
 }
@@ -229,6 +230,9 @@ function applyEnvOverrides(config: Config): Config {
   }
   if (process.env['BOLT_LOCAL_ENDPOINT']) {
     result.local.endpoint = process.env['BOLT_LOCAL_ENDPOINT'];
+  }
+  if (process.env['BOLT_WEB_TOKEN']) {
+    result.channels.web.token = process.env['BOLT_WEB_TOKEN'];
   }
 
   return result;

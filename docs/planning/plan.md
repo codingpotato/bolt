@@ -784,15 +784,15 @@ I want to access bolt via a web browser on my phone,
 so that I can control content generation without a terminal.
 
 Acceptance Criteria:
-- [ ] WebChannel implements the Channel interface
-- [ ] Starts an HTTP server on config.channels.web.port (default 3000)
-- [ ] WebSocket mode: persistent connection for bidirectional messaging
-- [ ] HTTP mode: POST /chat for user turns, SSE for streaming responses
-- [ ] Simple token authentication via BOLT_WEB_TOKEN or config.channels.web.token
-- [ ] Server only starts when config.channels.web.enabled is true
-- [ ] Only one active (read-write) WebSocket connection is allowed at a time; a second connection is accepted but immediately put into read-only mode — it receives all agent messages and progress events but its send attempts are rejected with a "read-only" error
-- [ ] When the active connection closes, the oldest read-only connection is promoted to active
-- [ ] Unit tests mock the HTTP server
+- [x] WebChannel implements the Channel interface
+- [x] Starts an HTTP server on config.channels.web.port (default 3000)
+- [x] WebSocket mode: persistent connection for bidirectional messaging
+- [x] HTTP mode: POST /chat for user turns, SSE for streaming responses
+- [x] Simple token authentication via BOLT_WEB_TOKEN or config.channels.web.token
+- [x] Server only starts when config.channels.web.enabled is true
+- [x] Only one active (read-write) WebSocket connection is allowed at a time; a second connection is accepted but immediately put into read-only mode — it receives all agent messages and progress events but its send attempts are rejected with a "read-only" error
+- [x] When the active connection closes, the oldest read-only connection is promoted to active
+- [x] Unit tests mock the HTTP server
 ```
 
 **S8-2: Web chat frontend**

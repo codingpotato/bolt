@@ -675,7 +675,7 @@ Acceptance Criteria:
 - [x] Skill frontmatter (name, description, inputSchema, outputSchema, allowedTools?) is parsed
 - [x] Body of the .skill.md file becomes the system prompt
 - [x] Invalid frontmatter emits a warning and skips the skill
-- [x] bolt skills list CLI command displays all discovered skills
+- [x] /skills slash command displays all discovered skills
 ```
 
 **S6-3: skill_run tool and execution flow**

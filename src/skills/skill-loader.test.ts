@@ -367,6 +367,77 @@ body`;
     expect(skills).toEqual([]);
   });
 
+  it('loads skills from builtinSkillsDir', async () => {
+    const builtinSkillsDir = '/bolt/src/skills';
+    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
+      if (dir === builtinSkillsDir) return ['my-skill.skill.md'] as never;
+      return [] as never;
+    });
+    vi.mocked(fsPromises.readFile).mockResolvedValue(validSkillContent);
+
+    const skills = await loadSkills(projectSkillsDir, userSkillsDir, () => {}, builtinSkillsDir);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.name).toBe('my-skill');
+  });
+
+  it('projectSkillsDir wins over builtinSkillsDir on name collision', async () => {
+    const builtinSkillsDir = '/bolt/src/skills';
+    const builtinContent = `---
+name: my-skill
+description: Built-in version
+input:
+  query:
+    type: string
+output:
+  result:
+    type: string
+---
+Built-in prompt.`;
+
+    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
+      if (dir === projectSkillsDir) return ['my-skill.skill.md'] as never;
+      if (dir === builtinSkillsDir) return ['my-skill.skill.md'] as never;
+      return [] as never;
+    });
+    vi.mocked(fsPromises.readFile).mockImplementation(async (filePath: unknown) => {
+      if (String(filePath).startsWith(projectSkillsDir)) return validSkillContent as never;
+      return builtinContent as never;
+    });
+
+    const skills = await loadSkills(projectSkillsDir, userSkillsDir, () => {}, builtinSkillsDir);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.description).toBe('A test skill'); // project wins
+  });
+
+  it('userSkillsDir wins over builtinSkillsDir on name collision', async () => {
+    const builtinSkillsDir = '/bolt/src/skills';
+    const builtinContent = `---
+name: my-skill
+description: Built-in version
+input:
+  query:
+    type: string
+output:
+  result:
+    type: string
+---
+Built-in prompt.`;
+
+    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
+      if (dir === userSkillsDir) return ['my-skill.skill.md'] as never;
+      if (dir === builtinSkillsDir) return ['my-skill.skill.md'] as never;
+      return [] as never;
+    });
+    vi.mocked(fsPromises.readFile).mockImplementation(async (filePath: unknown) => {
+      if (String(filePath).startsWith(userSkillsDir)) return validSkillContent as never;
+      return builtinContent as never;
+    });
+
+    const skills = await loadSkills(projectSkillsDir, userSkillsDir, () => {}, builtinSkillsDir);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.description).toBe('A test skill'); // user wins over built-in
+  });
+
   it('merges skills from both directories (non-colliding names)', async () => {
     const skill2Content = `---
 name: other-skill

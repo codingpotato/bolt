@@ -8,7 +8,7 @@
     "bolt": "dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-assets.js",
     "dev": "tsx --env-file=.env src/cli/index.ts",
     "dev:watch": "tsx watch --env-file=.env src/cli/index.ts",
     "start": "node dist/cli/index.js",

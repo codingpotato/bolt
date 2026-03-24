@@ -344,9 +344,11 @@ body`;
       return validSkillContent as never;
     });
 
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir);
+    const warn = vi.fn();
+    const skills = await loadSkills(projectSkillsDir, userSkillsDir, warn);
     expect(skills).toHaveLength(1);
     expect(skills[0]?.name).toBe('my-skill');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('bad.skill.md'));
   });
 
   it('returns empty array when both directories are missing', async () => {

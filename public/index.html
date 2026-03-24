@@ -564,7 +564,11 @@
       ws.addEventListener('close', () => {
         ws = null;
         setStatus('');
-        setReadOnly(true);
+        // Disable input without showing the read-only banner — the banner is
+        // reserved for when the server explicitly puts us in observer mode.
+        isReadOnly = true;
+        inputEl.disabled = true;
+        sendBtn.disabled = true;
         reconnectTimer = setTimeout(connect, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, 30000);
       });

@@ -742,14 +742,14 @@ I want to search the web by keyword and receive structured results,
 so that I can research trending topics and gather information.
 
 Acceptance Criteria:
-- [ ] web_search({ query, maxResults?, timeRange?, category? }) returns { results[] }
-- [ ] Each result has title, url, snippet, and optional date and source fields
-- [ ] maxResults defaults to config.search.maxResults (10)
-- [ ] timeRange filters results by recency (day, week, month, year)
-- [ ] category supports general, news, images, videos
-- [ ] Network/API errors return a retryable ToolError
-- [ ] web_search is registered as a built-in tool
-- [ ] Unit tests mock the search provider
+- [x] web_search({ query, maxResults?, timeRange?, category? }) returns { results[] }
+- [x] Each result has title, url, snippet, and optional date and source fields
+- [x] maxResults defaults to config.search.maxResults (10)
+- [x] timeRange filters results by recency (day, week, month, year)
+- [x] category supports general, news, images, videos
+- [x] Network/API errors return a retryable ToolError
+- [x] web_search is registered as a built-in tool
+- [x] Unit tests mock the search provider
 ```
 
 **S7-3: user_review tool**

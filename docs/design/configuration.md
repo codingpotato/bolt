@@ -18,11 +18,10 @@ Configuration is resolved from three sources, in order of precedence (highest fi
 | `ANTHROPIC_SESSION_TOKEN` | Conditional¹ | — | Anthropic account session token (subscription auth mode) |
 | `BOLT_LOCAL_ENDPOINT` | Conditional¹ | — | Base URL passed to the Anthropic SDK as `baseURL`, e.g. `http://localhost:8080` (local auth mode) |
 | `BOLT_LOCAL_API_KEY` | No | — | API key for the local server if it requires one |
-| `DISCORD_BOT_TOKEN` | No | — | Discord bot token (required if Discord channel is used) |
-| `DISCORD_CHANNEL_ID` | No | — | Discord channel ID to monitor |
 | `BOLT_MODEL` | No | `claude-opus-4-6` | Model ID sent in every API request (applies to all three auth modes) |
 | `BOLT_DATA_DIR` | No | `.bolt` | Runtime data directory |
 | `BOLT_LOG_LEVEL` | No | `info` | Log verbosity for `.bolt/bolt.log`: `debug` \| `info` \| `warn` \| `error`. Entries below this level are dropped. `error`-level entries are also written to stderr. See `docs/design/logging.md`. |
+| `BOLT_SEARCH_API_KEY` | No | — | API key for web search provider (Brave, Serper). Not needed for SearXNG. |
 
 ¹ Exactly one of `ANTHROPIC_API_KEY`, `ANTHROPIC_SESSION_TOKEN`, or `BOLT_LOCAL_ENDPOINT` must be set. Precedence when multiple are set: API Key > Subscription > Local.
 
@@ -45,6 +44,36 @@ Configuration is resolved from three sources, in order of precedence (highest fi
     // Base URL passed to the Anthropic SDK as baseURL
     // Overridden by BOLT_LOCAL_ENDPOINT env var
     "endpoint": "http://localhost:8080"
+  },
+
+  // Web search
+  "search": {
+    // Search provider: "searxng" (default, free) | "brave" | "serper"
+    "provider": "searxng",
+    // Endpoint URL for the search provider
+    // SearXNG: "http://localhost:8080" (local instance)
+    // Brave: "https://api.search.brave.com" (default, uses BOLT_SEARCH_API_KEY)
+    // Serper: "https://google.serper.dev" (default, uses BOLT_SEARCH_API_KEY)
+    "endpoint": "http://localhost:8080",
+    // Default max results per search
+    "maxResults": 10
+  },
+
+  // MCP (Model Context Protocol) servers
+  "mcp": {
+    "servers": [
+      {
+        // Unique name for this server (used in mcp_call)
+        "name": "comfyui",
+        // Server URL
+        "url": "http://gpu-server:8188/mcp",
+        // Timeout for tool calls in milliseconds (default: 300000 = 5 minutes)
+        "timeoutMs": 300000,
+        // Optional: restrict which tools are available from this server
+        // If omitted, all tools reported by the server are available
+        "tools": ["text2img", "img2video"]
+      }
+    ]
   },
 
   // Memory system
@@ -99,6 +128,13 @@ Configuration is resolved from three sources, in order of precedence (highest fi
     "testFixRetries": 3
   },
 
+  // Notifications
+  "notifications": {
+    // Notification provider: "system" (default) | "none"
+    // "system" uses macOS/Linux desktop notifications
+    "provider": "system"
+  },
+
   // CLI output
   "cli": {
     // Show progress events (tool calls, compaction, task changes) in TTY mode
@@ -115,7 +151,10 @@ Configuration is resolved from three sources, in order of precedence (highest fi
       // Port to listen on
       "port": 3000,
       // "http" | "websocket"
-      "mode": "websocket"
+      "mode": "websocket",
+      // Simple token for authentication (required when enabled)
+      // Can also be set via BOLT_WEB_TOKEN env var
+      "token": ""
     }
   }
 }
@@ -131,10 +170,12 @@ Configuration is validated at startup using the schema above. Invalid values cau
 
 ```
 Error: config.memory.compactThreshold must be between 0.0 and 1.0, got: 1.5
+Error: config.mcp.servers[0].url is required when MCP servers are configured
+Error: config.search.provider must be one of: searxng, brave, serper
 ```
 
 ## Sensitive Values
 
-Credentials (`ANTHROPIC_API_KEY`, `ANTHROPIC_SESSION_TOKEN`, `DISCORD_BOT_TOKEN`, `BOLT_LOCAL_API_KEY`) must only be set via environment variables — never written to `.bolt/config.json`. bolt rejects config files that contain credential fields.
+Credentials (`ANTHROPIC_API_KEY`, `ANTHROPIC_SESSION_TOKEN`, `BOLT_LOCAL_API_KEY`, `BOLT_SEARCH_API_KEY`) must only be set via environment variables — never written to `.bolt/config.json`. bolt rejects config files that contain credential fields.
 
 `BOLT_LOCAL_ENDPOINT` is not a credential and may be set in `.bolt/config.json` under `local.endpoint`.

@@ -35,8 +35,24 @@ interface ToolContext {
   logger: Logger;
   /** Allowlisted tool names for the current agent scope (undefined = all allowed) */
   allowedTools?: string[];
-  /** Progress reporter — emits real-time events to the CLI (no-op for sub-agents/Discord) */
+  /** Progress reporter — emits real-time events to the CLI (no-op for sub-agents) */
   progress: ProgressReporter;
+  /** Current session ID — used by tools that need to stamp session provenance */
+  sessionId?: string;
+  /** ID of the task currently being worked on, if any */
+  activeTaskId?: string;
+  /**
+   * Optional confirmation callback for dangerous operations.
+   * When absent (sub-agents, non-interactive mode) the operation is auto-denied.
+   */
+  confirm?: (message: string) => Promise<boolean>;
+  /**
+   * Channel reference for tools that need user interaction (user_review).
+   * When absent, user_review falls back to confirm-style interaction.
+   */
+  channel?: Channel;
+  /** MCP Client for dispatching mcp_call requests */
+  mcpClient?: McpClient;
 }
 ```
 
@@ -83,6 +99,9 @@ Call model again with updated messages
 | `file_write` | Write/overwrite a file; returns `{ path }` |
 | `file_edit` | Replace a substring in a file; returns `{ path, changed }` |
 | `web_fetch` | GET a URL; returns `{ body, statusCode, contentType }` |
+| `web_search` | Search the web via configurable provider; returns `{ results[] }` |
+| `user_review` | Present content for user approval/feedback; returns `{ approved, feedback? }` |
+| `mcp_call` | Call a tool on an external MCP server; returns the server's response |
 | `todo_create` | Add a todo item; returns `{ id }` |
 | `todo_update` | Update status or description of a todo item |
 | `todo_list` | Return the current ordered todo list |
@@ -96,24 +115,108 @@ Call model again with updated messages
 | `memory_write` | Write a fact or note to the long-term memory store (L3) |
 | `agent_suggest` | Propose an addition to `AGENT.md`; writes to `.bolt/suggestions/` for human review |
 
+### web_search
+
+Search the web using a configurable search provider. Designed for trend research and topic exploration.
+
+```ts
+interface WebSearchInput {
+  /** The search query */
+  query: string;
+  /** Maximum number of results (default: 10) */
+  maxResults?: number;
+  /** Time range filter for recency */
+  timeRange?: 'day' | 'week' | 'month' | 'year';
+  /** Search category */
+  category?: 'general' | 'news' | 'images' | 'videos';
+}
+
+interface WebSearchOutput {
+  results: Array<{
+    title: string;
+    url: string;
+    snippet: string;
+    date?: string;       // ISO 8601 if available
+    source?: string;     // e.g. "twitter.com", "youtube.com"
+  }>;
+}
+```
+
+**Provider abstraction:** The search backend is selected by `search.provider` in config. All providers implement the same interface; only the HTTP call differs.
+
+| Provider | Config value | Description |
+|----------|-------------|-------------|
+| **SearXNG** (default) | `"searxng"` | Self-hosted meta-search engine. Free, no API key. Default for development. |
+| **Brave** | `"brave"` | Brave Search API. 2000 free requests/month. Requires API key. |
+| **Serper** | `"serper"` | Google results via API. 2500 free credits. Requires API key. |
+
+### user_review
+
+Present content to the user for approval or feedback. This tool bridges the agent and the user for interactive workflows (e.g. reviewing a video storyboard before generating images).
+
+```ts
+interface UserReviewInput {
+  /** Content to present for review */
+  content: string;
+  /** Type hint for rendering in WebChannel */
+  contentType: 'script' | 'storyboard' | 'image_prompt' | 'video_prompt' | 'image' | 'video' | 'text';
+  /** Question or instruction for the reviewer */
+  question: string;
+  /** Optional file paths for media preview (images, videos) */
+  mediaFiles?: string[];
+}
+
+interface UserReviewOutput {
+  /** Whether the user approved the content */
+  approved: boolean;
+  /** Optional feedback text when not approved or requesting changes */
+  feedback?: string;
+}
+```
+
+**Channel-specific behavior:**
+- **CliChannel**: Renders content as text, prompts with `[approve/reject/feedback]:`
+- **WebChannel**: Renders rich preview (markdown, images, video player), shows approve/reject buttons with a feedback text box
+
+### mcp_call
+
+Invoke a tool on a registered MCP server. Used to integrate external services like ComfyUI.
+
+```ts
+interface McpCallInput {
+  /** Name of the registered MCP server */
+  server: string;
+  /** Tool name on the server */
+  tool: string;
+  /** Tool input arguments */
+  args: Record<string, unknown>;
+}
+
+interface McpCallOutput {
+  /** The result returned by the MCP server */
+  result: unknown;
+  /** Duration in milliseconds */
+  durationMs: number;
+}
+```
+
 ## Tool Registration
 
 Built-in tools are registered at agent startup. Additional tools can be registered at runtime:
 
 ```ts
 agent.tools.register({
-  name: 'send_discord_message',
-  description: 'Send a message to the configured Discord channel',
+  name: 'custom_tool',
+  description: 'A custom tool',
   inputSchema: {
     type: 'object',
     properties: {
-      content: { type: 'string' }
+      input: { type: 'string' }
     },
-    required: ['content']
+    required: ['input']
   },
-  execute: async ({ content }, ctx) => {
-    await discordClient.send(content);
-    return { sent: true };
+  execute: async ({ input }, ctx) => {
+    return { output: input.toUpperCase() };
   }
 });
 ```
@@ -163,7 +266,8 @@ Every tool call and result is appended to `.bolt/tool-audit.jsonl`:
 
 ```jsonc
 { "ts": "2026-03-21T10:00:00Z", "tool": "bash", "input": { "command": "ls" }, "result": { "stdout": "...", "exitCode": 0 } }
-{ "ts": "2026-03-21T10:00:01Z", "tool": "file_write", "input": { "path": "out.md", "content": "..." }, "result": { "path": "out.md" } }
+{ "ts": "2026-03-21T10:00:01Z", "tool": "web_search", "input": { "query": "AI coding trends" }, "result": { "results": [...] } }
+{ "ts": "2026-03-21T10:00:05Z", "tool": "mcp_call", "input": { "server": "comfyui", "tool": "text2img" }, "result": { "durationMs": 45000 } }
 ```
 
 ## Parallelism

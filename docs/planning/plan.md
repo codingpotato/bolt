@@ -2,19 +2,21 @@
 
 ## Overview
 
-9 sprints, each with a shippable increment. Every sprint follows the TDD cycle and agile process defined in `docs/workflow/`. Dependencies flow strictly — later sprints build on earlier ones.
+11 sprints, each with a shippable increment. Every sprint follows the TDD cycle and agile process defined in `docs/workflow/`. Dependencies flow strictly — later sprints build on earlier ones.
 
 ```
-Sprint 0 — Foundation
-Sprint 1 — Auth + Channel + CLI
-Sprint 2 — Tool Bus + Core Tools
-Sprint 3 — Agent Core Loop
-Sprint 4 — Todo & Task System
-Sprint 5 — Memory System (L2 + L3 + Context Assembly)
-Sprint 6 — Sub-agent + Skills
-Sprint 7 — Discord Channel
-Sprint 8 — Code Workflows + Content Generation
-Sprint 9 — Polish + Integration
+Sprint 0  — Foundation
+Sprint 1  — Auth + Channel + CLI
+Sprint 2  — Tool Bus + Core Tools
+Sprint 3  — Agent Core Loop
+Sprint 4  — Todo & Task System
+Sprint 5  — Memory System (L2 + L3 + Context Assembly)
+Sprint 6  — Sub-agent + Skills
+Sprint 7  — Web Search + User Review Tools
+Sprint 8  — WebChannel
+Sprint 9  — Content Generation + Trend Analysis
+Sprint 10 — MCP Client + Video Production
+Sprint 11 — Polish + Integration
 ```
 
 ---
@@ -394,7 +396,7 @@ Acceptance Criteria:
 
 ## Sprint 4 — Todo & Task System
 
-**Goal:** The agent can manage a todo list and structured tasks, with full serialization.
+**Goal:** The agent can manage a todo list and structured tasks, with full serialization, dependencies, and approval gates.
 
 ### Stories
 
@@ -443,6 +445,38 @@ Acceptance Criteria:
 - [x] Execution loop continues until all tasks are completed or failed
 ```
 
+**S4-4: Task dependencies**
+```
+As an agent,
+I want tasks to declare dependencies on other tasks,
+so that I can build ordered execution pipelines (e.g. video production).
+
+Acceptance Criteria:
+- [ ] task_create accepts optional dependsOn: string[] parameter
+- [ ] Tasks with unmet dependencies remain in 'pending' status
+- [ ] When all dependencies are 'completed', task becomes eligible to start
+- [ ] If any dependency is 'failed', dependent task is auto-failed (cascade)
+- [ ] Circular dependencies are detected at creation time and rejected with ToolError
+- [ ] task_list output includes dependsOn field
+- [ ] Unit tests cover: linear chain, fan-in, cascade failure, circular detection
+```
+
+**S4-5: Task approval gates**
+```
+As an agent,
+I want tasks to require user approval before completing,
+so that users can review creative output before expensive downstream work begins.
+
+Acceptance Criteria:
+- [ ] task_create accepts optional requiresApproval: boolean (default false)
+- [ ] When requiresApproval is true, agent must call user_review before marking task completed
+- [ ] task_update to 'awaiting_approval' status is valid only when requiresApproval is true
+- [ ] If user rejects (provides feedback), task returns to 'in_progress' for revision
+- [ ] If user approves, task transitions to 'completed'
+- [ ] task_list output includes requiresApproval and shows 'awaiting_approval' status
+- [ ] Unit tests cover: approval flow, rejection with feedback, direct complete (no approval needed)
+```
+
 ---
 
 ## Sprint 5 — Memory System
@@ -478,7 +512,7 @@ Acceptance Criteria:
 - [x] ProgressReporter interface matches docs/design/cli-progress.md
       (onSessionStart, onThinking, onToolCall, onToolResult, onTaskStatusChange,
        onContextInjection, onMemoryCompaction, onRetry)
-- [x] NoopProgressReporter implements all methods as no-ops; used by sub-agents, Discord, and tests
+- [x] NoopProgressReporter implements all methods as no-ops; used by sub-agents and tests
 - [x] CliProgressReporter writes formatted output matching the examples in docs/design/cli-progress.md
 - [x] CliProgressReporter only writes when process.stdout.isTTY is true or --verbose is passed
 - [x] --quiet flag suppresses all progress output even on a TTY
@@ -661,67 +695,194 @@ Acceptance Criteria:
 **S6-4: Built-in skills**
 ```
 As a developer,
-I want the six built-in skills shipped with bolt,
+I want the built-in skills shipped with bolt,
 so that common capabilities are available without user configuration.
 
 Acceptance Criteria:
 - [ ] write-blog-post skill is discoverable and invokable
 - [ ] review-code skill returns a CodeReviewResult (summary, issues[], approved)
 - [ ] generate-image-prompt skill returns a plain text prompt
-- [ ] generate-video-script skill returns a script + shot list in Markdown
+- [ ] generate-video-script skill returns a structured storyboard (script + scenes)
+- [ ] generate-video-prompt skill returns a motion/animation prompt
 - [ ] summarize-url skill fetches a URL and returns a structured summary
 - [ ] draft-social-post skill returns a short-form post for a given platform
+- [ ] analyze-trends skill searches the web and returns a structured trend report
 - [ ] Each skill has an input schema, output schema, and system prompt
 - [ ] Each skill has unit tests that mock the sub-agent execution
 ```
 
 ---
 
-## Sprint 7 — Discord Channel
+## Sprint 7 — Web Search + User Review Tools
 
-**Goal:** bolt can receive messages from Discord and reply in the same channel.
+**Goal:** The agent can search the web for trend research and present content for interactive user review.
 
 ### Stories
 
-**S7-1: DiscordChannel implementation**
+**S7-1: Web search provider abstraction**
 ```
-As a Discord user,
-I want to send messages to bolt in a Discord channel and receive replies,
-so that I can use bolt without opening a terminal.
+As a developer,
+I want a pluggable search provider interface,
+so that bolt can switch between SearXNG (development) and paid APIs (production).
 
 Acceptance Criteria:
-- [ ] DiscordChannel implements the Channel interface
-- [ ] Connects to the configured DISCORD_CHANNEL_ID channel using DISCORD_BOT_TOKEN
-- [ ] Incoming messages in the channel are yielded as UserTurns (metadata includes userId, channelId)
-- [ ] channel.send() posts the agent response back to the same channel
-- [ ] Unit tests mock the Discord client — no real network calls
+- [ ] SearchProvider interface: search(query, options) → SearchResult[]
+- [ ] SearXNGProvider implements the interface; calls local SearXNG JSON API
+- [ ] BraveProvider implements the interface; calls Brave Search API with BOLT_SEARCH_API_KEY
+- [ ] SerperProvider implements the interface; calls Serper API with BOLT_SEARCH_API_KEY
+- [ ] Provider is selected by config.search.provider (default: "searxng")
+- [ ] Provider connection is validated at startup; warning logged if unreachable
+- [ ] Unit tests mock HTTP calls for all three providers
 ```
 
-**S7-2: Discord Gateway reconnection**
+**S7-2: web_search tool**
 ```
-As a Discord user,
-I want bolt to automatically reconnect to Discord after a disconnection,
-so that temporary network issues do not require a manual restart.
+As an agent,
+I want to search the web by keyword and receive structured results,
+so that I can research trending topics and gather information.
 
 Acceptance Criteria:
-- [ ] Gateway disconnection triggers reconnect with exponential backoff
-- [ ] Reconnect is attempted up to 5 times before giving up
-- [ ] Reconnect attempts and failures are logged
-- [ ] Messages received during a disconnection are not silently dropped
+- [ ] web_search({ query, maxResults?, timeRange?, category? }) returns { results[] }
+- [ ] Each result has title, url, snippet, and optional date and source fields
+- [ ] maxResults defaults to config.search.maxResults (10)
+- [ ] timeRange filters results by recency (day, week, month, year)
+- [ ] category supports general, news, images, videos
+- [ ] Network/API errors return a retryable ToolError
+- [ ] web_search is registered as a built-in tool
+- [ ] Unit tests mock the search provider
+```
+
+**S7-3: user_review tool**
+```
+As an agent,
+I want to present content for user review and collect approval or feedback,
+so that the user can guide creative decisions before expensive operations.
+
+Acceptance Criteria:
+- [ ] user_review({ content, contentType, question, mediaFiles? }) returns { approved, feedback? }
+- [ ] contentType supports: script, storyboard, image_prompt, video_prompt, image, video, text
+- [ ] CliChannel renders content as formatted text; prompts [approve/reject/feedback]:
+- [ ] When channel.requestReview is available, delegates to it (enables rich WebChannel UI later)
+- [ ] When channel has no requestReview, falls back to ctx.confirm + text display
+- [ ] mediaFiles paths are validated to exist before presenting
+- [ ] user_review is registered as a built-in tool
+- [ ] Unit tests mock the channel interaction
 ```
 
 ---
 
-## Sprint 8 — Code Workflows + Content Generation
+## Sprint 8 — WebChannel
 
-**Goal:** The agent can write code, run tests, review code, and produce content — all as skills.
+**Goal:** bolt serves a web chat interface over HTTP/WebSocket, accessible from phone or desktop browser.
 
 ### Stories
 
-**S8-1: Code review skill**
+**S8-1: WebChannel HTTP + WebSocket server**
+```
+As a blogger,
+I want to access bolt via a web browser on my phone,
+so that I can control content generation without a terminal.
+
+Acceptance Criteria:
+- [ ] WebChannel implements the Channel interface
+- [ ] Starts an HTTP server on config.channels.web.port (default 3000)
+- [ ] WebSocket mode: persistent connection for bidirectional messaging
+- [ ] HTTP mode: POST /chat for user turns, SSE for streaming responses
+- [ ] Simple token authentication via BOLT_WEB_TOKEN or config.channels.web.token
+- [ ] Server only starts when config.channels.web.enabled is true
+- [ ] Unit tests mock the HTTP server
+```
+
+**S8-2: Web chat frontend**
+```
+As a blogger,
+I want a responsive chat UI in my browser,
+so that I can interact with bolt from my phone or desktop.
+
+Acceptance Criteria:
+- [ ] Single-file HTML (public/index.html) with vanilla JS and responsive CSS
+- [ ] Mobile-first design; usable on phones and desktops
+- [ ] Message list with user/agent bubbles, auto-scroll
+- [ ] Text input with send button
+- [ ] WebSocket connection with auto-reconnect
+- [ ] Progress indicators for agent thinking and tool execution
+- [ ] No build tools required — served directly by the HTTP server
+```
+
+**S8-3: Rich review UI in WebChannel**
+```
+As a blogger,
+I want to review content with approve/reject buttons and see image/video previews,
+so that I can make creative decisions from my phone.
+
+Acceptance Criteria:
+- [ ] WebChannel.requestReview() sends a rich message with content, media previews, and action buttons
+- [ ] Approve button sends { approved: true } back to the agent
+- [ ] Reject button shows a text input for feedback, then sends { approved: false, feedback }
+- [ ] Image files are served via static file endpoint and displayed inline
+- [ ] Video files are served via static file endpoint and playable inline
+- [ ] Markdown content is rendered as formatted HTML
+- [ ] WebChannel.sendMedia() sends image/video with optional caption
+```
+
+**S8-4: WebChannel daemon mode**
+```
+As a blogger,
+I want bolt to stay running as a background service,
+so that I can connect to it from my phone at any time.
+
+Acceptance Criteria:
+- [ ] bolt serve CLI command starts bolt in daemon mode with WebChannel
+- [ ] Agent stays alive between conversations, listening for new WebSocket connections
+- [ ] Multiple sequential conversations are supported (not concurrent — single-user v1)
+- [ ] Graceful shutdown on SIGTERM/SIGINT
+- [ ] Session state is preserved between conversations
+```
+
+---
+
+## Sprint 9 — Content Generation + Trend Analysis
+
+**Goal:** The agent can research trends, generate content for social media platforms, and produce video storyboards with structured output.
+
+### Stories
+
+**S9-1: analyze-trends skill**
+```
+As a blogger,
+I want bolt to search and analyse trending topics,
+so that I can create content based on what is currently popular.
+
+Acceptance Criteria:
+- [ ] analyze-trends skill accepts { topic?, platforms?, timeRange? } input
+- [ ] Uses web_search to find trending content across platforms
+- [ ] Uses web_fetch to deep-read top results for details
+- [ ] Returns structured report: { trends[], recommendedAngles[], topPosts[] }
+- [ ] Each trend has title, platform, engagement metrics (if available), and content angle
+- [ ] Skill has unit tests with mocked web_search and web_fetch
+```
+
+**S9-2: Content generation skills**
+```
+As a blogger,
+I want bolt to generate blog posts, social posts, and video scripts,
+so that I can produce content at scale.
+
+Acceptance Criteria:
+- [ ] write-blog-post produces well-structured Markdown given topic + tone
+- [ ] draft-social-post produces platform-appropriate copy (Twitter, LinkedIn, Xiaohongshu, etc.)
+- [ ] generate-video-script produces a structured Storyboard (title, summary, scenes[])
+- [ ] Each scene includes: description, dialogue, camera, duration, imagePromptHint, transitionTo
+- [ ] generate-image-prompt creates prompts optimised for target model (SDXL, Flux, etc.)
+- [ ] generate-video-prompt creates motion prompts for image-to-video generation
+- [ ] Skills can optionally use web_search and web_fetch to research before writing
+- [ ] Skills can be chained: summarize-url output feeds into write-blog-post
+```
+
+**S9-3: Code review skill**
 ```
 As a developer,
-I want bolt to review a file or diff and return a structured report,
+I want bolt to review code and return a structured report,
 so that I can get automated feedback on my code.
 
 Acceptance Criteria:
@@ -732,10 +893,10 @@ Acceptance Criteria:
 - [ ] Skill has unit tests with mocked sub-agent execution
 ```
 
-**S8-2: Automated test-and-fix workflow**
+**S9-4: Automated test-and-fix workflow**
 ```
 As an agent,
-I want to run a test suite, read failures, attempt fixes, and retry up to the configured limit,
+I want to run a test suite, read failures, attempt fixes, and retry,
 so that I can autonomously fix broken tests.
 
 Acceptance Criteria:
@@ -746,30 +907,89 @@ Acceptance Criteria:
 - [ ] Reports final pass/fail status after exhausting retries
 ```
 
-**S8-3: Content generation skills**
+---
+
+## Sprint 10 — MCP Client + Video Production
+
+**Goal:** bolt can connect to external MCP servers and orchestrate the full video production pipeline.
+
+### Stories
+
+**S10-1: MCP Client**
 ```
-As a content creator,
-I want bolt to generate blog posts, image prompts, video scripts, and social posts,
-so that I can produce content at scale.
+As a developer,
+I want bolt to connect to external MCP servers,
+so that it can integrate with services like ComfyUI for media generation.
 
 Acceptance Criteria:
-- [ ] write-blog-post produces well-structured Markdown given topic + tone
-- [ ] generate-image-prompt produces a detailed, usable image generation prompt
-- [ ] generate-video-script produces a script + shot list for short-form video
-- [ ] draft-social-post produces platform-appropriate copy (Twitter, LinkedIn, etc.)
-- [ ] Skills can optionally use web_fetch to research the topic before writing
-- [ ] Skills can be chained: summarize-url output feeds into write-blog-post
+- [ ] McpClient reads server configs from config.mcp.servers[]
+- [ ] McpClient.listTools() discovers tools from all registered servers
+- [ ] McpClient.call(server, tool, input) routes to the correct server
+- [ ] Connection health check at startup; unreachable servers logged as warning
+- [ ] Per-server timeout from config (default 300000ms for long-running operations)
+- [ ] Retry with backoff on transient connection failures
+- [ ] Unit tests mock the MCP protocol
+```
+
+**S10-2: mcp_call tool**
+```
+As an agent,
+I want to call tools on external MCP servers,
+so that I can generate images and videos via ComfyUI.
+
+Acceptance Criteria:
+- [ ] mcp_call({ server, tool, args }) dispatches to McpClient
+- [ ] Returns { result, durationMs }
+- [ ] Server not found → ToolError (non-retryable)
+- [ ] Tool not found on server → ToolError (non-retryable)
+- [ ] Timeout → ToolError (retryable)
+- [ ] mcp_call is registered as a built-in tool
+- [ ] Progress events emitted during long-running MCP calls
+- [ ] Unit tests mock the MCP client
+```
+
+**S10-3: Video production workflow**
+```
+As a blogger,
+I want bolt to orchestrate the full video production pipeline,
+so that I can go from a topic to finished video clips with human-in-the-loop review.
+
+Acceptance Criteria:
+- [ ] Agent creates a task DAG for video production (analyze → script → image prompts → images → video prompts → videos)
+- [ ] Each task has dependsOn linking to previous step
+- [ ] Each task has requiresApproval: true
+- [ ] user_review is called at each approval gate
+- [ ] mcp_call(comfyui, text2img) generates images from approved prompts
+- [ ] mcp_call(comfyui, img2video) generates video clips from approved images + motion prompts
+- [ ] Generated media files are saved to the workspace
+- [ ] User can reject and request changes at any gate; agent revises and re-presents
+- [ ] Integration test covers the full pipeline with mocked MCP and channel
+```
+
+**S10-4: Notification system**
+```
+As a blogger,
+I want to be notified when long-running tasks complete,
+so that I don't have to watch the screen while images/videos generate.
+
+Acceptance Criteria:
+- [ ] System notification on macOS (osascript) and Linux (notify-send) when a task completes
+- [ ] Notification includes task title and status
+- [ ] Provider selected by config.notifications.provider (default: "system")
+- [ ] "none" provider disables notifications
+- [ ] WebChannel sends real-time progress via WebSocket (no extra notification needed)
+- [ ] Unit tests mock system commands
 ```
 
 ---
 
-## Sprint 9 — Polish + Integration
+## Sprint 11 — Polish + Integration
 
 **Goal:** Error recovery paths are hardened, end-to-end flows work, and the system is ready for v1 release.
 
 ### Stories
 
-**S9-1: End-to-end CLI session test**
+**S11-1: End-to-end CLI session test**
 ```
 As a developer,
 I want an end-to-end test that runs a full agent session via CliChannel,
@@ -782,7 +1002,7 @@ Acceptance Criteria:
 - [ ] Test completes deterministically with no real network calls
 ```
 
-**S9-2: State recovery from corrupt files**
+**S11-2: State recovery from corrupt files**
 ```
 As a developer,
 I want bolt to recover gracefully from corrupt state files,
@@ -796,7 +1016,7 @@ Acceptance Criteria:
 - [ ] All recovery paths are unit tested with injected corrupt fixtures
 ```
 
-**S9-3: Embedding memory search backend (optional)**
+**S11-3: Embedding memory search backend (optional)**
 ```
 As a power user,
 I want to switch memory search to an embedding-based backend,
@@ -809,7 +1029,7 @@ Acceptance Criteria:
 - [ ] Backend is interchangeable with no changes to memory_search tool interface
 ```
 
-**S9-4: README and getting-started documentation**
+**S11-4: README and getting-started documentation**
 ```
 As a new user,
 I want clear setup instructions in the README,
@@ -818,7 +1038,8 @@ so that I can get bolt running in under 5 minutes.
 Acceptance Criteria:
 - [x] README covers: prerequisites, install, auth setup, first run
 - [ ] Includes example of running a skill from the CLI
-- [ ] Includes example of connecting to Discord
+- [ ] Includes example of using WebChannel from a phone
+- [ ] Includes example of connecting to ComfyUI via MCP
 - [x] Links to docs/ for deeper reference
 ```
 
@@ -840,13 +1061,17 @@ S0 (Foundation)
 │         │        │         + Skills)
 │         └────────┴─────┐    │
 │                        ▼    ▼
-│                       S7   S8
-│                    (Discord)(Workflows
-│                             + Content)
-│                         │    │
-│                         └────┘
-│                              │
-└─────────────────────────────►S9 (Polish)
+│                S7 (Web Search + User Review)
+│                        │
+│                ┌───────┼────────┐
+│                ▼                ▼
+│         S8 (WebChannel)   S9 (Content + Trends)
+│                │                │
+│                └───────┬────────┘
+│                        ▼
+│                S10 (MCP + Video Production)
+│                        │
+└───────────────────────►S11 (Polish)
 ```
 
 ---
@@ -855,11 +1080,12 @@ S0 (Foundation)
 
 All of the following must be true before tagging v1:
 
-- [ ] All Sprint 0–8 stories are complete and meet their acceptance criteria
+- [ ] All Sprint 0–10 stories are complete and meet their acceptance criteria
 - [ ] CI pipeline is green on `main`
 - [ ] Coverage thresholds met across all modules
 - [ ] No `any` types (`tsc --noEmit` passes)
-- [ ] E2E test passes (S9-1)
-- [ ] State recovery paths tested (S9-2)
-- [ ] README is complete (S9-4)
-- [ ] WebChannel is documented as planned but not implemented
+- [ ] E2E test passes (S11-1)
+- [ ] State recovery paths tested (S11-2)
+- [ ] README is complete (S11-4)
+- [ ] WebChannel is functional and tested on mobile
+- [ ] At least one full video production pipeline tested end-to-end (with mocked ComfyUI)

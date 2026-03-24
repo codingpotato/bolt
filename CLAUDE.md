@@ -1,10 +1,10 @@
 # bolt
 
-An autonomous AI CLI agent built with TypeScript and the Anthropic SDK.
+An autonomous AI agent for social media content creators, built with TypeScript and the Anthropic SDK.
 
 ## Project Overview
 
-bolt is a self-directed AI agent operated from the command line. It can connect to Discord, execute shell commands, edit files, browse the web, manage tasks, and generate content.
+bolt is an AI agent designed for social media bloggers. It automates the content creation workflow: trend research, content planning, interactive review, and media generation (text-to-image and image-to-video via ComfyUI MCP). It operates via CLI and a web chat interface (WebChannel) accessible from a phone.
 
 ## Documentation Index
 
@@ -21,10 +21,10 @@ Read these docs before making decisions in the relevant area:
 | Agent Prompt | `docs/design/agent-prompt.md` | AGENT.md loading, system prompt construction, agent_suggest flow |
 | CLI Progress | `docs/design/cli-progress.md` | ProgressReporter interface, CliProgressReporter output format, TTY guard |
 | Memory System | `docs/design/memory-system.md` | How context compaction and persistent memory work |
-| Task System | `docs/design/task-system.md` | Task model, todo list tools, sub-agent delegation |
+| Task System | `docs/design/task-system.md` | Task model, dependencies, approval gates, todo list tools, sub-agent delegation |
 | Skills System | `docs/design/skills-system.md` | Skill definition, discovery, invocation, and chaining |
 | Code Workflows | `docs/design/code-workflows.md` | Writing code, running tests, code review |
-| Content Generation | `docs/design/content-generation.md` | Articles, image prompts, social posts, video scripts |
+| Content Generation | `docs/design/content-generation.md` | Trend analysis, social posts, video production pipeline, MCP integration |
 | Configuration | `docs/design/configuration.md` | All config keys, env vars, `.bolt/config.json` schema |
 | Logging | `docs/design/logging.md` | Structured logger, log levels, `.bolt/bolt.log` format, LLM request logging |
 | Unit Testing | `docs/testing/unit-testing.md` | TDD cycle, test conventions, coverage requirements |
@@ -35,18 +35,23 @@ Read these docs before making decisions in the relevant area:
 ## Core Capabilities
 
 - **Tools execution** — model drives tool calls via the Anthropic tool-use API; Tool Bus dispatches and returns results
-- **CLI interface** — all interaction happens via the command line
-- **Discord integration** — connects to and operates within Discord channels
+- **CLI interface** — primary development and debug interface
+- **WebChannel** — web chat interface (HTTP/WebSocket) accessible from phone or desktop browser
+- **Web search** — configurable search provider (SearXNG/Brave/Serper) for trend research
+- **User review** — interactive approval/feedback loop for creative content
+- **MCP client** — connects to external MCP servers (ComfyUI) for image/video generation
 - **Bash execution** — runs shell commands on the host system
 - **File editing** — reads and modifies files on disk
 - **Web fetching** — retrieves content from URLs
 - **Todo / task management** — creates and updates todo lists, executes them step by step
 - **Multi-level memory** — compacts context on overflow, persists history for future retrieval
-- **Task serialization** — creates, serializes, and executes tasks; supports pause/resume
+- **Task serialization** — creates, serializes, and executes tasks; supports pause/resume with dependencies and approval gates
 - **Sub-agent delegation** — spawns child agents for subtasks; contexts are fully isolated
 - **Skills** — loadable, composable capability modules invokable by name from CLI or by the agent
 - **Code workflows** — writes code, writes tests, runs tests, performs code review
-- **Content generation** — produces social media content: articles, images, short videos
+- **Content generation** — trend analysis, social posts, articles, video scripts/storyboards, image/video prompts
+- **Media generation** — text-to-image and image-to-video via ComfyUI MCP server
+- **Notifications** — system desktop notifications for long-running tasks
 
 ## Tech Stack
 

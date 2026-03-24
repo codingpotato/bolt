@@ -955,14 +955,16 @@ I want bolt to orchestrate the full video production pipeline,
 so that I can go from a topic to finished video clips with human-in-the-loop review.
 
 Acceptance Criteria:
+- [ ] Agent creates a content project directory projects/<project-id>/ with project.json manifest at workflow start
+- [ ] project.json manifest schema matches docs/design/content-generation.md (ContentProject interface)
 - [ ] Agent creates a task DAG for video production (analyze → script → image prompts → images → video prompts → videos)
-- [ ] Each task has dependsOn linking to previous step
-- [ ] Each task has requiresApproval: true
-- [ ] user_review is called at each approval gate
-- [ ] mcp_call(comfyui, text2img) generates images from approved prompts
-- [ ] mcp_call(comfyui, img2video) generates video clips from approved images + motion prompts
-- [ ] Generated media files are saved to the workspace
-- [ ] User can reject and request changes at any gate; agent revises and re-presents
+- [ ] Each task has dependsOn linking to previous step; each task has requiresApproval: true
+- [ ] First task result stores { projectId, manifestPath } as JSON so all downstream tasks can locate the project
+- [ ] Each task reads project.json via file_read to find input artifacts; writes outputs to the scene directory
+- [ ] Manifest artifact status is updated to 'draft' after generation, 'approved' after user_review approval
+- [ ] mcp_call(comfyui, text2img) generates images; downloaded to projects/<id>/scenes/scene-<NN>/image.png
+- [ ] mcp_call(comfyui, img2video) generates video clips; downloaded to projects/<id>/scenes/scene-<NN>/clip.mp4
+- [ ] User can reject and request changes at any gate; agent revises and re-presents; manifest status reflects rejections
 - [ ] Integration test covers the full pipeline with mocked MCP and channel
 ```
 

@@ -111,10 +111,12 @@ User: "Make a short video about AI coding trends"
          Notification sent to user
 ```
 
-Each step is a separate Task with `dependsOn` linking to the previous step and `requiresApproval: true`. This enables:
-- Pausing and resuming the workflow across sessions
-- Partial re-execution (e.g. redo step 4 for scene 3 only)
-- Full audit trail of all generated content
+Each step is a separate Task with `dependsOn` linking to the previous step and `requiresApproval: true`. All files are saved to a content project directory (see **Content Project** below); the manifest path is stored in the first task's result so every subsequent task knows exactly where to find its inputs.
+
+This enables:
+- Pausing and resuming the workflow across sessions — the agent reads `project.json` to reconstruct state
+- Partial re-execution (e.g. redo step 4 for scene 3 only) — only that scene's artifacts are regenerated
+- Full audit trail of all generated content — every artifact has a `status` in the manifest
 
 ## Storyboard Schema
 
@@ -140,18 +142,111 @@ interface Scene {
 }
 ```
 
+## Content Project
+
+Every video production run is a **content project** — a self-contained directory under the user's workspace that holds all intermediate and final files for that run. The project directory is the single source of truth for file locations throughout the workflow.
+
+### Directory Structure
+
+```
+<workspace>/
+  projects/
+    <project-id>/               ← one directory per production run
+      project.json              ← manifest: tracks all artifacts and their status
+      01-trend-report.md        ← output of analyze-trends
+      02-storyboard.json        ← structured storyboard from generate-video-script
+      scenes/
+        scene-01/
+          prompt.md             ← image prompt for scene 1
+          image.png             ← generated image for scene 1
+          video-prompt.md       ← motion prompt for scene 1
+          clip.mp4              ← generated video clip for scene 1
+        scene-02/
+          ...
+      final/
+        video.mp4               ← assembled final video (future)
+```
+
+`<project-id>` is a slug derived from the topic and date, e.g. `ai-coding-trends-2026-03-24`. The `projects/` directory lives inside the user's workspace root (not inside `.bolt/`) so the user can browse and manage content directly.
+
+### Project Manifest (`project.json`)
+
+The manifest is written by the agent at project creation and updated after every step. It is the definitive index of all files and their status — the agent reads this file whenever it needs to locate an artifact.
+
+```ts
+interface ContentProject {
+  id: string;                  // slug, e.g. "ai-coding-trends-2026-03-24"
+  title: string;               // human-readable, e.g. "AI Coding Trends"
+  topic: string;               // original user request
+  createdAt: string;           // ISO 8601
+  updatedAt: string;
+  dir: string;                 // absolute path to project directory
+  taskIds: {                   // maps workflow steps to task IDs
+    analyzeTrends?: string;
+    generateScript?: string;
+    generateImagePrompts?: string;
+    generateImages?: string;
+    generateVideoPrompts?: string;
+    generateVideos?: string;
+  };
+  artifacts: {
+    trendReport?: Artifact;
+    storyboard?: Artifact;
+    scenes: SceneArtifacts[];
+  };
+}
+
+interface Artifact {
+  path: string;                // relative to project dir, e.g. "01-trend-report.md"
+  status: 'pending' | 'draft' | 'approved' | 'failed';
+  approvedAt?: string;
+}
+
+interface SceneArtifacts {
+  sceneNumber: number;
+  imagePrompt?: Artifact;      // scenes/scene-01/prompt.md
+  image?: Artifact;            // scenes/scene-01/image.png
+  videoPrompt?: Artifact;      // scenes/scene-01/video-prompt.md
+  clip?: Artifact;             // scenes/scene-01/clip.mp4
+}
+```
+
+### How the Agent Finds Files
+
+The task result for the project-creation task stores the manifest path as JSON:
+
+```json
+{ "projectId": "ai-coding-trends-2026-03-24", "manifestPath": "projects/ai-coding-trends-2026-03-24/project.json" }
+```
+
+Every subsequent task reads `project.json` with `file_read` to locate the files it needs. There is no reliance on remembering paths across task boundaries — the manifest is the lookup table.
+
+Example: the `generate-images` task reads the manifest to find all approved `imagePrompt` artifacts, generates images for each, saves them to the scene directory, and updates each scene's `image` artifact status in the manifest.
+
+### File Naming Conventions
+
+| Artifact | Path | Notes |
+|----------|------|-------|
+| Trend report | `01-trend-report.md` | Markdown, numbered for sort order |
+| Storyboard | `02-storyboard.json` | Structured JSON matching `Storyboard` schema |
+| Image prompt | `scenes/scene-<NN>/prompt.md` | Zero-padded scene number |
+| Generated image | `scenes/scene-<NN>/image.png` | PNG from ComfyUI |
+| Video prompt | `scenes/scene-<NN>/video-prompt.md` | Motion prompt for img2video |
+| Video clip | `scenes/scene-<NN>/clip.mp4` | MP4 from ComfyUI |
+| Final video | `final/video.mp4` | Assembled output (future) |
+
 ## MCP Integration (ComfyUI)
 
 Image and video generation are handled by an external ComfyUI MCP server (separate project).
 
 ### File Path Mapping
 
-ComfyUI runs on a separate machine (GPU server) and returns paths on its own filesystem. The ComfyUI MCP Server is responsible for making generated files accessible to bolt:
+ComfyUI runs on a separate machine (GPU server) and produces files on its own filesystem. The ComfyUI MCP Server is responsible for making generated files accessible to bolt:
 
-- The MCP server copies completed files to a shared location accessible from bolt's machine (e.g. via NFS, scp, or HTTP download), or
-- The MCP server returns an HTTP URL and bolt downloads the file using `web_fetch`
+- The MCP server returns an HTTP `downloadUrl`; bolt downloads the file using `web_fetch` and saves it to the project scene directory using `file_write`
+- Alternatively the MCP server may push files to a shared NFS mount and return the local path directly
 
-Either way, the ComfyUI MCP server's tool response must include a path or URL that bolt can use to store the file locally. bolt saves incoming media to `.bolt/media/<filename>` (within its workspace) before passing paths to subsequent tools or `user_review`. The workflow agent is responsible for calling `file_write` or a download helper to land the file locally before referencing it downstream.
+The `img2video` call passes the **local workspace path** of the source image (after it has been downloaded), not the remote ComfyUI path. The MCP server must accept a URL or uploaded binary for the source image.
 
 ### text2img
 
@@ -170,52 +265,59 @@ Either way, the ComfyUI MCP server's tool response must include a path or URL th
   }
 }
 
-// mcp_call result (MCP server returns a URL or network path)
+// mcp_call result — MCP server returns a downloadUrl
 {
   result: {
-    downloadUrl: "http://gpu-server:8188/output/img_001.png",  // fetched by bolt → .bolt/media/img_001.png
+    downloadUrl: "http://gpu-server:8188/output/tmp_abc123.png",
     seed: 42,
     durationMs: 45000
   }
 }
+// bolt then: web_fetch(downloadUrl) → file_write("projects/<id>/scenes/scene-01/image.png")
+// then: updates project.json scene[0].image.status = 'draft'
 ```
 
 ### img2video
 
 ```ts
-// mcp_call input
+// mcp_call input — imageUrl is the downloadable URL of the approved local image
 {
   server: "comfyui",
   tool: "img2video",
   args: {
-    imagePath: "/output/img_001.png",
+    imageUrl: "http://bolt-host:PORT/media/projects/ai-coding-trends-2026-03-24/scenes/scene-01/image.png",
     motionPrompt: "slow zoom in, subtle parallax...",
     duration?: 5,
     fps?: 24
   }
 }
 
-// mcp_call result (MCP server returns a URL or network path)
+// mcp_call result
 {
   result: {
-    downloadUrl: "http://gpu-server:8188/output/vid_001.mp4",  // fetched by bolt → .bolt/media/vid_001.mp4
+    downloadUrl: "http://gpu-server:8188/output/tmp_def456.mp4",
     durationMs: 120000
   }
 }
+// bolt then: web_fetch(downloadUrl) → file_write("projects/<id>/scenes/scene-01/clip.mp4")
+// then: updates project.json scene[0].clip.status = 'draft'
 ```
+
+Note: for the `img2video` call to work, the local image file must be accessible to the ComfyUI server. The WebChannel static file server (S8-1) doubles as the local media server for this purpose. Alternatively, bolt can base64-encode the image and pass it inline if the MCP server supports it.
 
 ## Tool Usage Summary
 
 | Tool | Usage in content generation |
 |------|----------------------------|
 | `web_search` | Trend research, topic exploration, competitor analysis |
-| `web_fetch` | Deep-read specific articles/pages found via search |
-| `user_review` | Present drafts/storyboards/prompts/media for user approval |
+| `web_fetch` | Deep-read specific articles/pages; download generated media from ComfyUI |
+| `file_read` | Read `project.json` manifest to locate artifacts; read prompts/storyboard for downstream steps |
+| `file_write` | Save all artifacts (trend report, storyboard, prompts, downloaded images/videos, updated manifest) |
+| `user_review` | Present drafts/storyboards/prompts/media for user approval; update manifest status on result |
 | `mcp_call` | Generate images (text2img) and videos (img2video) via ComfyUI |
-| `file_write` | Save generated content, prompts, and final media to disk |
 | `skill_run` | Invoke content generation skills (analyze-trends, generate-video-script, etc.) |
-| `task_create` | Set up the task DAG for multi-step workflows |
-| `task_update` | Track progress through the workflow |
+| `task_create` | Set up the task DAG; first task result stores manifest path for all downstream tasks |
+| `task_update` | Track progress; task result JSON references project ID and manifest path |
 
 ## Chaining Example
 

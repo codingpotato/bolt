@@ -18,6 +18,11 @@ export interface Config {
   local: {
     endpoint?: string;
   };
+  search: {
+    provider: 'searxng' | 'brave' | 'serper';
+    endpoint?: string;
+    maxResults: number;
+  };
   agentPrompt: {
     projectFile: string;
     userFile: string;
@@ -65,6 +70,10 @@ const DEFAULTS: Config = {
   logLevel: 'info',
   auth: {},
   local: {},
+  search: {
+    provider: 'searxng',
+    maxResults: 10,
+  },
   agentPrompt: {
     projectFile: '.bolt/AGENT.md',
     userFile: '~/.bolt/AGENT.md',
@@ -116,13 +125,14 @@ const CREDENTIAL_FIELDS = [
 // Intentionally excludes `logLevel` (env-var only: BOLT_LOG_LEVEL) and
 // `dataDir` (computed from BOLT_DATA_DIR, used to locate the file itself).
 const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(
-  ['model', 'auth', 'local', 'agentPrompt', 'memory', 'tasks', 'tools', 'codeWorkflows', 'cli', 'channels'] satisfies (keyof Config)[]
+  ['model', 'auth', 'local', 'search', 'agentPrompt', 'memory', 'tasks', 'tools', 'codeWorkflows', 'cli', 'channels'] satisfies (keyof Config)[]
 );
 
 // Validation constants — defined once, not recreated on every call.
 const VALID_LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 const VALID_AUTH_MODES = ['api-key', 'subscription', 'local'] as const;
 const VALID_SEARCH_BACKENDS = ['keyword', 'embedding'] as const;
+const VALID_SEARCH_PROVIDERS = ['searxng', 'brave', 'serper'] as const;
 const VALID_WEB_MODES = ['http', 'websocket'] as const;
 
 function deepMerge(
@@ -201,6 +211,7 @@ function applyEnvOverrides(config: Config): Config {
     ...config,
     auth: { ...config.auth },
     local: { ...config.local },
+    search: { ...config.search },
     agentPrompt: { ...config.agentPrompt },
     memory: { ...config.memory },
     tasks: { ...config.tasks },
@@ -259,6 +270,18 @@ function validate(config: Config): void {
   if (!(VALID_SEARCH_BACKENDS as readonly string[]).includes(config.memory.searchBackend)) {
     throw new ConfigError(
       `config.memory.searchBackend must be one of ${VALID_SEARCH_BACKENDS.join(', ')}, got: ${config.memory.searchBackend}`
+    );
+  }
+
+  if (!(VALID_SEARCH_PROVIDERS as readonly string[]).includes(config.search.provider)) {
+    throw new ConfigError(
+      `config.search.provider must be one of ${VALID_SEARCH_PROVIDERS.join(', ')}, got: ${config.search.provider}`
+    );
+  }
+
+  if (!Number.isInteger(config.search.maxResults) || config.search.maxResults < 1) {
+    throw new ConfigError(
+      `config.search.maxResults must be a positive integer, got: ${config.search.maxResults}`
     );
   }
 

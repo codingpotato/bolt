@@ -110,6 +110,7 @@ async function main(): Promise<void> {
       userFile: '~/.bolt/AGENT.md',
       suggestionsPath: '.bolt/suggestions',
     },
+    search: { provider: 'searxng' as const, maxResults: 10 },
     tasks: { maxSubtaskDepth: 5, maxRetries: 3 },
     channels: {
       web: { enabled: false, port: 3000, mode: 'http' as const },

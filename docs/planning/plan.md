@@ -726,13 +726,13 @@ I want a pluggable search provider interface,
 so that bolt can switch between SearXNG (development) and paid APIs (production).
 
 Acceptance Criteria:
-- [ ] SearchProvider interface: search(query, options) → SearchResult[]
-- [ ] SearXNGProvider implements the interface; calls local SearXNG JSON API
-- [ ] BraveProvider implements the interface; calls Brave Search API with BOLT_SEARCH_API_KEY
-- [ ] SerperProvider implements the interface; calls Serper API with BOLT_SEARCH_API_KEY
-- [ ] Provider is selected by config.search.provider (default: "searxng")
-- [ ] Provider connection is validated at startup; warning logged if unreachable
-- [ ] Unit tests mock HTTP calls for all three providers
+- [x] SearchProvider interface: search(query, options) → SearchResult[]
+- [x] SearXNGProvider implements the interface; calls local SearXNG JSON API
+- [x] BraveProvider implements the interface; calls Brave Search API with BOLT_SEARCH_API_KEY
+- [x] SerperProvider implements the interface; calls Serper API with BOLT_SEARCH_API_KEY
+- [x] Provider is selected by config.search.provider (default: "searxng")
+- [x] Provider connection is validated at startup; warning logged if unreachable
+- [x] Unit tests mock HTTP calls for all three providers
 ```
 
 **S7-2: web_search tool**

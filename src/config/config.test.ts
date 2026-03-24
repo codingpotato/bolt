@@ -296,5 +296,40 @@ describe('resolveConfig', () => {
       mockConfigFile({ auth: {} });
       expect(() => resolveConfig()).not.toThrow();
     });
+
+    it('throws ConfigError for invalid search.provider', () => {
+      mockConfigFile({ search: { provider: 'google' } });
+      expect(() => resolveConfig()).toThrow(
+        'config.search.provider must be one of searxng, brave, serper, got: google'
+      );
+    });
+
+    it('throws ConfigError for non-positive search.maxResults', () => {
+      mockConfigFile({ search: { maxResults: 0 } });
+      expect(() => resolveConfig()).toThrow(
+        'config.search.maxResults must be a positive integer, got: 0'
+      );
+    });
+
+    it('throws ConfigError for non-integer search.maxResults', () => {
+      mockConfigFile({ search: { maxResults: 2.5 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+    });
+  });
+
+  describe('search config defaults', () => {
+    it('returns default search config when not set', () => {
+      const config = resolveConfig();
+      expect(config.search.provider).toBe('searxng');
+      expect(config.search.maxResults).toBe(10);
+      expect(config.search.endpoint).toBeUndefined();
+    });
+
+    it('merges search config from file', () => {
+      mockConfigFile({ search: { provider: 'brave', maxResults: 5 } });
+      const config = resolveConfig();
+      expect(config.search.provider).toBe('brave');
+      expect(config.search.maxResults).toBe(5);
+    });
   });
 });

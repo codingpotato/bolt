@@ -759,14 +759,14 @@ I want to present content for user review and collect approval or feedback,
 so that the user can guide creative decisions before expensive operations.
 
 Acceptance Criteria:
-- [ ] user_review({ content, contentType, question, mediaFiles? }) returns { approved, feedback? }
-- [ ] contentType supports: script, storyboard, image_prompt, video_prompt, image, video, text
-- [ ] CliChannel renders content as formatted text; prompts [approve/reject/feedback]:
-- [ ] When channel.requestReview is available, delegates to it (enables rich WebChannel UI later)
-- [ ] When channel has no requestReview, falls back to ctx.confirm + text display
-- [ ] mediaFiles paths are validated to exist before presenting
-- [ ] user_review is registered as a built-in tool
-- [ ] Unit tests mock the channel interaction
+- [x] user_review({ content, contentType, question, mediaFiles? }) returns { approved, feedback? }
+- [x] contentType supports: script, storyboard, image_prompt, video_prompt, image, video, text
+- [x] CliChannel renders content as formatted text; prompts [approve/reject/feedback]:
+- [x] When channel.requestReview is available, delegates to it (enables rich WebChannel UI later)
+- [x] When channel has no requestReview, falls back to ctx.confirm + text display
+- [x] mediaFiles paths are validated to exist before presenting
+- [x] user_review is registered as a built-in tool
+- [x] Unit tests mock the channel interaction
 ```
 
 ---

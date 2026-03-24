@@ -136,4 +136,81 @@ describe('CliChannel', () => {
       expect(channel).toBeInstanceOf(CliChannel);
     });
   });
+
+  describe('requestReview()', () => {
+    /** Start receive() so that rl is initialised, then call requestReview(). */
+    async function withReceive(
+      lines: string[],
+      fn: (channel: CliChannel, output: () => string) => Promise<void>,
+    ): Promise<void> {
+      const { stream, data } = makeOutput();
+      const channel = new CliChannel(makeInput(lines), stream);
+      const iter = channel.receive()[Symbol.asyncIterator]();
+      void iter.next(); // initialise rl without consuming a line
+      await fn(channel, data);
+      await iter.return?.();
+    }
+
+    it('returns approved: true when user enters "approve"', async () => {
+      await withReceive(['approve'], async (channel) => {
+        const result = await channel.requestReview({
+          content: 'hello',
+          contentType: 'text',
+          question: 'OK?',
+        });
+        expect(result).toEqual({ approved: true });
+      });
+    });
+
+    it('returns approved: true when user enters "y"', async () => {
+      await withReceive(['y'], async (channel) => {
+        const result = await channel.requestReview({
+          content: 'hello',
+          contentType: 'text',
+          question: 'OK?',
+        });
+        expect(result.approved).toBe(true);
+      });
+    });
+
+    it('returns approved: false when user enters "reject"', async () => {
+      await withReceive(['reject'], async (channel) => {
+        const result = await channel.requestReview({
+          content: 'hello',
+          contentType: 'text',
+          question: 'OK?',
+        });
+        expect(result).toEqual({ approved: false });
+      });
+    });
+
+    it('returns feedback when user enters "feedback" then feedback text', async () => {
+      const { stream } = makeOutput();
+      const channel = new CliChannel(Readable.from(''), stream);
+      // Stub question() to return controlled answers without depending on readline timing
+      vi.spyOn(channel, 'question')
+        .mockResolvedValueOnce('feedback')
+        .mockResolvedValueOnce('needs more detail');
+
+      const result = await channel.requestReview({
+        content: 'hello',
+        contentType: 'script',
+        question: 'Review?',
+      });
+      expect(result).toEqual({ approved: false, feedback: 'needs more detail' });
+    });
+
+    it('writes content and question to output', async () => {
+      await withReceive(['approve'], async (channel, data) => {
+        await channel.requestReview({
+          content: 'my content',
+          contentType: 'storyboard',
+          question: 'Looks good?',
+        });
+        expect(data()).toContain('my content');
+        expect(data()).toContain('Looks good?');
+        expect(data()).toContain('storyboard');
+      });
+    });
+  });
 });

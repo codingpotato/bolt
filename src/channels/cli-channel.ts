@@ -1,5 +1,5 @@
 import { createInterface, type Interface } from 'node:readline';
-import type { Channel, UserTurn } from './channel';
+import type { Channel, UserTurn, UserReviewRequest, UserReviewResponse } from './channel';
 
 // ANSI escape helpers
 const RESET = '\x1b[0m';
@@ -75,6 +75,32 @@ export class CliChannel implements Channel {
         resolve(answer);
       });
     });
+  }
+
+  /**
+   * Display content for user review and collect approve/reject/feedback via readline.
+   * Prompts: [approve/reject/feedback]:
+   *   - "y", "yes", "approve" → { approved: true }
+   *   - "f", "feedback"       → prompts for feedback text → { approved: false, feedback }
+   *   - anything else         → { approved: false }
+   */
+  async requestReview(request: UserReviewRequest): Promise<UserReviewResponse> {
+    const sep = '─'.repeat(40);
+    this.output.write(`\n${sep}\n[${request.contentType}] ${request.question}\n${sep}\n`);
+    this.output.write(`${request.content}\n${sep}\n\n`);
+
+    const answer = (await this.question('[approve/reject/feedback]: ')).trim().toLowerCase();
+
+    if (answer === 'y' || answer === 'yes' || answer === 'approve') {
+      return { approved: true };
+    }
+
+    if (answer === 'f' || answer === 'feedback') {
+      const feedback = (await this.question('Feedback: ')).trim();
+      return { approved: false, feedback: feedback || undefined };
+    }
+
+    return { approved: false };
   }
 
   async send(response: string): Promise<void> {

@@ -802,15 +802,15 @@ I want a responsive chat UI in my browser,
 so that I can interact with bolt from my phone or desktop.
 
 Acceptance Criteria:
-- [ ] Single-file HTML (public/index.html) with vanilla JS and responsive CSS
-- [ ] Mobile-first design; usable on phones and desktops
-- [ ] Message list with user/agent bubbles, auto-scroll
-- [ ] Text input with send button
-- [ ] WebSocket connection with auto-reconnect
-- [ ] Progress indicators for agent thinking and tool execution
-- [ ] No build tools required — served directly by the HTTP server
-- [ ] Read-only mode: when the connection is not the active one, the input is disabled and a banner reads "Observing — another session is active"
-- [ ] When the client is promoted from read-only to active, the banner is removed and input is enabled automatically
+- [x] Single-file HTML (public/index.html) with vanilla JS and responsive CSS
+- [x] Mobile-first design; usable on phones and desktops
+- [x] Message list with user/agent bubbles, auto-scroll
+- [x] Text input with send button
+- [x] WebSocket connection with auto-reconnect
+- [x] Progress indicators for agent thinking and tool execution
+- [x] No build tools required — served directly by the HTTP server
+- [x] Read-only mode: when the connection is not the active one, the input is disabled and a banner reads "Observing — another session is active"
+- [x] When the client is promoted from read-only to active, the banner is removed and input is enabled automatically
 ```
 
 **S8-3: Rich review UI in WebChannel**

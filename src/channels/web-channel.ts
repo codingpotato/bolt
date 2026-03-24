@@ -1,6 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Channel, UserTurn, UserReviewRequest, UserReviewResponse } from './channel';
+
+const INDEX_HTML_PATH = path.join(__dirname, '../../public', 'index.html');
 
 /** Shape of messages sent from client → server over WebSocket or HTTP. */
 interface ClientMessage {
@@ -209,6 +213,11 @@ export class WebChannel implements Channel {
 
     const url = new URL(req.url ?? '/', 'http://localhost');
 
+    if (req.method === 'GET' && url.pathname === '/') {
+      this.handleIndex(res);
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/chat') {
       this.handleHttpChat(req, res);
       return;
@@ -221,6 +230,18 @@ export class WebChannel implements Channel {
 
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'not found' }));
+  }
+
+  private handleIndex(res: ServerResponse): void {
+    readFile(INDEX_HTML_PATH, 'utf-8')
+      .then((html) => {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      })
+      .catch(() => {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'not found' }));
+      });
   }
 
   private handleHttpChat(req: IncomingMessage, res: ServerResponse): void {

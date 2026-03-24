@@ -31,11 +31,26 @@ import { SuggestionStore } from '../suggestions/suggestion-store';
 import { handleSuggestionsCli } from '../suggestions/suggestions-cli';
 import { createSubagentRunTool } from '../tools/subagent-run';
 import { runSubagent } from '../subagent/subagent-runner';
+import { loadSkills } from '../skills/skill-loader';
+import { handleSkillsCli } from '../skills/skills-cli';
 import { resolve, join } from 'node:path';
+import { homedir } from 'node:os';
 
 async function main(): Promise<void> {
   const config = resolveConfig();
   const args = process.argv.slice(2);
+
+  // Dispatch 'bolt skills [...]' sub-command before starting the agent.
+  if (args[0] === 'skills') {
+    const cwd = process.cwd();
+    const dataDir = resolve(cwd, config.dataDir);
+    const projectSkillsDir = join(dataDir, 'skills');
+    const userSkillsDir = join(homedir(), '.bolt', 'skills');
+    const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
+    const skills = await loadSkills(projectSkillsDir, userSkillsDir, (msg) => logger.warn(msg));
+    await handleSkillsCli(args.slice(1), skills, (s) => process.stdout.write(s + '\n'));
+    return;
+  }
 
   // Dispatch 'bolt suggestions [...]' sub-command before starting the agent.
   if (args[0] === 'suggestions') {

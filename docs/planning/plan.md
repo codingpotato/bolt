@@ -670,12 +670,12 @@ I want bolt to discover and load .skill.md files from .bolt/skills/ and ~/.bolt/
 so that users can add custom skills without modifying core code.
 
 Acceptance Criteria:
-- [ ] .bolt/skills/ is searched first (higher priority than ~/.bolt/skills/)
-- [ ] Name collision: .bolt/skills/ wins over ~/.bolt/skills/
-- [ ] Skill frontmatter (name, description, inputSchema, outputSchema, allowedTools?) is parsed
-- [ ] Body of the .skill.md file becomes the system prompt
-- [ ] Invalid frontmatter emits a warning and skips the skill
-- [ ] bolt skills list CLI command displays all discovered skills
+- [x] .bolt/skills/ is searched first (higher priority than ~/.bolt/skills/)
+- [x] Name collision: .bolt/skills/ wins over ~/.bolt/skills/
+- [x] Skill frontmatter (name, description, inputSchema, outputSchema, allowedTools?) is parsed
+- [x] Body of the .skill.md file becomes the system prompt
+- [x] Invalid frontmatter emits a warning and skips the skill
+- [x] bolt skills list CLI command displays all discovered skills
 ```
 
 **S6-3: skill_run tool and execution flow**

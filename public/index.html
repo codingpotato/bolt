@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>bolt</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root {
       --bg: #0f0f0f;
@@ -206,6 +207,73 @@
       padding: 12px;
       max-height: 220px;
       overflow-y: auto;
+    }
+    .review-content.markdown {
+      white-space: normal;
+    }
+    .review-content.markdown h1,
+    .review-content.markdown h2,
+    .review-content.markdown h3 {
+      margin: 0.6em 0 0.3em;
+      font-size: 1em;
+      font-weight: 700;
+    }
+    .review-content.markdown p { margin: 0.4em 0; }
+    .review-content.markdown ul,
+    .review-content.markdown ol { padding-left: 1.4em; margin: 0.4em 0; }
+    .review-content.markdown code {
+      background: rgba(255,255,255,0.08);
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.9em;
+    }
+    .review-content.markdown pre {
+      background: rgba(0,0,0,0.5);
+      border-radius: 6px;
+      padding: 10px;
+      overflow-x: auto;
+      margin: 0.5em 0;
+    }
+    .review-content.markdown pre code { background: none; padding: 0; }
+    .review-content.markdown blockquote {
+      border-left: 3px solid var(--accent);
+      padding-left: 10px;
+      color: var(--text-muted);
+      margin: 0.4em 0;
+    }
+
+    .review-media {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .review-media img,
+    .review-media video {
+      max-width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .review-media video { max-height: 300px; }
+
+    .media-message {
+      align-self: flex-start;
+      max-width: 80%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .media-message img,
+    .media-message video {
+      max-width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .media-message video { max-height: 300px; }
+    .media-caption {
+      font-size: 13px;
+      color: var(--text-muted);
+      padding: 0 4px;
     }
 
     .review-actions {
@@ -478,10 +546,39 @@
       question.className = 'review-question';
       question.textContent = request.question;
 
-      // Content preview
+      // Content preview — render as markdown for text-like types
       const contentEl = document.createElement('div');
-      contentEl.className = 'review-content';
-      contentEl.textContent = request.content;
+      const MARKDOWN_TYPES = ['text', 'script', 'storyboard', 'image_prompt', 'video_prompt'];
+      if (MARKDOWN_TYPES.includes(request.contentType) && typeof marked !== 'undefined') {
+        contentEl.className = 'review-content markdown';
+        contentEl.innerHTML = marked.parse(request.content);
+      } else {
+        contentEl.className = 'review-content';
+        contentEl.textContent = request.content;
+      }
+
+      // Media previews
+      let mediaEl = null;
+      if (Array.isArray(request.mediaFiles) && request.mediaFiles.length > 0) {
+        mediaEl = document.createElement('div');
+        mediaEl.className = 'review-media';
+        for (const filePath of request.mediaFiles) {
+          const url = `/media/${encodeURIComponent(filePath)}`;
+          const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+          if (['mp4', 'webm', 'mov'].includes(ext)) {
+            const video = document.createElement('video');
+            video.src = url;
+            video.controls = true;
+            video.preload = 'metadata';
+            mediaEl.appendChild(video);
+          } else {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = filePath;
+            mediaEl.appendChild(img);
+          }
+        }
+      }
 
       // Action buttons
       const actions = document.createElement('div');
@@ -529,8 +626,42 @@
       });
 
       actions.append(approveBtn, rejectBtn);
-      card.append(label, question, contentEl, actions, feedbackArea, sendFeedbackBtn);
+      if (mediaEl) card.append(label, question, mediaEl, contentEl, actions, feedbackArea, sendFeedbackBtn);
+      else card.append(label, question, contentEl, actions, feedbackArea, sendFeedbackBtn);
       messagesEl.insertBefore(card, thinkingEl);
+      scrollToBottom();
+    }
+
+    // -----------------------------------------------------------------------
+    // Media message
+    // -----------------------------------------------------------------------
+
+    function addMediaMessage(mediaUrl, caption) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'media-message';
+
+      const ext = mediaUrl.split('.').pop()?.toLowerCase() ?? '';
+      if (['mp4', 'webm', 'mov'].includes(ext)) {
+        const video = document.createElement('video');
+        video.src = mediaUrl;
+        video.controls = true;
+        video.preload = 'metadata';
+        wrapper.appendChild(video);
+      } else {
+        const img = document.createElement('img');
+        img.src = mediaUrl;
+        img.alt = caption || 'media';
+        wrapper.appendChild(img);
+      }
+
+      if (caption) {
+        const cap = document.createElement('div');
+        cap.className = 'media-caption';
+        cap.textContent = caption;
+        wrapper.appendChild(cap);
+      }
+
+      messagesEl.insertBefore(wrapper, thinkingEl);
       scrollToBottom();
     }
 
@@ -605,6 +736,10 @@
           if (msg.reviewId && msg.reviewRequest) {
             addReviewCard(msg.reviewId, msg.reviewRequest);
           }
+          break;
+
+        case 'media':
+          if (typeof msg.mediaUrl === 'string') addMediaMessage(msg.mediaUrl, msg.caption);
           break;
 
         case 'error':

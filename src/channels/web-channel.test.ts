@@ -7,10 +7,21 @@ import type { UserReviewRequest } from './channel';
 // Mock fs/promises so tests don't touch the real filesystem
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn().mockResolvedValue('<html><body>bolt</body></html>'),
+  stat: vi.fn().mockResolvedValue({ isFile: () => true }),
 }));
 
-// Import the mock so individual tests can override it
-import { readFile } from 'node:fs/promises';
+// Mock fs (sync) for createReadStream
+vi.mock('node:fs', () => ({
+  createReadStream: vi.fn().mockReturnValue({
+    pipe: vi.fn((res: { write: (d: string) => void; end: () => void }) => {
+      res.write('media-bytes');
+      res.end();
+    }),
+  }),
+}));
+
+// Import the mocks so individual tests can override them
+import { readFile, stat } from 'node:fs/promises';
 
 // ---------------------------------------------------------------------------
 // WebSocket stub
@@ -127,13 +138,21 @@ class FakeResponse extends EventEmitter {
 // Helper: build a WebChannel with a FakeServer and expose onConnection
 // ---------------------------------------------------------------------------
 
-function makeChannel(opts: { token?: string; mode?: 'http' | 'websocket'; enabled?: boolean } = {}): {
+function makeChannel(
+  opts: { token?: string; mode?: 'http' | 'websocket'; enabled?: boolean; workspaceRoot?: string } = {}
+): {
   channel: WebChannel & { _onConnection: (ws: FakeWs) => void };
   server: FakeServer;
 } {
   const server = new FakeServer();
   const channel = new WebChannel(
-    { port: 3000, token: opts.token, mode: opts.mode ?? 'websocket', enabled: opts.enabled },
+    {
+      port: 3000,
+      token: opts.token,
+      mode: opts.mode ?? 'websocket',
+      enabled: opts.enabled,
+      workspaceRoot: opts.workspaceRoot,
+    },
     server as unknown as Server
   ) as WebChannel & { _onConnection: (ws: FakeWs) => void };
 
@@ -513,6 +532,66 @@ describe('WebChannel', () => {
 
       await channel.stop();
       await expect(reviewPromise).rejects.toThrow('WebChannel stopped');
+    });
+  });
+
+  describe('sendMedia()', () => {
+    it('broadcasts a media message with mediaUrl and caption', async () => {
+      const { channel } = makeChannel({ workspaceRoot: '/workspace' });
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+
+      await channel.sendMedia('images/photo.png', 'A photo');
+
+      const msg = ws.lastSent();
+      expect(msg.type).toBe('media');
+      expect(msg.mediaUrl).toContain('photo.png');
+      expect(msg.caption).toBe('A photo');
+    });
+
+    it('broadcasts a media message without a caption', async () => {
+      const { channel } = makeChannel({ workspaceRoot: '/workspace' });
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+
+      await channel.sendMedia('video.mp4');
+
+      const msg = ws.lastSent();
+      expect(msg.type).toBe('media');
+      expect(msg.caption).toBeUndefined();
+    });
+  });
+
+  describe('HTTP mode — GET /media/:path', () => {
+    it('returns 404 when workspaceRoot is not configured', async () => {
+      const { server } = makeChannel({ mode: 'http' });
+      const { res } = server.simulateRequest('GET', '/media/photo.png', {}, '');
+      await new Promise((r) => setTimeout(r, 10));
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('serves a file within the workspace root', async () => {
+      const { server } = makeChannel({ mode: 'http', workspaceRoot: '/workspace' });
+      const { res } = server.simulateRequest('GET', '/media/photo.png', {}, '');
+      await new Promise((r) => setTimeout(r, 10));
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['Content-Type']).toContain('image/png');
+      expect(res.body).toContain('media-bytes');
+    });
+
+    it('returns 403 for path traversal attempts', async () => {
+      const { server } = makeChannel({ mode: 'http', workspaceRoot: '/workspace' });
+      const { res } = server.simulateRequest('GET', '/media/..%2F..%2Fetc%2Fpasswd', {}, '');
+      await new Promise((r) => setTimeout(r, 10));
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('returns 404 when stat() rejects (file not found)', async () => {
+      vi.mocked(stat).mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+      const { server } = makeChannel({ mode: 'http', workspaceRoot: '/workspace' });
+      const { res } = server.simulateRequest('GET', '/media/missing.png', {}, '');
+      await new Promise((r) => setTimeout(r, 10));
+      expect(res.statusCode).toBe(404);
     });
   });
 });

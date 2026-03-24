@@ -4,6 +4,14 @@ import { EventEmitter } from 'node:events';
 import { WebChannel, type ServerMessage } from './web-channel';
 import type { UserReviewRequest } from './channel';
 
+// Mock fs/promises so tests don't touch the real filesystem
+vi.mock('node:fs/promises', () => ({
+  readFile: vi.fn().mockResolvedValue('<html><body>bolt</body></html>'),
+}));
+
+// Import the mock so individual tests can override it
+import { readFile } from 'node:fs/promises';
+
 // ---------------------------------------------------------------------------
 // WebSocket stub
 // ---------------------------------------------------------------------------
@@ -283,6 +291,25 @@ describe('WebChannel', () => {
 
       const response = await reviewPromise;
       expect(response).toEqual({ approved: false, feedback: 'needs more detail' });
+    });
+  });
+
+  describe('HTTP mode — GET / (static frontend)', () => {
+    it('returns 200 with the HTML file content', async () => {
+      const { server } = makeChannel({ mode: 'http' });
+      const { res } = server.simulateRequest('GET', '/', {}, '');
+      await new Promise((r) => setTimeout(r, 10));
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['Content-Type']).toContain('text/html');
+      expect(res.body).toContain('bolt');
+    });
+
+    it('returns 404 when the HTML file cannot be read', async () => {
+      vi.mocked(readFile).mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+      const { server } = makeChannel({ mode: 'http' });
+      const { res } = server.simulateRequest('GET', '/', {}, '');
+      await new Promise((r) => setTimeout(r, 10));
+      expect(res.statusCode).toBe(404);
     });
   });
 

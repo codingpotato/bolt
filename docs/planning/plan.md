@@ -689,7 +689,7 @@ Acceptance Criteria:
 - [x] Skill runs as an isolated sub-agent with skill.systemPrompt as system turn
 - [x] Effective tool allowlist is intersection of skill.allowedTools and agent allowedTools
 - [x] Result is validated against outputSchema; ToolError on invalid output
-- [x] skill_run can be called from CLI: bolt run-skill <name> --<arg> <value>
+- [x] skill_run can be invoked from the interactive session via /run-skill slash command
 ```
 
 **S6-4: Built-in skills**

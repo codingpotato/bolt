@@ -30,11 +30,11 @@ import { createAgentSuggestTool } from '../tools/agent-suggest';
 import { SuggestionStore } from '../suggestions/suggestion-store';
 import { handleSuggestionsCli } from '../suggestions/suggestions-cli';
 import { createSubagentRunTool } from '../tools/subagent-run';
-import { createSkillRunTool, buildSkillPrompt } from '../tools/skill-run';
+import { createSkillRunTool } from '../tools/skill-run';
 import { runSubagent } from '../subagent/subagent-runner';
-import type { SubagentPayload } from '../subagent/subagent-runner'; // type-only
 import { loadSkills } from '../skills/skill-loader';
 import { createSkillsSlashCommand } from '../skills/skills-slash-command';
+import { createRunSkillSlashCommand } from '../skills/run-skill-slash-command';
 import { createSlashCommandRegistry } from '../slash-commands/slash-commands';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
@@ -42,72 +42,6 @@ import { homedir } from 'node:os';
 async function main(): Promise<void> {
   const config = resolveConfig();
   const args = process.argv.slice(2);
-
-  // Dispatch 'bolt run-skill <name> [--<arg> <value> ...]' sub-command.
-  if (args[0] === 'run-skill') {
-    const skillName = args[1];
-    if (!skillName) {
-      process.stderr.write('Usage: bolt run-skill <skill-name> [--<arg> <value> ...]\n');
-      process.exit(1);
-    }
-
-    const cwd = process.cwd();
-    const dataDir = resolve(cwd, config.dataDir);
-    const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
-    const projectSkillsDir = join(dataDir, 'skills');
-    const userSkillsDir = join(homedir(), '.bolt', 'skills');
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir, (msg) => logger.warn(msg));
-
-    const skill = skills.find((s) => s.name === skillName);
-    if (!skill) {
-      process.stderr.write(`bolt: unknown skill "${skillName}"\n`);
-      process.exit(1);
-    }
-
-    // Parse --key value pairs from remaining args.
-    const skillArgs: Record<string, string> = {};
-    const remaining = args.slice(2);
-    for (let i = 0; i < remaining.length; i += 2) {
-      const key = remaining[i] ?? '';
-      const value = remaining[i + 1];
-      if (!key.startsWith('--') || value === undefined) {
-        process.stderr.write(`bolt: invalid argument "${key}"\n`);
-        process.exit(1);
-      }
-      skillArgs[key.slice(2)] = value;
-    }
-
-    // Validate required input fields.
-    const required = (skill.inputSchema.required as string[] | undefined) ?? [];
-    for (const field of required) {
-      if (!(field in skillArgs)) {
-        process.stderr.write(`bolt: missing required argument --${field}\n`);
-        process.exit(1);
-      }
-    }
-
-    const auth = resolveAuth();
-    const subagentScript = join(__dirname, 'subagent.js');
-    const prompt = buildSkillPrompt(skillName, skillArgs, skill.outputSchema);
-
-    const payload: SubagentPayload = {
-      prompt,
-      authConfig: auth,
-      model: config.model,
-      systemPrompt: skill.systemPrompt,
-      ...(skill.allowedTools !== undefined ? { allowedTools: skill.allowedTools } : {}),
-    };
-
-    try {
-      const result = await runSubagent(payload, subagentScript);
-      process.stdout.write(result.output + '\n');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`bolt: skill failed: ${msg}\n`);
-      process.exit(1);
-    }
-    return;
-  }
 
   // Dispatch 'bolt suggestions [...]' sub-command before starting the agent.
   if (args[0] === 'suggestions') {
@@ -179,6 +113,7 @@ async function main(): Promise<void> {
   toolBus.register(createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent));
   const slashRegistry = createSlashCommandRegistry();
   slashRegistry.register(createSkillsSlashCommand(skills));
+  slashRegistry.register(createRunSkillSlashCommand(skills, auth, config.model, subagentScript, runSubagent));
 
   const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
   const ctx = {

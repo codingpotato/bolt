@@ -312,6 +312,196 @@ Each line should be valid JSON with `ts`, `level`, `msg`, and optional `context`
 
 ---
 
+---
+
+## bolt serve — WebChannel daemon mode
+
+These test cases cover `bolt serve` end-to-end. Run them after `npm run build` (or replace `node dist/cli/index.js` with `npx ts-node src/cli/index.ts` for dev mode).
+
+**Setup for all serve test cases:**
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+export BOLT_WEB_TOKEN=test-token
+```
+
+---
+
+### 23. Start the server and verify it listens
+
+```bash
+node dist/cli/index.js serve --port 3001
+```
+
+**Expected:**
+
+```
+bolt serve: listening on http://localhost:3001 (model: claude-opus-4-6)
+```
+
+Process stays running (does not exit). `.bolt/bolt.log` contains a `bolt serve started` entry with `port: 3001`.
+
+---
+
+### 24. Connect from a browser
+
+Open `http://localhost:3001?token=test-token` in a browser.
+
+**Expected:**
+- The chat UI loads.
+- The input box is **enabled** (not read-only).
+- No console errors.
+
+---
+
+### 25. Send a message via WebChannel
+
+With the browser connected (test case 24 running), type a message:
+
+```
+What is 2 + 2?
+```
+
+**Expected:**
+- A thinking indicator appears while the agent responds.
+- The agent replies "4" (or a short explanation). No tool calls.
+- The server process remains running after the reply.
+
+---
+
+### 26. Session preserved after client reconnects
+
+1. Send a message: *"Remember the number 42."*
+2. Close the browser tab (disconnect).
+3. Reopen `http://localhost:3001?token=test-token`.
+4. Send: *"What number did I ask you to remember?"*
+
+**Expected:** The agent recalls 42 — conversation history is preserved in the running process across disconnects.
+
+---
+
+### 27. Read-only observer
+
+1. Open the UI in **Tab A** — it becomes the active connection.
+2. Open the same URL in **Tab B**.
+
+**Expected:**
+- Tab B shows the banner: *"Observing — another session is active"* and the input is disabled.
+- Send a message from Tab A. Tab B receives the response.
+- Close Tab A. Tab B's banner disappears and input becomes enabled (promoted to active).
+
+---
+
+### 28. Graceful shutdown — Ctrl+C
+
+With the server running and a browser connected:
+
+1. Press `Ctrl+C` in the terminal.
+
+**Expected:**
+- Terminal prints: `bolt serve: shutting down gracefully...`
+- Process exits with code 0.
+- Browser shows the disconnected/reconnecting state.
+- `.bolt/bolt.log` does **not** contain any unhandled error entries.
+
+---
+
+### 29. Graceful shutdown — SIGTERM
+
+```bash
+# Start server in background
+node dist/cli/index.js serve --port 3001 &
+SERVER_PID=$!
+
+# Wait for it to start, then send SIGTERM
+sleep 2
+kill -TERM $SERVER_PID
+wait $SERVER_PID
+echo "Exit code: $?"
+```
+
+**Expected:** Exit code is 0. Terminal shows the shutdown message.
+
+---
+
+### 30. Invalid --port argument
+
+```bash
+node dist/cli/index.js serve --port abc
+```
+
+**Expected:**
+
+```
+bolt serve: --port must be a number
+```
+
+Process exits immediately with a non-zero exit code. No server is started.
+
+---
+
+### 31. Missing auth token — connection rejected
+
+```bash
+# Start server with a token
+node dist/cli/index.js serve --port 3001 --token secret
+
+# In another terminal, attempt to connect without a token:
+curl -i http://localhost:3001/chat -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"type":"message","content":"hello"}'
+```
+
+**Expected:** HTTP `401 Unauthorized`. No agent turn is enqueued.
+
+---
+
+### 32. --port override takes precedence over config
+
+With `.bolt/config.json` containing `"channels": { "web": { "port": 4000 } }`:
+
+```bash
+node dist/cli/index.js serve --port 3001
+```
+
+**Expected:** Server listens on port **3001**, not 4000. The startup message shows port 3001.
+
+---
+
+### 33. Media file served inline in review card
+
+*(Requires a test image in the workspace.)*
+
+1. Place a file `test.png` in the current working directory.
+2. Trigger a `user_review` tool call with `mediaFiles: ["test.png"]` (e.g. ask the agent: *"Review my image test.png and ask me to approve it."*).
+
+**Expected:**
+- The review card appears in the browser with the image displayed inline above the content.
+- Approve button sends approval; the agent continues.
+
+---
+
+### 34. Markdown rendered in review card
+
+Trigger a review with markdown content, e.g.:
+
+```
+Ask me to review a short blog post draft that includes headers and bullet points.
+```
+
+**Expected:** The review card shows formatted HTML — headers, bullet points, code spans — not raw markdown syntax.
+
+---
+
+### 35. Server survives multiple conversation rounds
+
+1. Start the server.
+2. Send five separate messages in sequence, including at least one that triggers a tool call (e.g. *"List files in the current directory."*).
+
+**Expected:** All five messages receive responses. The server does not crash or stall between rounds. `.bolt/tool-audit.jsonl` contains entries for any tool calls.
+
+---
+
 ## Local inference server
 
 To use a local Anthropic-compatible server instead of the real API:

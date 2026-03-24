@@ -357,6 +357,114 @@ describe('TaskStore', () => {
     });
   });
 
+  // ── approval gates ───────────────────────────────────────────────────────────
+
+  describe('approval gates', () => {
+    it('task created with requiresApproval:true has requiresApproval=true', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc', [], true);
+      expect(store.list().find((t) => t.id === id)?.requiresApproval).toBe(true);
+    });
+
+    it('task created without requiresApproval has requiresApproval=false', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc');
+      expect(store.list().find((t) => t.id === id)?.requiresApproval).toBe(false);
+    });
+
+    it('allows awaiting_approval status when requiresApproval is true', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc', [], true);
+      await store.update(id, { status: 'in_progress' });
+      await expect(store.update(id, { status: 'awaiting_approval' })).resolves.toBeUndefined();
+      expect(store.list().find((t) => t.id === id)?.status).toBe('awaiting_approval');
+    });
+
+    it('rejects awaiting_approval status when requiresApproval is false', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc', [], false);
+      await expect(store.update(id, { status: 'awaiting_approval' })).rejects.toThrow(
+        /requiresApproval/,
+      );
+    });
+
+    it('approval flow: awaiting_approval → completed', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc', [], true);
+      await store.update(id, { status: 'in_progress' });
+      await store.update(id, { status: 'awaiting_approval' });
+      await store.update(id, { status: 'completed', result: 'approved output' });
+      const task = store.list().find((t) => t.id === id);
+      expect(task?.status).toBe('completed');
+      expect(task?.result).toBe('approved output');
+    });
+
+    it('rejection flow: awaiting_approval → in_progress for revision', async () => {
+      const store = new TaskStore(dataDir);
+      const id = await store.create('task', 'desc', [], true);
+      await store.update(id, { status: 'in_progress' });
+      await store.update(id, { status: 'awaiting_approval' });
+      await store.update(id, { status: 'in_progress' });
+      expect(store.list().find((t) => t.id === id)?.status).toBe('in_progress');
+    });
+
+    it('task_list includes requiresApproval field', async () => {
+      const store = new TaskStore(dataDir);
+      await store.create('task', 'desc', [], true);
+      const tasks = store.list();
+      expect(tasks[0]).toHaveProperty('requiresApproval', true);
+    });
+
+    it('loads requiresApproval from persisted data', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({
+          tasks: [
+            {
+              id: 'task-1',
+              title: 'approval task',
+              description: 'desc',
+              status: 'pending',
+              requiresApproval: true,
+              dependsOn: [],
+              subtaskIds: [],
+              sessionIds: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          counter: 1,
+        }),
+      );
+      const store = new TaskStore(dataDir);
+      expect(store.list().find((t) => t.id === 'task-1')?.requiresApproval).toBe(true);
+    });
+
+    it('defaults requiresApproval to false for tasks persisted before S4-5', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({
+          tasks: [
+            {
+              id: 'task-1',
+              title: 'old task',
+              description: 'desc',
+              status: 'pending',
+              dependsOn: [],
+              subtaskIds: [],
+              sessionIds: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          counter: 1,
+        }),
+      );
+      const store = new TaskStore(dataDir);
+      expect(store.list().find((t) => t.id === 'task-1')?.requiresApproval).toBe(false);
+    });
+  });
+
   // ── list ─────────────────────────────────────────────────────────────────────
 
   describe('list', () => {

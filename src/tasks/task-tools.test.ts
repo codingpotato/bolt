@@ -40,6 +40,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     description: 'test description',
     status: 'pending',
     dependsOn: [],
+    requiresApproval: false,
     subtaskIds: [],
     sessionIds: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -79,12 +80,22 @@ describe('task tools', () => {
 
     it('passes title and description to store.create', async () => {
       await getTool('task_create').execute({ title: 'T', description: 'D' }, ctx);
-      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined);
+      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, undefined);
     });
 
     it('passes dependsOn to store.create when provided', async () => {
       await getTool('task_create').execute({ title: 'T', description: 'D', dependsOn: ['task-1'] }, ctx);
-      expect(store.create).toHaveBeenCalledWith('T', 'D', ['task-1']);
+      expect(store.create).toHaveBeenCalledWith('T', 'D', ['task-1'], undefined);
+    });
+
+    it('passes requiresApproval to store.create when provided', async () => {
+      await getTool('task_create').execute({ title: 'T', description: 'D', requiresApproval: true }, ctx);
+      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, true);
+    });
+
+    it('passes requiresApproval=false to store.create when explicitly false', async () => {
+      await getTool('task_create').execute({ title: 'T', description: 'D', requiresApproval: false }, ctx);
+      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, false);
     });
 
     it('is not marked sequential', () => {
@@ -140,6 +151,11 @@ describe('task tools', () => {
 
     it('is marked sequential', () => {
       expect(getTool('task_update').sequential).toBe(true);
+    });
+
+    it('passes awaiting_approval status to store.update', async () => {
+      await getTool('task_update').execute({ id: 'task-1', status: 'awaiting_approval' }, ctx);
+      expect(store.update).toHaveBeenCalledWith('task-1', { status: 'awaiting_approval' });
     });
 
     it('sets ctx.activeTaskId when transitioning to in_progress', async () => {

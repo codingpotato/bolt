@@ -771,7 +771,7 @@ Acceptance Criteria:
 
 ---
 
-## Sprint 8 — WebChannel
+## Sprint 8 — WebChannel ✅
 
 **Goal:** bolt serves a web chat interface over HTTP/WebSocket, accessible from phone or desktop browser.
 

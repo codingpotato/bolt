@@ -187,6 +187,22 @@ describe('resolveConfig', () => {
       expect(config.local.endpoint).toBe('http://localhost:8080');
     });
 
+    it('BOLT_WEB_PORT overrides channels.web.port', () => {
+      process.env['BOLT_WEB_PORT'] = '9090';
+
+      const config = resolveConfig();
+
+      expect(config.channels.web.port).toBe(9090);
+    });
+
+    it('BOLT_WEB_PORT is ignored when not a valid number', () => {
+      process.env['BOLT_WEB_PORT'] = 'abc';
+
+      const config = resolveConfig();
+
+      expect(config.channels.web.port).toBe(3000);
+    });
+
     it('mutating returned config does not affect subsequent calls', () => {
       const config = resolveConfig();
       config.memory.compactThreshold = 0.99;

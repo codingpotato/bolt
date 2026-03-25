@@ -59,6 +59,7 @@ export interface Config {
     web: {
       enabled: boolean;
       port: number;
+      host?: string;
       mode: 'http' | 'websocket';
       token?: string;
     };
@@ -236,6 +237,15 @@ function applyEnvOverrides(config: Config): Config {
   }
   if (process.env['BOLT_WEB_TOKEN']) {
     result.channels.web.token = process.env['BOLT_WEB_TOKEN'];
+  }
+  if (process.env['BOLT_WEB_HOST']) {
+    result.channels.web.host = process.env['BOLT_WEB_HOST'];
+  }
+  if (process.env['BOLT_WEB_PORT']) {
+    const parsed = parseInt(process.env['BOLT_WEB_PORT'], 10);
+    if (!isNaN(parsed)) {
+      result.channels.web.port = parsed;
+    }
   }
 
   return result;

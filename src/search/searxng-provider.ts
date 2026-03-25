@@ -2,6 +2,11 @@ import type { SearchOptions, SearchProvider, SearchResult } from './search-provi
 
 const DEFAULT_ENDPOINT = 'http://localhost:8080';
 
+const FETCH_HEADERS = {
+  Accept: 'application/json',
+  'User-Agent': 'Mozilla/5.0 (compatible; bolt-agent/1.0)',
+} as const;
+
 interface SearXNGResult {
   title: string;
   url: string;
@@ -50,12 +55,7 @@ export class SearXNGProvider implements SearchProvider {
     const url = `${this.endpoint}/search?${params.toString()}`;
     let response: Response;
     try {
-      response = await fetch(url, {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'Mozilla/5.0 (compatible; bolt-agent/1.0)',
-        },
-      });
+      response = await fetch(url, { headers: FETCH_HEADERS });
     } catch (err) {
       throw new Error(
         `SearXNG network error: ${err instanceof Error ? err.message : String(err)}`,
@@ -85,12 +85,7 @@ export class SearXNGProvider implements SearchProvider {
 
   async checkConnectivity(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.endpoint}/search?q=test&format=json`, {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'Mozilla/5.0 (compatible; bolt-agent/1.0)',
-        },
-      });
+      const response = await fetch(`${this.endpoint}/search?q=test&format=json`, { headers: FETCH_HEADERS });
       return response.ok;
     } catch {
       return false;

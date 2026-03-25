@@ -37,7 +37,12 @@ describe('SearXNGProvider', () => {
     await provider.search('typescript trends');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('q=typescript+trends'),
-      expect.any(Object),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Accept: 'application/json',
+          'User-Agent': expect.stringContaining('bolt-agent'),
+        }),
+      }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('format=json'),

@@ -21,6 +21,7 @@ Configuration is resolved from three sources, in order of precedence (highest fi
 | `BOLT_MODEL` | No | `claude-opus-4-6` | Model ID sent in every API request (applies to all three auth modes) |
 | `BOLT_DATA_DIR` | No | `.bolt` | Runtime data directory |
 | `BOLT_LOG_LEVEL` | No | `info` | Log verbosity for `.bolt/bolt.log`: `debug` \| `info` \| `warn` \| `error`. Entries below this level are dropped. `error`-level entries are also written to stderr. See `docs/design/logging.md`. |
+| `BOLT_SEARCH_ENDPOINT` | No | — | Endpoint URL for the search provider (overrides `search.endpoint` in config). E.g. `http://localhost:4000` for a SearXNG instance on a non-default port. |
 | `BOLT_SEARCH_API_KEY` | No | — | API key for web search provider (Brave, Serper). Not needed for SearXNG. |
 | `BOLT_WEB_TOKEN` | No | — | Authentication token for WebChannel. Required when `channels.web.enabled` is true. |
 

@@ -231,6 +231,9 @@ function applyEnvOverrides(config: Config): Config {
   if (process.env['BOLT_LOCAL_ENDPOINT']) {
     result.local.endpoint = process.env['BOLT_LOCAL_ENDPOINT'];
   }
+  if (process.env['BOLT_SEARCH_ENDPOINT']) {
+    result.search.endpoint = process.env['BOLT_SEARCH_ENDPOINT'];
+  }
   if (process.env['BOLT_WEB_TOKEN']) {
     result.channels.web.token = process.env['BOLT_WEB_TOKEN'];
   }

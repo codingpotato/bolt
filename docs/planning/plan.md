@@ -790,8 +790,7 @@ Acceptance Criteria:
 - [x] HTTP mode: POST /chat for user turns, SSE for streaming responses
 - [x] Simple token authentication via BOLT_WEB_TOKEN or config.channels.web.token
 - [x] Server only starts when config.channels.web.enabled is true
-- [x] Only one active (read-write) WebSocket connection is allowed at a time; a second connection is accepted but immediately put into read-only mode — it receives all agent messages and progress events but its send attempts are rejected with a "read-only" error
-- [x] When the active connection closes, the oldest read-only connection is promoted to active
+- [x] Any number of WebSocket connections may connect simultaneously; all can send messages
 - [x] Unit tests mock the HTTP server
 ```
 
@@ -809,8 +808,8 @@ Acceptance Criteria:
 - [x] WebSocket connection with auto-reconnect
 - [x] Progress indicators for agent thinking and tool execution
 - [x] No build tools required — served directly by the HTTP server
-- [x] Read-only mode: when the connection is not the active one, the input is disabled and a banner reads "Observing — another session is active"
-- [x] When the client is promoted from read-only to active, the banner is removed and input is enabled automatically
+- [x] All connected users see all messages (user messages and Bolt responses) in real time
+- [x] Each message bubble shows the author name
 ```
 
 **S8-3: Rich review UI in WebChannel**
@@ -838,9 +837,34 @@ so that I can connect to it from my phone at any time.
 Acceptance Criteria:
 - [x] bolt serve CLI command starts bolt in daemon mode with WebChannel
 - [x] Agent stays alive between conversations, listening for new WebSocket connections
-- [x] Only one connection may send commands at a time; additional connections are read-only observers (see S8-1)
+- [x] All connections can send messages; Bolt processes them sequentially from a shared queue
 - [x] Graceful shutdown on SIGTERM/SIGINT
 - [x] Session state is preserved between conversations
+```
+
+**S8-5: Multi-user shared conversation**
+```
+As a team of bloggers,
+I want multiple people to send messages to bolt from their own devices,
+so that we can collaborate on content creation in real time.
+
+Acceptance Criteria:
+- [x] Each WebSocket client identifies itself via ?name= query param; defaults to User1, User2, … (server-assigned counter)
+- [x] Duplicate names are allowed without enforcement
+- [x] UserTurn gains an optional author field; WebChannel populates it from the connection's name
+- [x] When a user sends a message, server immediately broadcasts { type: "user_message", author, content, queuePosition } to all clients before Bolt processes it
+- [x] Turns are appended to the shared turnQueue (FIFO); Bolt processes one at a time
+- [x] Server broadcasts { type: "queue_status", depth } whenever the queue length changes
+- [x] When Bolt dequeues a turn, server broadcasts { type: "processing", author, content } to all clients
+- [x] Bolt's response is broadcast as { type: "response", content, replyTo: author } so all users see whose message was answered
+- [x] Review requests (requestReview) are broadcast to all clients; first reply wins
+- [x] AgentCore prefixes the LLM message with [Author]: when author is set
+- [x] Frontend: username prompt on load if ?name= is absent; input is always enabled (no read-only mode)
+- [x] Frontend: three distinct bubble styles — own messages (right, highlighted), others' messages (left, muted), Bolt responses (left, distinct color)
+- [x] Frontend: queue indicator shows depth and "Processing Alice's message…" status
+- [x] On connect, server sends { type: "status", userId, connectedUsers, queueDepth }
+- [x] SSE / HTTP mode remains single-user and is unchanged
+- [x] Unit tests cover: multi-client broadcast, queue ordering, author prefix in LLM message
 ```
 
 ---

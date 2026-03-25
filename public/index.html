@@ -12,6 +12,7 @@
       --surface: #1a1a1a;
       --border: #2a2a2a;
       --user-bubble: #2563eb;
+      --other-bubble: #1a2535;
       --agent-bubble: #1e1e1e;
       --text: #e5e5e5;
       --text-muted: #9ca3af;
@@ -62,18 +63,18 @@
     #status-dot.connecting { background: var(--warning); }
     #status-dot.connected  { background: var(--success); }
 
-    /* ---- Read-only banner ---- */
-    #readonly-banner {
+    /* ---- Status banner (queue / processing indicator) ---- */
+    #status-banner {
       display: none;
-      padding: 8px 16px;
-      background: #78350f;
-      color: #fde68a;
-      font-size: 13px;
-      font-weight: 500;
+      padding: 6px 16px;
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 12px;
       text-align: center;
+      border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
-    #readonly-banner.visible { display: block; }
+    #status-banner.visible { display: block; }
 
     /* ---- Messages ---- */
     #messages {
@@ -94,7 +95,16 @@
     }
 
     .message.user  { align-self: flex-end; align-items: flex-end; }
+    .message.other { align-self: flex-start; align-items: flex-start; }
     .message.agent { align-self: flex-start; align-items: flex-start; }
+
+    .msg-author {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 0 4px 3px;
+    }
+    .message.user .msg-author { text-align: right; }
 
     .bubble {
       padding: 10px 14px;
@@ -115,12 +125,18 @@
       border-bottom-left-radius: 4px;
     }
 
+    .message.other .bubble {
+      background: var(--other-bubble);
+      border: 1px solid #2a3a4a;
+      border-bottom-left-radius: 4px;
+    }
+
     .progress-event {
       align-self: flex-start;
       font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
       font-size: 12px;
       color: var(--text-muted, #888);
-      white-space: pre;
+      white-space: pre-wrap;
       padding: 2px 4px;
     }
 
@@ -398,7 +414,7 @@
     <h1>bolt</h1>
   </div>
 
-  <div id="readonly-banner">Observing — another session is active</div>
+  <div id="status-banner"></div>
 
   <div id="messages">
     <div id="thinking">
@@ -421,10 +437,11 @@
 
   <script>
     // -----------------------------------------------------------------------
-    // Config — token extracted from ?token= query param
+    // Config — token and name extracted from query params
     // -----------------------------------------------------------------------
     const params = new URLSearchParams(window.location.search);
     const TOKEN = params.get('token') ?? '';
+    const MY_NAME = params.get('name') || window.prompt('Your name:', 'User') || 'User';
 
     // -----------------------------------------------------------------------
     // DOM refs
@@ -434,33 +451,34 @@
     const inputEl       = document.getElementById('input');
     const sendBtn       = document.getElementById('send-btn');
     const statusDot     = document.getElementById('status-dot');
-    const readonlyBanner = document.getElementById('readonly-banner');
+    const statusBanner  = document.getElementById('status-banner');
 
     // -----------------------------------------------------------------------
     // State
     // -----------------------------------------------------------------------
     let ws             = null;
-    let isReadOnly     = true;   // assume read-only until server says active
     let reconnectDelay = 1000;   // ms; doubles on each failure up to 30s
     let reconnectTimer = null;
+    let queueDepth     = 0;
+    let processingAuthor = null;
 
     // -----------------------------------------------------------------------
-    // Status / read-only helpers
+    // Status helpers
     // -----------------------------------------------------------------------
 
     function setStatus(state /* 'connecting' | 'connected' | '' */) {
       statusDot.className = state;
     }
 
-    function setReadOnly(ro) {
-      isReadOnly = ro;
-      inputEl.disabled = ro;
-      sendBtn.disabled = ro;
-      if (ro) {
-        readonlyBanner.classList.add('visible');
+    function updateBanner() {
+      if (processingAuthor) {
+        statusBanner.textContent = `Bolt is responding to ${processingAuthor}…`;
+        statusBanner.classList.add('visible');
+      } else if (queueDepth > 0) {
+        statusBanner.textContent = `${queueDepth} message${queueDepth > 1 ? 's' : ''} waiting`;
+        statusBanner.classList.add('visible');
       } else {
-        readonlyBanner.classList.remove('visible');
-        inputEl.focus();
+        statusBanner.classList.remove('visible');
       }
     }
 
@@ -519,9 +537,16 @@
     // Message rendering
     // -----------------------------------------------------------------------
 
-    function addMessage(role /* 'user' | 'agent' */, text) {
+    function addMessage(role /* 'user' | 'other' | 'agent' */, text, author) {
       const wrapper = document.createElement('div');
       wrapper.className = `message ${role}`;
+
+      if (author) {
+        const label = document.createElement('div');
+        label.className = 'msg-author';
+        label.textContent = author;
+        wrapper.appendChild(label);
+      }
 
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
@@ -694,8 +719,11 @@
 
     function wsUrl() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const url = `${proto}//${location.host}/`;
-      return TOKEN ? `${url}?token=${encodeURIComponent(TOKEN)}` : url;
+      const parts = [];
+      if (TOKEN) parts.push(`token=${encodeURIComponent(TOKEN)}`);
+      if (MY_NAME) parts.push(`name=${encodeURIComponent(MY_NAME)}`);
+      const qs = parts.length ? `?${parts.join('&')}` : '';
+      return `${proto}//${location.host}/${qs}`;
     }
 
     function connect() {
@@ -718,9 +746,6 @@
       ws.addEventListener('close', () => {
         ws = null;
         setStatus('');
-        // Disable input without showing the read-only banner — the banner is
-        // reserved for when the server explicitly puts us in observer mode.
-        isReadOnly = true;
         inputEl.disabled = true;
         sendBtn.disabled = true;
         reconnectTimer = setTimeout(connect, reconnectDelay);
@@ -746,16 +771,45 @@
     function handleServerMessage(msg) {
       switch (msg.type) {
         case 'status':
-          setReadOnly(msg.readOnly === true);
+          // Connected — enable input
+          inputEl.disabled = false;
+          sendBtn.disabled = false;
+          inputEl.focus();
+          break;
+
+        case 'user_message':
+          // A user sent a message — show it to everyone
+          if (typeof msg.content === 'string' && typeof msg.author === 'string') {
+            const role = msg.author === MY_NAME ? 'user' : 'other';
+            addMessage(role, msg.content, msg.author);
+            if (role === 'user') showThinking(true);
+          }
+          break;
+
+        case 'processing':
+          // Bolt started processing someone's message
+          processingAuthor = msg.author ?? null;
+          updateBanner();
+          showThinking(true);
+          break;
+
+        case 'queue_status':
+          queueDepth = typeof msg.depth === 'number' ? msg.depth : 0;
+          updateBanner();
           break;
 
         case 'response':
           showThinking(false);
-          if (typeof msg.content === 'string') addMessage('agent', msg.content);
+          processingAuthor = null;
+          queueDepth = 0;
+          updateBanner();
+          if (typeof msg.content === 'string') addMessage('agent', msg.content, 'Bolt');
           break;
 
         case 'review':
           showThinking(false);
+          processingAuthor = null;
+          updateBanner();
           if (msg.reviewId && msg.reviewRequest) {
             addReviewCard(msg.reviewId, msg.reviewRequest);
           }
@@ -770,7 +824,6 @@
           break;
 
         case 'error':
-          // read-only errors are expected and silently handled
           break;
       }
     }
@@ -781,14 +834,13 @@
 
     function sendMessage() {
       const text = inputEl.value.trim();
-      if (!text || isReadOnly || !ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
 
-      addMessage('user', text);
+      // Don't add message locally — the server broadcasts user_message back to us
       ws.send(JSON.stringify({ type: 'message', content: text }));
 
       inputEl.value = '';
       inputEl.style.height = '';
-      showThinking(true);
     }
 
     sendBtn.addEventListener('click', sendMessage);
@@ -809,8 +861,7 @@
     // -----------------------------------------------------------------------
     // Bootstrap
     // -----------------------------------------------------------------------
-    setReadOnly(true); // keep input disabled until active status received
-    connect();
+    connect(); // input starts disabled (HTML attr); enabled on 'status' event
   </script>
 </body>
 </html>

@@ -56,6 +56,13 @@ interface UserTurn {
   /** The message content from the user */
   content: string;
   /**
+   * Display name of the user who sent this turn.
+   * Set by WebChannel from the ?name= query param; defaults to "User1", "User2", etc.
+   * Used by AgentCore to prefix the message to the LLM: "[Alice]: ...".
+   * Not set by CliChannel (single-user).
+   */
+  author?: string;
+  /**
    * Transport-specific metadata — not passed to the model.
    * Examples: empty for CLI; { sessionToken } for WebChannel.
    */
@@ -99,9 +106,44 @@ Implementations:
 | Channel | Status | Description |
 |---------|--------|-------------|
 | `CliChannel` | built-in | Reads from stdin / CLI args; writes to stdout. Review requests are rendered as text with y/n/feedback prompt. |
-| `WebChannel` | v1 | HTTP/WebSocket server. Supports rich media preview, inline approval buttons, and text feedback. Preferred for mobile use. |
+| `WebChannel` | v1 | HTTP/WebSocket server. Supports rich media preview, inline approval buttons, and text feedback. Preferred for mobile use. Supports multiple simultaneous users in a shared conversation (see below). |
 
 Adding a new transport (e.g. Telegram, WeChat) means implementing `Channel` — no changes to Agent Core are required.
+
+#### WebChannel — Multi-User Shared Conversation
+
+WebChannel supports multiple simultaneous users sharing one conversation. All messages (from any user) are visible to all connected clients. Bolt processes them one at a time from a shared FIFO queue.
+
+**Connection model:**
+- Any number of WebSocket clients may connect simultaneously
+- Each client identifies itself via the `?name=` query param (e.g. `ws://host:3000/?name=Alice`)
+- If omitted, the server assigns a default name: `User1`, `User2`, etc. (incrementing counter)
+- Duplicate names are allowed without enforcement
+- SSE (HTTP mode) remains single-user as before
+
+**Message flow:**
+1. Client sends `{ type: "message", content }` over WebSocket
+2. Server immediately broadcasts `{ type: "user_message", author, content, queuePosition }` to **all** clients so every user sees the message appear instantly
+3. Turn is appended to the shared `turnQueue`
+4. Server broadcasts `{ type: "queue_status", depth }` to all clients
+5. When AgentCore dequeues the turn via `receive()`, server broadcasts `{ type: "processing", author, content }` so all users see who Bolt is responding to
+6. Bolt's final response is broadcast as `{ type: "response", content, replyTo: author }` — all users see it, tagged with whose message triggered it
+7. Review requests (`requestReview`) are broadcast to all; first client to reply wins
+
+**Server → Client message types (additions):**
+```ts
+{ type: 'user_message'; author: string; content: string; queuePosition: number }
+{ type: 'processing';   author: string; content: string }
+{ type: 'queue_status'; depth: number }
+// existing 'response' gains:
+{ type: 'response'; content: string; replyTo?: string }
+// existing 'status' gains on connect:
+{ type: 'status'; userId: string; connectedUsers: number; queueDepth: number }
+```
+
+**Agent Core integration:**
+- When `UserTurn.author` is set, AgentCore prefixes the LLM message: `[Alice]: What's trending?`
+- This lets the model understand multi-user context without changes to the tool/memory layers
 
 ### Slash Command Registry
 

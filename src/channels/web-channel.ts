@@ -15,13 +15,26 @@ interface ClientMessage {
 
 /** Shape of messages sent from server → client. */
 export interface ServerMessage {
-  type: 'response' | 'review' | 'error' | 'status' | 'media' | 'progress';
+  type: 'response' | 'review' | 'error' | 'status' | 'media' | 'progress' | 'user_message' | 'processing' | 'queue_status';
   content?: string;
   reviewId?: string;
   reviewRequest?: UserReviewRequest;
+  /** Deprecated: kept for type compatibility; no longer sent in WS mode. */
   readOnly?: boolean;
   mediaUrl?: string;
   caption?: string;
+  /** Author name for user_message / processing events. */
+  author?: string;
+  /** 1-indexed position in queue for user_message events. */
+  queuePosition?: number;
+  /** Author of the user turn Bolt is replying to, sent with response events. */
+  replyTo?: string;
+  /** Sent with status events on connect. */
+  userId?: string;
+  connectedUsers?: number;
+  queueDepth?: number;
+  /** Current queue depth for queue_status events. */
+  depth?: number;
 }
 
 /** Shape of the client's reply to a review request. */
@@ -87,24 +100,28 @@ const MEDIA_CONTENT_TYPES: Record<string, string> = {
 /**
  * Channel implementation for web-based interaction.
  *
- * WebSocket mode:
- *   - Persistent bidirectional connection
- *   - First connection is "active" (read-write), subsequent are "read-only"
- *   - Read-only connections receive all messages but cannot send turns
- *   - When active disconnects, oldest read-only is promoted
+ * WebSocket mode (multi-user shared conversation):
+ *   - Any number of clients may connect simultaneously; all can send messages
+ *   - Each client identifies itself via the ?name= query param
+ *   - All user messages are broadcast to every connected client
+ *   - Turns are queued (FIFO); Bolt processes one at a time
+ *   - Progress, responses, and review requests are broadcast to all clients
  *
  * HTTP mode:
  *   - POST /chat sends a user turn; response delivered via SSE stream
+ *   - Single-user; no broadcast semantics
  */
 export class WebChannel implements Channel {
   private readonly opts: WebChannelOptions;
   private readonly httpServer: Server;
   private readonly wss: WebSocketServer;
 
-  /** Active (read-write) WebSocket connection. */
-  private activeWs: WebSocket | null = null;
-  /** Read-only connections in order of arrival. */
-  private readOnlyWs: WebSocket[] = [];
+  /** All connected WebSocket clients, keyed by socket, value is the user's display name. */
+  private connections: Map<WebSocket, { userId: string }> = new Map();
+  /** Counter for auto-assigning names when ?name= is absent. */
+  private userCounter = 0;
+  /** The turn currently being processed by the agent (set when dequeued, cleared after send). */
+  private currentlyProcessing: UserTurn | null = null;
 
   /** Queued user turns waiting to be consumed by receive(). */
   private turnQueue: UserTurn[] = [];
@@ -134,8 +151,10 @@ export class WebChannel implements Channel {
         socket.destroy();
         return;
       }
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      const requestedName = url.searchParams.get('name') ?? undefined;
       this.wss.handleUpgrade(req, socket, head, (ws) => {
-        this.onConnection(ws);
+        this.onConnection(ws, requestedName);
       });
     });
   }
@@ -163,48 +182,32 @@ export class WebChannel implements Channel {
   // WebSocket connection management
   // ---------------------------------------------------------------------------
 
-  private onConnection(ws: WebSocket): void {
-    if (this.activeWs !== null) {
-      this.readOnlyWs.push(ws);
-      const msg: ServerMessage = { type: 'status', readOnly: true, content: 'read-only' };
-      ws.send(JSON.stringify(msg));
-    } else {
-      this.activeWs = ws;
-      const msg: ServerMessage = { type: 'status', readOnly: false, content: 'active' };
-      ws.send(JSON.stringify(msg));
-    }
+  private onConnection(ws: WebSocket, requestedName?: string): void {
+    const userId = requestedName ?? `User${++this.userCounter}`;
+    this.connections.set(ws, { userId });
+
+    const statusMsg: ServerMessage = {
+      type: 'status',
+      readOnly: false,
+      userId,
+      connectedUsers: this.connections.size,
+      queueDepth: this.turnQueue.length,
+    };
+    ws.send(JSON.stringify(statusMsg));
 
     ws.on('message', (data) => {
-      if (ws !== this.activeWs) {
-        // read-only connections cannot send turns
-        ws.send(JSON.stringify({ type: 'error', content: 'read-only' } satisfies ServerMessage));
-        return;
-      }
-      this.handleWsMessage(data.toString());
+      this.handleWsMessage(data.toString(), ws);
     });
 
     ws.on('close', () => {
-      if (ws === this.activeWs) {
-        this.activeWs = null;
-        this.promoteNextReadOnly();
-      } else {
-        this.readOnlyWs = this.readOnlyWs.filter((c) => c !== ws);
-      }
-
-      if (this.activeWs === null && this.readOnlyWs.length === 0 && !this.opts.persistent) {
+      this.connections.delete(ws);
+      if (this.connections.size === 0 && !this.opts.persistent) {
         this.signalClose();
       }
     });
   }
 
-  private promoteNextReadOnly(): void {
-    if (this.readOnlyWs.length === 0) return;
-    this.activeWs = this.readOnlyWs.shift()!;
-    const msg: ServerMessage = { type: 'status', readOnly: false, content: 'active' };
-    this.activeWs.send(JSON.stringify(msg));
-  }
-
-  private handleWsMessage(raw: string): void {
+  private handleWsMessage(raw: string, ws: WebSocket): void {
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw) as unknown;
@@ -212,9 +215,24 @@ export class WebChannel implements Channel {
       return;
     }
 
+    const info = this.connections.get(ws);
+    if (!info) return;
+
     if (isClientMessage(parsed)) {
-      const turn: UserTurn = { content: parsed.content };
+      const turn: UserTurn = { content: parsed.content, author: info.userId };
+      const queuePosition = this.turnQueue.length + 1;
+      const userMsg: ServerMessage = {
+        type: 'user_message',
+        author: info.userId,
+        content: parsed.content,
+        queuePosition,
+      };
+      this.broadcastWs(userMsg);
+      this.broadcastSse(userMsg);
       this.enqueueTurn(turn);
+      const queueStatus: ServerMessage = { type: 'queue_status', depth: this.turnQueue.length };
+      this.broadcastWs(queueStatus);
+      this.broadcastSse(queueStatus);
     } else if (isReviewReply(parsed)) {
       const pending = this.pendingReviews.get(parsed.reviewId);
       if (pending) {
@@ -351,8 +369,9 @@ export class WebChannel implements Channel {
 
   private broadcastWs(msg: ServerMessage): void {
     const data = JSON.stringify(msg);
-    if (this.activeWs) this.activeWs.send(data);
-    for (const ro of this.readOnlyWs) ro.send(data);
+    for (const ws of this.connections.keys()) {
+      ws.send(data);
+    }
   }
 
   private broadcastSse(msg: ServerMessage): void {
@@ -387,7 +406,10 @@ export class WebChannel implements Channel {
   async *receive(): AsyncIterable<UserTurn> {
     while (true) {
       if (this.turnQueue.length > 0) {
-        yield this.turnQueue.shift()!;
+        const turn = this.turnQueue.shift()!;
+        this.currentlyProcessing = turn;
+        this.broadcastProcessingEvent(turn);
+        yield turn;
         continue;
       }
 
@@ -399,12 +421,27 @@ export class WebChannel implements Channel {
       });
 
       if (turn === null) return;
+      this.currentlyProcessing = turn;
+      this.broadcastProcessingEvent(turn);
       yield turn;
     }
   }
 
+  private broadcastProcessingEvent(turn: UserTurn): void {
+    if (!turn.author) return;
+    const msg: ServerMessage = { type: 'processing', author: turn.author, content: turn.content };
+    this.broadcastWs(msg);
+    this.broadcastSse(msg);
+  }
+
   async send(response: string): Promise<void> {
-    const msg: ServerMessage = { type: 'response', content: response };
+    const replyTo = this.currentlyProcessing?.author;
+    this.currentlyProcessing = null;
+    const msg: ServerMessage = {
+      type: 'response',
+      content: response,
+      ...(replyTo !== undefined ? { replyTo } : {}),
+    };
     this.broadcastWs(msg);
     this.broadcastSse(msg);
   }

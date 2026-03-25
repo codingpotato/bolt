@@ -37,8 +37,12 @@ describe('SearXNGProvider', () => {
     await provider.search('typescript trends');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('q=typescript+trends'),
+      expect.any(Object),
     );
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('format=json'));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('format=json'),
+      expect.any(Object),
+    );
   });
 
   it('maps results to SearchResult shape', async () => {
@@ -83,14 +87,14 @@ describe('SearXNGProvider', () => {
     fetchMock.mockResolvedValue(makeOkResponse({ results: [] }));
     const provider = new SearXNGProvider();
     await provider.search('test', { timeRange: 'week' });
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('time_range=week'));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('time_range=week'), expect.any(Object));
   });
 
   it('passes categories when category option is set', async () => {
     fetchMock.mockResolvedValue(makeOkResponse({ results: [] }));
     const provider = new SearXNGProvider();
     await provider.search('test', { category: 'news' });
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('categories=news'));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('categories=news'), expect.any(Object));
   });
 
   it('throws on HTTP error response', async () => {
@@ -380,7 +384,7 @@ describe('createSearchProvider', () => {
       search: { provider: 'searxng', endpoint: 'http://custom:9999', maxResults: 10 },
     });
     await provider.search('test');
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('http://custom:9999'));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('http://custom:9999'), expect.any(Object));
   });
 
   it('passes custom endpoint to Brave provider', async () => {

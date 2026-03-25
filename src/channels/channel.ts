@@ -24,6 +24,13 @@ export interface UserTurn {
   /** The message content from the user. */
   content: string;
   /**
+   * Display name of the sender.
+   * Set by WebChannel from the ?name= query param; auto-assigned as User1/User2/…
+   * when omitted. Not set by CliChannel (single-user).
+   * AgentCore prefixes the LLM message with [author]: when this is present.
+   */
+  author?: string;
+  /**
    * Transport-specific metadata — not passed to the model.
    * Examples: { userId, channelId } for Discord; absent for CLI.
    */

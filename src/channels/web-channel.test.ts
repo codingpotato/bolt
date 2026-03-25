@@ -149,7 +149,7 @@ function makeChannel(
     persistent?: boolean;
   } = {}
 ): {
-  channel: WebChannel & { _onConnection: (ws: FakeWs) => void };
+  channel: WebChannel & { _onConnection: (ws: FakeWs, name?: string) => void };
   server: FakeServer;
 } {
   const server = new FakeServer();
@@ -163,12 +163,12 @@ function makeChannel(
       persistent: opts.persistent,
     },
     server as unknown as Server
-  ) as WebChannel & { _onConnection: (ws: FakeWs) => void };
+  ) as WebChannel & { _onConnection: (ws: FakeWs, name?: string) => void };
 
   // Expose the private onConnection so tests can simulate WS connections
   // without going through the real WebSocketServer upgrade path.
-  channel['_onConnection'] = (ws: FakeWs) =>
-    (channel as unknown as { onConnection: (ws: FakeWs) => void }).onConnection(ws);
+  channel['_onConnection'] = (ws: FakeWs, name?: string) =>
+    (channel as unknown as { onConnection: (ws: FakeWs, name?: string) => void }).onConnection(ws, name);
 
   return { channel, server };
 }
@@ -178,86 +178,162 @@ function makeChannel(
 // ---------------------------------------------------------------------------
 
 describe('WebChannel', () => {
-  describe('WebSocket mode — connection roles', () => {
-    it('marks the first connection as active', () => {
+  describe('WebSocket mode — connection management', () => {
+    it('sends status with userId on connect (requested name)', () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel['_onConnection'](ws, 'Alice');
+      expect(ws.lastSent()).toMatchObject({ type: 'status', userId: 'Alice', connectedUsers: 1, queueDepth: 0 });
+    });
+
+    it('auto-assigns name when none provided', () => {
       const { channel } = makeChannel();
       const ws = new FakeWs();
       channel['_onConnection'](ws);
-      expect(ws.lastSent()).toMatchObject({ type: 'status', readOnly: false });
+      expect(ws.lastSent()).toMatchObject({ type: 'status', userId: 'User1' });
     });
 
-    it('marks the second connection as read-only', () => {
+    it('increments counter for each unnamed connection', () => {
       const { channel } = makeChannel();
       const ws1 = new FakeWs();
       const ws2 = new FakeWs();
       channel['_onConnection'](ws1);
       channel['_onConnection'](ws2);
-      expect(ws2.lastSent()).toMatchObject({ type: 'status', readOnly: true });
+      expect(ws1.lastSent()).toMatchObject({ type: 'status', userId: 'User1' });
+      expect(ws2.lastSent()).toMatchObject({ type: 'status', userId: 'User2' });
     });
 
-    it('promotes the oldest read-only when active disconnects', () => {
+    it('reflects connectedUsers count on connect', () => {
       const { channel } = makeChannel();
       const ws1 = new FakeWs();
       const ws2 = new FakeWs();
-      const ws3 = new FakeWs();
-      channel['_onConnection'](ws1);
-      channel['_onConnection'](ws2);
-      channel['_onConnection'](ws3);
-
-      ws1.simulateClose();
-
-      // ws2 is oldest read-only → should be promoted
-      const lastMsg = ws2.lastSent();
-      expect(lastMsg).toMatchObject({ type: 'status', readOnly: false });
-      // ws3 stays read-only (no additional status message)
+      channel['_onConnection'](ws1, 'Alice');
+      channel['_onConnection'](ws2, 'Bob');
+      expect(ws2.lastSent()).toMatchObject({ connectedUsers: 2 });
     });
 
-    it('rejects messages from read-only connections', () => {
+    it('all connections can send messages', async () => {
       const { channel } = makeChannel();
       const ws1 = new FakeWs();
       const ws2 = new FakeWs();
-      channel['_onConnection'](ws1);
-      channel['_onConnection'](ws2);
+      channel['_onConnection'](ws1, 'Alice');
+      channel['_onConnection'](ws2, 'Bob');
 
-      ws2.simulateMessage({ type: 'message', content: 'hello' });
+      const iter = channel.receive()[Symbol.asyncIterator]();
+      ws2.simulateMessage({ type: 'message', content: 'from bob' });
 
-      expect(ws2.lastSent()).toMatchObject({ type: 'error', content: 'read-only' });
+      const { value } = await iter.next();
+      expect(value).toMatchObject({ content: 'from bob', author: 'Bob' });
     });
   });
 
   describe('WebSocket mode — messaging', () => {
-    it('enqueues turns from the active connection', async () => {
+    it('enqueues turns with author from any connection', async () => {
       const { channel } = makeChannel();
       const ws = new FakeWs();
-      channel['_onConnection'](ws);
+      channel['_onConnection'](ws, 'Alice');
 
       const iter = channel.receive()[Symbol.asyncIterator]();
-
       ws.simulateMessage({ type: 'message', content: 'hello world' });
 
       const { value } = await iter.next();
-      expect(value).toEqual({ content: 'hello world' });
+      expect(value).toMatchObject({ content: 'hello world', author: 'Alice' });
     });
 
-    it('broadcasts send() to all connections', async () => {
+    it('broadcasts user_message to all clients when a message is sent', () => {
       const { channel } = makeChannel();
       const ws1 = new FakeWs();
       const ws2 = new FakeWs();
-      channel['_onConnection'](ws1);
-      channel['_onConnection'](ws2);
+      channel['_onConnection'](ws1, 'Alice');
+      channel['_onConnection'](ws2, 'Bob');
+
+      ws1.simulateMessage({ type: 'message', content: 'hi' });
+
+      // Both clients should receive user_message broadcast
+      const msgs1 = ws1.sent.map((s) => JSON.parse(s) as ServerMessage);
+      const msgs2 = ws2.sent.map((s) => JSON.parse(s) as ServerMessage);
+      const userMsg1 = msgs1.find((m) => m.type === 'user_message');
+      const userMsg2 = msgs2.find((m) => m.type === 'user_message');
+      expect(userMsg1).toMatchObject({ type: 'user_message', author: 'Alice', content: 'hi' });
+      expect(userMsg2).toMatchObject({ type: 'user_message', author: 'Alice', content: 'hi' });
+    });
+
+    it('broadcasts queue_status after a message is enqueued', () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel['_onConnection'](ws, 'Alice');
+
+      // Block receive so the turn goes to queue
+      ws.simulateMessage({ type: 'message', content: 'queued' });
+
+      const msgs = ws.sent.map((s) => JSON.parse(s) as ServerMessage);
+      const queueMsg = msgs.find((m) => m.type === 'queue_status');
+      expect(queueMsg).toBeDefined();
+      expect(typeof queueMsg!.depth).toBe('number');
+    });
+
+    it('broadcasts processing event when a turn is dequeued', async () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel['_onConnection'](ws, 'Alice');
+
+      // Enqueue a turn, then dequeue via receive()
+      ws.simulateMessage({ type: 'message', content: 'process me' });
+      const iter = channel.receive()[Symbol.asyncIterator]();
+      await iter.next();
+
+      const msgs = ws.sent.map((s) => JSON.parse(s) as ServerMessage);
+      // processing may have been broadcast before or after the turn was queued
+      // (depends on whether waiter was present); just confirm it exists
+      const processingMsg = msgs.find((m) => m.type === 'processing');
+      expect(processingMsg).toMatchObject({ type: 'processing', author: 'Alice', content: 'process me' });
+    });
+
+    it('broadcasts send() to all connections with replyTo', async () => {
+      const { channel } = makeChannel();
+      const ws1 = new FakeWs();
+      const ws2 = new FakeWs();
+      channel['_onConnection'](ws1, 'Alice');
+      channel['_onConnection'](ws2, 'Bob');
+
+      // Dequeue Alice's turn so currentlyProcessing is set
+      const iter = channel.receive()[Symbol.asyncIterator]();
+      ws1.simulateMessage({ type: 'message', content: 'hello' });
+      await iter.next();
 
       await channel.send('great response');
 
       const msg1 = ws1.lastSent();
       const msg2 = ws2.lastSent();
-      expect(msg1).toMatchObject({ type: 'response', content: 'great response' });
-      expect(msg2).toMatchObject({ type: 'response', content: 'great response' });
+      expect(msg1).toMatchObject({ type: 'response', content: 'great response', replyTo: 'Alice' });
+      expect(msg2).toMatchObject({ type: 'response', content: 'great response', replyTo: 'Alice' });
     });
 
-    it('ignores malformed JSON messages silently', async () => {
+    it('queues multiple turns in FIFO order', async () => {
+      const { channel } = makeChannel();
+      const ws1 = new FakeWs();
+      const ws2 = new FakeWs();
+      channel['_onConnection'](ws1, 'Alice');
+      channel['_onConnection'](ws2, 'Bob');
+
+      // Enqueue both before consuming
+      ws1.simulateMessage({ type: 'message', content: 'first' });
+      ws2.simulateMessage({ type: 'message', content: 'second' });
+
+      const turns: Array<{ content: string; author?: string }> = [];
+      for await (const turn of channel.receive()) {
+        turns.push({ content: turn.content, author: turn.author });
+        if (turns.length === 2) break;
+      }
+
+      expect(turns[0]).toMatchObject({ content: 'first', author: 'Alice' });
+      expect(turns[1]).toMatchObject({ content: 'second', author: 'Bob' });
+    });
+
+    it('ignores malformed JSON messages silently', () => {
       const { channel } = makeChannel();
       const ws = new FakeWs();
-      channel['_onConnection'](ws);
+      channel['_onConnection'](ws, 'Alice');
 
       // Emit raw bad JSON — should not throw
       ws.emit('message', 'not-json');
@@ -456,26 +532,7 @@ describe('WebChannel', () => {
     });
   });
 
-  describe('WebSocket mode — promoted connection can send messages', () => {
-    it('allows the promoted connection to send messages after active disconnects', async () => {
-      const { channel } = makeChannel();
-      const ws1 = new FakeWs();
-      const ws2 = new FakeWs();
-      channel['_onConnection'](ws1);
-      channel['_onConnection'](ws2);
-
-      // ws1 disconnects → ws2 is promoted to active
-      ws1.simulateClose();
-
-      const iter = channel.receive()[Symbol.asyncIterator]();
-      ws2.simulateMessage({ type: 'message', content: 'from promoted' });
-
-      const { value } = await iter.next();
-      expect(value).toEqual({ content: 'from promoted' });
-    });
-  });
-
-  describe('WebSocket upgrade — token auth via ?token= query param', () => {
+describe('WebSocket upgrade — token auth via ?token= query param', () => {
     it('rejects upgrade when token in query param does not match', () => {
       const { channel } = makeChannel({ token: 'secret' });
       const socket = { write: vi.fn(), destroy: vi.fn(), on: vi.fn() };

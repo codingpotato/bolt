@@ -144,7 +144,7 @@ export class AgentCore {
         if (result.exit) break;
         continue;
       }
-      await this.handleTurn(turn.content, sessionId);
+      await this.handleTurn(turn.content, sessionId, turn.author);
     }
   }
 
@@ -159,14 +159,18 @@ export class AgentCore {
    * Context overflow that cannot be resolved by compaction is also surfaced
    * this way.
    */
-  async handleTurn(userMessage: string, sessionId: string = randomUUID()): Promise<void> {
+  async handleTurn(userMessage: string, sessionId: string = randomUUID(), author?: string): Promise<void> {
     // Tool definitions are stable for the lifetime of a turn — hoist the call
     // outside the loop to avoid redundant work on every round-trip.
     const tools = this.toolBus.getAnthropicDefinitions() as Anthropic.Tool[];
 
+    // In multi-user sessions, prefix the message with the author's name so the
+    // model understands who sent each turn.
+    const messageContent = author ? `[${author}]: ${userMessage}` : userMessage;
+
     // Append the user message to L1 and persist to L2.
-    this.l1.push({ role: 'user', content: userMessage });
-    await this.persistEntry(sessionId, 'user', userMessage);
+    this.l1.push({ role: 'user', content: messageContent });
+    await this.persistEntry(sessionId, 'user', messageContent);
 
     try {
       while (true) {

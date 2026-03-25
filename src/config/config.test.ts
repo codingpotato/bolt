@@ -187,6 +187,14 @@ describe('resolveConfig', () => {
       expect(config.local.endpoint).toBe('http://localhost:8080');
     });
 
+    it('BOLT_WEB_HOST overrides channels.web.host', () => {
+      process.env['BOLT_WEB_HOST'] = '0.0.0.0';
+
+      const config = resolveConfig();
+
+      expect(config.channels.web.host).toBe('0.0.0.0');
+    });
+
     it('BOLT_WEB_PORT overrides channels.web.port', () => {
       process.env['BOLT_WEB_PORT'] = '9090';
 

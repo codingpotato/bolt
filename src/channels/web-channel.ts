@@ -440,14 +440,18 @@ export class WebChannel implements Channel {
     }
     const host = this.opts.host ?? '127.0.0.1';
     return new Promise((resolve, reject) => {
-      this.httpServer.once('error', (err: NodeJS.ErrnoException) => {
+      const onError = (err: NodeJS.ErrnoException): void => {
         if (err.code === 'EADDRINUSE') {
           reject(new Error(`Port ${this.opts.port} is already in use`));
         } else {
           reject(err);
         }
+      };
+      this.httpServer.once('error', onError);
+      this.httpServer.listen(this.opts.port, host, () => {
+        this.httpServer.removeListener('error', onError);
+        resolve();
       });
-      this.httpServer.listen(this.opts.port, host, () => resolve());
     });
   }
 

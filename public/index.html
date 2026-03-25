@@ -115,6 +115,15 @@
       border-bottom-left-radius: 4px;
     }
 
+    .progress-event {
+      align-self: flex-start;
+      font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 12px;
+      color: var(--text-muted, #888);
+      white-space: pre;
+      padding: 2px 4px;
+    }
+
     .bubble code {
       font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
       font-size: 13px;
@@ -530,6 +539,18 @@
     }
 
     // -----------------------------------------------------------------------
+    // Progress event rendering
+    // -----------------------------------------------------------------------
+
+    function addProgress(text) {
+      const el = document.createElement('div');
+      el.className = 'progress-event';
+      el.textContent = text;
+      messagesEl.insertBefore(el, thinkingEl);
+      scrollToBottom();
+    }
+
+    // -----------------------------------------------------------------------
     // Review card
     // -----------------------------------------------------------------------
 
@@ -742,6 +763,10 @@
 
         case 'media':
           if (typeof msg.mediaUrl === 'string') addMediaMessage(msg.mediaUrl, msg.caption);
+          break;
+
+        case 'progress':
+          if (typeof msg.content === 'string') addProgress(msg.content);
           break;
 
         case 'error':

@@ -104,6 +104,15 @@ async function serve(serveArgs: string[]): Promise<void> {
   const slashRegistry = createSlashCommandRegistry();
   slashRegistry.register(createSkillsSlashCommand(skills));
   slashRegistry.register(createRunSkillSlashCommand(skills, auth, config.model, subagentScript, runSubagent));
+  // /exit is console-only in daemon mode — disable it from the web UI.
+  slashRegistry.register({
+    name: 'exit',
+    description: 'Not available in daemon mode.',
+    async execute(_args, ctx) {
+      await ctx.send('/exit is not available from the web UI. Stop the server from the console.');
+      return {};
+    },
+  });
 
   const channel = new WebChannel({
     port,

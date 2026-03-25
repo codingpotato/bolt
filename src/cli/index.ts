@@ -155,6 +155,8 @@ async function serve(serveArgs: string[]): Promise<void> {
   toolBus.register(createUserReviewTool());
 
   const shutdown = async (): Promise<void> => {
+    process.off('SIGTERM', handleSignal);
+    process.off('SIGINT', handleSignal);
     process.stderr.write('\nbolt serve: shutting down gracefully...\n');
     await channel.stop();
     process.exit(0);

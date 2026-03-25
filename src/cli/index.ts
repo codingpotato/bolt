@@ -57,6 +57,8 @@ async function serve(serveArgs: string[]): Promise<void> {
   }
   const tokenFlagIndex = serveArgs.indexOf('--token');
   const token = tokenFlagIndex !== -1 ? (serveArgs[tokenFlagIndex + 1] ?? undefined) : config.channels.web.token;
+  const hostFlagIndex = serveArgs.indexOf('--host');
+  const host = hostFlagIndex !== -1 ? (serveArgs[hostFlagIndex + 1] ?? undefined) : config.channels.web.host;
 
   const auth = resolveAuth();
   const client = createAnthropicClient(auth);
@@ -102,9 +104,19 @@ async function serve(serveArgs: string[]): Promise<void> {
   const slashRegistry = createSlashCommandRegistry();
   slashRegistry.register(createSkillsSlashCommand(skills));
   slashRegistry.register(createRunSkillSlashCommand(skills, auth, config.model, subagentScript, runSubagent));
+  // /exit is console-only in daemon mode — disable it from the web UI.
+  slashRegistry.register({
+    name: 'exit',
+    description: 'Not available in daemon mode.',
+    async execute(_args, ctx) {
+      await ctx.send('/exit is not available from the web UI. Stop the server from the console.');
+      return {};
+    },
+  });
 
   const channel = new WebChannel({
     port,
+    host,
     token,
     mode: config.channels.web.mode,
     enabled: true,
@@ -157,10 +169,12 @@ async function serve(serveArgs: string[]): Promise<void> {
   process.on('SIGINT', handleSignal);
 
   await channel.listen();
-  logger.info('bolt serve started', { port, model: config.model, auth: auth.mode });
-  process.stderr.write(`bolt serve: listening on http://localhost:${port} (model: ${config.model})\n`);
+  const boundHost = host ?? '127.0.0.1';
+  logger.info('bolt serve started', { port, host: boundHost, model: config.model, auth: auth.mode });
+  process.stderr.write(`bolt serve: listening on http://${boundHost}:${port} (model: ${config.model})\n`);
 
   await agent.run();
+  await shutdown();
 }
 
 async function main(): Promise<void> {

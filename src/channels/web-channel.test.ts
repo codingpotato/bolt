@@ -56,8 +56,10 @@ class FakeWs extends EventEmitter {
 
 class FakeServer extends EventEmitter {
   listening = false;
+  lastListenArgs: { port: number; host: string } | null = null;
 
-  listen(_port: number, cb: () => void): this {
+  listen(port: number, host: string, cb: () => void): this {
+    this.lastListenArgs = { port, host };
     this.listening = true;
     cb();
     return this;
@@ -629,6 +631,55 @@ describe('WebChannel', () => {
       const msg = ws.lastSent();
       expect(msg.type).toBe('media');
       expect(msg.caption).toBeUndefined();
+    });
+  });
+
+  describe('listen()', () => {
+    it('binds to 127.0.0.1 by default', async () => {
+      const { channel, server } = makeChannel();
+      await channel.listen();
+      expect(server.lastListenArgs).toEqual({ port: 3000, host: '127.0.0.1' });
+    });
+
+    it('binds to the provided host', async () => {
+      const server = new FakeServer();
+      const channel = new WebChannel(
+        { port: 3000, host: '0.0.0.0', mode: 'websocket' },
+        server as unknown as Server
+      );
+      await channel.listen();
+      expect(server.lastListenArgs).toEqual({ port: 3000, host: '0.0.0.0' });
+    });
+
+    it('rejects with a clear message when EADDRINUSE', async () => {
+      const server = new FakeServer();
+      // Override listen to emit EADDRINUSE instead of calling the callback
+      server.listen = function (_port: number, _host: string, _cb: () => void): typeof server {
+        process.nextTick(() => {
+          server.emit('error', Object.assign(new Error('EADDRINUSE'), { code: 'EADDRINUSE' }));
+        });
+        return server;
+      };
+      const channel = new WebChannel(
+        { port: 3000, mode: 'websocket' },
+        server as unknown as Server
+      );
+      await expect(channel.listen()).rejects.toThrow('Port 3000 is already in use');
+    });
+
+    it('rejects with the original error for non-EADDRINUSE errors', async () => {
+      const server = new FakeServer();
+      server.listen = function (_port: number, _host: string, _cb: () => void): typeof server {
+        process.nextTick(() => {
+          server.emit('error', Object.assign(new Error('EACCES'), { code: 'EACCES' }));
+        });
+        return server;
+      };
+      const channel = new WebChannel(
+        { port: 3000, mode: 'websocket' },
+        server as unknown as Server
+      );
+      await expect(channel.listen()).rejects.toThrow('EACCES');
     });
   });
 

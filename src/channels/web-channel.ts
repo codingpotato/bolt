@@ -58,6 +58,8 @@ interface PendingReview {
 
 export interface WebChannelOptions {
   port: number;
+  /** Network interface to bind to. Defaults to '127.0.0.1'. Use '0.0.0.0' to listen on all interfaces. */
+  host?: string;
   token?: string;
   mode: 'http' | 'websocket';
   enabled?: boolean;
@@ -431,13 +433,25 @@ export class WebChannel implements Channel {
   // Lifecycle
   // ---------------------------------------------------------------------------
 
-  /** Start listening. Throws if `enabled` is explicitly set to false. */
+  /** Start listening. Throws if `enabled` is explicitly set to false or if the port is already in use. */
   listen(): Promise<void> {
     if (this.opts.enabled === false) {
       return Promise.reject(new Error('WebChannel is disabled (enabled: false)'));
     }
-    return new Promise((resolve) => {
-      this.httpServer.listen(this.opts.port, () => resolve());
+    const host = this.opts.host ?? '127.0.0.1';
+    return new Promise((resolve, reject) => {
+      const onError = (err: NodeJS.ErrnoException): void => {
+        if (err.code === 'EADDRINUSE') {
+          reject(new Error(`Port ${this.opts.port} is already in use`));
+        } else {
+          reject(err);
+        }
+      };
+      this.httpServer.once('error', onError);
+      this.httpServer.listen(this.opts.port, host, () => {
+        this.httpServer.removeListener('error', onError);
+        resolve();
+      });
     });
   }
 

@@ -118,7 +118,8 @@ describe('webFetchTool', () => {
     fetchMock.mockResolvedValue(makeMockResponse(200, 'text/html', longBody));
 
     const result = await webFetchTool.execute({ url: 'https://example.com' }, ctx);
-    expect(result.body).toHaveLength(MAX_BODY_CHARS + result.body.length - MAX_BODY_CHARS);
+    expect(result.body.length).toBeGreaterThan(MAX_BODY_CHARS);
+    expect(result.body.length).toBeLessThan(MAX_BODY_CHARS + 100);
     expect(result.body.startsWith('x'.repeat(MAX_BODY_CHARS))).toBe(true);
     expect(result.body).toContain('[truncated');
   });

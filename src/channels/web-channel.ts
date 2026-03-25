@@ -15,7 +15,7 @@ interface ClientMessage {
 
 /** Shape of messages sent from server → client. */
 export interface ServerMessage {
-  type: 'response' | 'review' | 'error' | 'status' | 'media';
+  type: 'response' | 'review' | 'error' | 'status' | 'media' | 'progress';
   content?: string;
   reviewId?: string;
   reviewRequest?: UserReviewRequest;
@@ -418,6 +418,12 @@ export class WebChannel implements Channel {
     return new Promise<UserReviewResponse>((resolve, reject) => {
       this.pendingReviews.set(reviewId, { resolve, reject });
     });
+  }
+
+  sendProgress(text: string): void {
+    const msg: ServerMessage = { type: 'progress', content: text };
+    this.broadcastWs(msg);
+    this.broadcastSse(msg);
   }
 
   async sendMedia(filePath: string, caption?: string): Promise<void> {

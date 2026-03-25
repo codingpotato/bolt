@@ -20,7 +20,7 @@ import { createTodoTools } from '../todo/todo-tools';
 import { TaskStore } from '../tasks/task-store';
 import { createTaskTools } from '../tasks/task-tools';
 import { loadAgentPrompt, expandTilde } from '../agent-prompt/agent-prompt';
-import { CliProgressReporter } from '../progress';
+import { CliProgressReporter, WebChannelProgressReporter } from '../progress';
 import { SessionStore } from '../memory/session-store';
 import { MemoryStore } from '../memory/memory-store';
 import { MemoryManager } from '../memory/memory-manager';
@@ -124,7 +124,7 @@ async function serve(serveArgs: string[]): Promise<void> {
     persistent: true,
   });
 
-  const progress = new CliProgressReporter(process.stdout, false, true);
+  const progress = new WebChannelProgressReporter((text) => channel.sendProgress(text));
   const ctx = {
     cwd,
     log,

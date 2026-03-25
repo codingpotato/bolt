@@ -634,6 +634,20 @@ describe('WebChannel', () => {
     });
   });
 
+  describe('sendProgress()', () => {
+    it('broadcasts a progress message to connected clients', () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel['_onConnection'](ws);
+
+      channel.sendProgress('⟳ Thinking…');
+
+      const msg = ws.lastSent();
+      expect(msg.type).toBe('progress');
+      expect(msg.content).toBe('⟳ Thinking…');
+    });
+  });
+
   describe('listen()', () => {
     it('binds to 127.0.0.1 by default', async () => {
       const { channel, server } = makeChannel();

@@ -407,6 +407,10 @@ export class WebChannel implements Channel {
     while (true) {
       if (this.turnQueue.length > 0) {
         const turn = this.turnQueue.shift()!;
+        // Broadcast updated queue depth now that we've consumed one turn.
+        const depthMsg: ServerMessage = { type: 'queue_status', depth: this.turnQueue.length };
+        this.broadcastWs(depthMsg);
+        this.broadcastSse(depthMsg);
         this.currentlyProcessing = turn;
         this.broadcastProcessingEvent(turn);
         yield turn;

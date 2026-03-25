@@ -801,7 +801,6 @@
         case 'response':
           showThinking(false);
           processingAuthor = null;
-          queueDepth = 0;
           updateBanner();
           if (typeof msg.content === 'string') addMessage('agent', msg.content, 'Bolt');
           break;

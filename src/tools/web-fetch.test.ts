@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolContext } from './tool';
-import { webFetchTool } from './web-fetch';
+import { webFetchTool, MAX_BODY_CHARS } from './web-fetch';
 
 // Mock the global fetch
 const fetchMock = vi.fn();
@@ -111,6 +111,24 @@ describe('webFetchTool', () => {
     await expect(webFetchTool.execute({ url: 'https://example.com' }, ctx)).rejects.toSatisfy(
       (err) => err instanceof ToolError && err.message.includes('{"error":"invalid"}'),
     );
+  });
+
+  it('truncates body exceeding MAX_BODY_CHARS and appends a notice', async () => {
+    const longBody = 'x'.repeat(MAX_BODY_CHARS + 100);
+    fetchMock.mockResolvedValue(makeMockResponse(200, 'text/html', longBody));
+
+    const result = await webFetchTool.execute({ url: 'https://example.com' }, ctx);
+    expect(result.body).toHaveLength(MAX_BODY_CHARS + result.body.length - MAX_BODY_CHARS);
+    expect(result.body.startsWith('x'.repeat(MAX_BODY_CHARS))).toBe(true);
+    expect(result.body).toContain('[truncated');
+  });
+
+  it('does not truncate body within MAX_BODY_CHARS', async () => {
+    const shortBody = 'hello world';
+    fetchMock.mockResolvedValue(makeMockResponse(200, 'text/html', shortBody));
+
+    const result = await webFetchTool.execute({ url: 'https://example.com' }, ctx);
+    expect(result.body).toBe(shortBody);
   });
 
   it('handles missing content-type header gracefully', async () => {

@@ -1,6 +1,8 @@
 import { ToolError } from './tool';
 import type { Tool, ToolContext } from './tool';
 
+export const MAX_BODY_CHARS = 20_000;
+
 export interface WebFetchInput {
   url: string;
 }
@@ -56,6 +58,10 @@ export const webFetchTool: Tool<WebFetchInput, WebFetchOutput> = {
       );
     }
     const contentType = response.headers.get('content-type') ?? '';
+    const truncated = body.length > MAX_BODY_CHARS;
+    if (truncated) {
+      body = body.slice(0, MAX_BODY_CHARS) + `\n\n[truncated — response exceeded ${MAX_BODY_CHARS} characters]`;
+    }
     return { body, statusCode: response.status, contentType };
   },
 };

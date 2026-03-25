@@ -165,6 +165,7 @@ async function serve(serveArgs: string[]): Promise<void> {
   process.stderr.write(`bolt serve: listening on http://${boundHost}:${port} (model: ${config.model})\n`);
 
   await agent.run();
+  await shutdown();
 }
 
 async function main(): Promise<void> {

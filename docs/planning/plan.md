@@ -897,14 +897,14 @@ I want bolt to generate blog posts, social posts, and video scripts,
 so that I can produce content at scale.
 
 Acceptance Criteria:
-- [ ] write-blog-post produces well-structured Markdown given topic + tone
-- [ ] draft-social-post produces platform-appropriate copy (Twitter, LinkedIn, Xiaohongshu, etc.)
-- [ ] generate-video-script produces a structured Storyboard (title, summary, scenes[])
-- [ ] Each scene includes: description, dialogue, camera, duration, imagePromptHint, transitionTo
-- [ ] generate-image-prompt creates prompts optimised for target model (SDXL, Flux, etc.)
-- [ ] generate-video-prompt creates motion prompts for image-to-video generation
-- [ ] Skills can optionally use web_search and web_fetch to research before writing
-- [ ] Skills can be chained: summarize-url output feeds into write-blog-post
+- [x] write-blog-post produces well-structured Markdown given topic + tone
+- [x] draft-social-post produces platform-appropriate copy (Twitter, LinkedIn, Xiaohongshu, etc.)
+- [x] generate-video-script produces a structured Storyboard (title, summary, scenes[])
+- [x] Each scene includes: description, dialogue, camera, duration, imagePromptHint, transitionTo
+- [x] generate-image-prompt creates prompts optimised for target model (SDXL, Flux, etc.)
+- [x] generate-video-prompt creates motion prompts for image-to-video generation
+- [x] Skills can optionally use web_search and web_fetch to research before writing
+- [x] Skills can be chained: summarize-url output feeds into write-blog-post
 ```
 
 **S9-3: Code review skill**

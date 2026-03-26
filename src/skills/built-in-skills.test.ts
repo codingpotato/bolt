@@ -43,9 +43,10 @@ describe('built-in skills discoverability', () => {
     'generate-video-prompt',
     'summarize-url',
     'review-code',
+    'fix-tests',
   ];
 
-  it('loadSkills finds all 8 built-in skills when passed SKILLS_DIR as builtinSkillsDir', async () => {
+  it('loadSkills finds all 9 built-in skills when passed SKILLS_DIR as builtinSkillsDir', async () => {
     const skills = await loadSkills('', '', () => {}, SKILLS_DIR);
     const names = skills.map((s) => s.name);
     for (const expected of EXPECTED_NAMES) {

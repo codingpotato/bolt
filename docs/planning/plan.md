@@ -708,7 +708,7 @@ Acceptance Criteria:
 - [x] draft-social-post skill returns a short-form post for a given platform
 - [x] Each skill has an input schema, output schema, and system prompt
 - [x] Each skill has unit tests that mock the sub-agent execution
-- [ ] Note: analyze-trends skill is NOT included here — it depends on web_search (S7-2) and is implemented in S9-1
+- [x] Note: analyze-trends skill is NOT included here — it depends on web_search (S7-2) and is implemented in S9-1
 ```
 
 ---
@@ -882,12 +882,12 @@ I want bolt to search and analyse trending topics,
 so that I can create content based on what is currently popular.
 
 Acceptance Criteria:
-- [ ] analyze-trends skill accepts { topic?, platforms?, timeRange? } input
-- [ ] Uses web_search to find trending content across platforms
-- [ ] Uses web_fetch to deep-read top results for details
-- [ ] Returns structured report: { trends[], recommendedAngles[], topPosts[] }
-- [ ] Each trend has title, platform, engagement metrics (if available), and content angle
-- [ ] Skill has unit tests with mocked web_search and web_fetch
+- [x] analyze-trends skill accepts { topic?, platforms?, timeRange? } input
+- [x] Uses web_search to find trending content across platforms
+- [x] Uses web_fetch to deep-read top results for details
+- [x] Returns structured report: { trends[], recommendedAngles[], topPosts[] }
+- [x] Each trend has title, platform, engagement metrics (if available), and content angle
+- [x] Skill has unit tests with mocked web_search and web_fetch
 ```
 
 **S9-2: Content generation skills**

@@ -928,11 +928,11 @@ I want to run a test suite, read failures, attempt fixes, and retry,
 so that I can autonomously fix broken tests.
 
 Acceptance Criteria:
-- [ ] Agent runs bash({ command: "npm test" }) and interprets output
-- [ ] On test failure: reads error output, identifies failing file/assertion
-- [ ] Applies a targeted fix via file_edit or file_write
-- [ ] Retries the test run; max retries from codeWorkflows.testFixRetries (default 3)
-- [ ] Reports final pass/fail status after exhausting retries
+- [x] Agent runs bash({ command: "npm test" }) and interprets output
+- [x] On test failure: reads error output, identifies failing file/assertion
+- [x] Applies a targeted fix via file_edit or file_write
+- [x] Retries the test run; max retries from codeWorkflows.testFixRetries (default 3)
+- [x] Reports final pass/fail status after exhausting retries
 ```
 
 ---

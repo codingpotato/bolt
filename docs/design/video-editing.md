@@ -318,6 +318,7 @@ After all scene clips are generated and approved (S10-3), the post-production wo
                │
                ▼
          Final video saved
+         Channel completion message sent (S10-4)
 ```
 
 Steps 8 and 9 are **optional**: if the user did not provide an audio file or does not want subtitles, those tasks are skipped and the previous step's output becomes the final video.

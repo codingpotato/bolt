@@ -996,7 +996,21 @@ Acceptance Criteria:
 - [ ] Integration test covers the full pipeline with mocked MCP and channel
 ```
 
-**S10-4: FFmpeg Runner**
+**S10-4: Task completion notification via channel**
+```
+As a user,
+I want bolt to tell me when a long-running task finishes,
+so that I know the result without having to watch the screen.
+
+Acceptance Criteria:
+- [ ] When a task completes (success or failure), AgentCore sends a completion message through the active channel
+- [ ] CliChannel: prints a formatted completion line to stdout, e.g. "✓ Task completed: <title>" or "✗ Task failed: <title> — <reason>"
+- [ ] WebChannel: broadcasts a { type: "task_complete", title, status, result? } WebSocket event to all connected clients
+- [ ] Completion message is sent regardless of whether the agent is still in an active conversation turn
+- [ ] Unit tests cover CliChannel and WebChannel completion message paths
+```
+
+**S10-6: FFmpeg Runner**
 ```
 As a developer,
 I want a local FFmpeg wrapper that bolt's video tools can use,
@@ -1014,7 +1028,7 @@ Acceptance Criteria:
 - [ ] Unit tests mock child_process.spawn
 ```
 
-**S10-5: Video editing tools (video_merge, video_add_audio, video_add_subtitles)**
+**S10-7: Video editing tools (video_merge, video_add_audio, video_add_subtitles)**
 ```
 As an agent,
 I want tools to merge video clips and add audio and subtitles using FFmpeg,
@@ -1035,7 +1049,7 @@ Acceptance Criteria:
 - [ ] Unit tests mock FfmpegRunner
 ```
 
-**S10-6: Post-production workflow integration**
+**S10-8: Post-production workflow integration**
 ```
 As a blogger,
 I want bolt to automatically merge my scene clips and optionally add audio and subtitles,
@@ -1144,7 +1158,8 @@ S0 (Foundation)
 │                        ▼
 │          S10 (MCP + Video Production + Post-Production)
 │              S10-1..4: MCP + production workflow
-│              S10-4..6: FFmpeg Runner + video editing tools
+│              S10-4: channel task completion notification
+│              S10-5..8: FFmpeg Runner + video editing tools
 │                        │
 └───────────────────────►S11 (Polish)
 ```

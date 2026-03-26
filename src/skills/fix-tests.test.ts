@@ -67,14 +67,19 @@ describe('fix-tests: pass on first run', () => {
     expect(r.finalOutput).toContain('42 tests passed');
   });
 
-  it('uses default command "npm test" when command is omitted', async () => {
+  it('omitting command leaves it absent from serialised args (default is LLM-inferred)', async () => {
     const result = { passed: true, attempts: 1, finalOutput: 'ok', fixesApplied: [] };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
     const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
     await tool.execute({ name: 'fix-tests', args: { maxRetries: 3 } }, makeCtx());
     const [payload] = runner.mock.calls[0] as [import('../subagent/subagent-runner').SubagentPayload];
-    // default command value is in the serialised args
-    expect(payload.prompt).toContain('fix-tests');
+    // command has a YAML default but skill-loader never injects defaults into args;
+    // the LLM must rely on the system prompt fallback ("run npm test if command absent")
+    expect(payload.prompt).not.toContain('"command"');
+  });
+
+  it('system prompt specifies npm test as the fallback when command is absent', () => {
+    expect(skill.systemPrompt).toContain('npm test');
   });
 });
 

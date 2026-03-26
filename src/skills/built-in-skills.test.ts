@@ -35,6 +35,7 @@ function makeCtx(): ToolContext {
 
 describe('built-in skills discoverability', () => {
   const EXPECTED_NAMES = [
+    'analyze-trends',
     'write-blog-post',
     'draft-social-post',
     'generate-video-script',
@@ -44,7 +45,7 @@ describe('built-in skills discoverability', () => {
     'review-code',
   ];
 
-  it('loadSkills finds all 7 built-in skills when passed SKILLS_DIR as builtinSkillsDir', async () => {
+  it('loadSkills finds all 8 built-in skills when passed SKILLS_DIR as builtinSkillsDir', async () => {
     const skills = await loadSkills('', '', () => {}, SKILLS_DIR);
     const names = skills.map((s) => s.name);
     for (const expected of EXPECTED_NAMES) {
@@ -416,5 +417,110 @@ describe('review-code skill', () => {
       makeCtx(),
     );
     expect((result.result as typeof review).approved).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// analyze-trends
+// ---------------------------------------------------------------------------
+
+describe('analyze-trends skill', () => {
+  const skill = loadSkill('analyze-trends.skill.md');
+
+  it('has correct name', () => {
+    expect(skill.name).toBe('analyze-trends');
+  });
+
+  it('topic, platforms, and timeRange are all optional inputs', () => {
+    const required = skill.inputSchema.required ?? [];
+    expect(required).not.toContain('topic');
+    expect(required).not.toContain('platforms');
+    expect(required).not.toContain('timeRange');
+  });
+
+  it('timeRange enum includes expected values', () => {
+    const prop = skill.inputSchema.properties?.['timeRange'];
+    expect(prop?.enum).toEqual(expect.arrayContaining(['day', 'week', 'month']));
+  });
+
+  it('requires trends, recommendedAngles, and topPosts in output', () => {
+    expect(skill.outputSchema.required).toContain('trends');
+    expect(skill.outputSchema.required).toContain('recommendedAngles');
+    expect(skill.outputSchema.required).toContain('topPosts');
+  });
+
+  it('allows web_search and web_fetch', () => {
+    expect(skill.allowedTools).toContain('web_search');
+    expect(skill.allowedTools).toContain('web_fetch');
+  });
+
+  it('has a non-empty system prompt', () => {
+    expect(skill.systemPrompt.length).toBeGreaterThan(0);
+  });
+
+  it('invokes sub-agent with correct payload via skill_run', async () => {
+    const report = {
+      trends: [
+        {
+          title: 'AI agents are replacing junior devs',
+          platform: 'twitter',
+          contentAngle: 'Fear vs opportunity framing',
+        },
+      ],
+      recommendedAngles: ['Share a personal story about AI in your workflow'],
+      topPosts: [{ title: 'Thread: I replaced my intern with GPT-4', url: 'https://example.com/1' }],
+    };
+    const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(report) });
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+
+    await tool.execute({ name: 'analyze-trends', args: { topic: 'AI coding tools' } }, makeCtx());
+
+    expect(runner).toHaveBeenCalledOnce();
+    const [payload] = runner.mock.calls[0] as [import('../subagent/subagent-runner').SubagentPayload];
+    expect(payload.systemPrompt).toBe(skill.systemPrompt);
+    expect(payload.prompt).toContain('analyze-trends');
+    expect(payload.prompt).toContain('AI coding tools');
+    expect(payload.allowedTools).toEqual(expect.arrayContaining(['web_search', 'web_fetch']));
+  });
+
+  it('returns structured trend report from sub-agent output', async () => {
+    const report = {
+      trends: [
+        {
+          title: 'Short-form video is dominating',
+          platform: 'tiktok',
+          engagementMetrics: { views: '2M', likes: '150K' },
+          contentAngle: 'How-to tutorials outperform vlogs',
+        },
+      ],
+      recommendedAngles: ['Make a 30-second tip video', 'Use trending audio'],
+      topPosts: [
+        { title: 'My 30-day TikTok experiment', url: 'https://example.com/tiktok', platform: 'tiktok' },
+      ],
+    };
+    const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(report) });
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const result = await tool.execute(
+      { name: 'analyze-trends', args: { platforms: ['tiktok', 'instagram'], timeRange: 'week' } },
+      makeCtx(),
+    );
+    const r = result.result as typeof report;
+    expect(r.trends).toHaveLength(1);
+    expect(r.trends[0]?.platform).toBe('tiktok');
+    expect(r.trends[0]?.contentAngle).toBeTruthy();
+    expect(r.recommendedAngles).toHaveLength(2);
+    expect(r.topPosts).toHaveLength(1);
+  });
+
+  it('works with no input args (fully optional)', async () => {
+    const report = {
+      trends: [],
+      recommendedAngles: ['General trending content is hard to pin down right now'],
+      topPosts: [],
+    };
+    const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(report) });
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const result = await tool.execute({ name: 'analyze-trends', args: {} }, makeCtx());
+    expect(result.result).toBeDefined();
   });
 });

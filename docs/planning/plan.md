@@ -914,11 +914,11 @@ I want bolt to review code and return a structured report,
 so that I can get automated feedback on my code.
 
 Acceptance Criteria:
-- [ ] review-code skill accepts { path?, diff? } input
-- [ ] Returns CodeReviewResult: { summary, issues[], approved }
-- [ ] Each issue has severity ("error"|"warning"|"suggestion"), file, line?, message
-- [ ] Uses file_read to read source files if path is provided
-- [ ] Skill has unit tests with mocked sub-agent execution
+- [x] review-code skill accepts { path?, diff? } input
+- [x] Returns CodeReviewResult: { summary, issues[], approved }
+- [x] Each issue has severity ("error"|"warning"|"suggestion"), file, line?, message
+- [x] Uses file_read to read source files if path is provided
+- [x] Skill has unit tests with mocked sub-agent execution
 ```
 
 **S9-4: Automated test-and-fix workflow**

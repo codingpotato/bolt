@@ -15,7 +15,7 @@ Sprint 6  — Sub-agent + Skills
 Sprint 7  — Web Search + User Review Tools
 Sprint 8  — WebChannel
 Sprint 9  — Content Generation + Trend Analysis
-Sprint 10 — MCP Client + Video Production
+Sprint 10 — MCP Client + Video Production + Post-Production
 Sprint 11 — Polish + Integration
 ```
 
@@ -937,9 +937,9 @@ Acceptance Criteria:
 
 ---
 
-## Sprint 10 — MCP Client + Video Production
+## Sprint 10 — MCP Client + Video Production + Post-Production
 
-**Goal:** bolt can connect to external MCP servers and orchestrate the full video production pipeline.
+**Goal:** bolt can connect to external MCP servers, orchestrate the full video production pipeline, and assemble a final video with merged clips, audio, and subtitles using FFmpeg.
 
 ### Stories
 
@@ -1009,6 +1009,65 @@ Acceptance Criteria:
 - [ ] "none" provider disables notifications
 - [ ] WebChannel sends real-time progress via WebSocket (no extra notification needed)
 - [ ] Unit tests mock system commands
+```
+
+**S10-5: FFmpeg Runner**
+```
+As a developer,
+I want a local FFmpeg wrapper that bolt's video tools can use,
+so that post-production operations run reliably on the host machine.
+
+Acceptance Criteria:
+- [ ] FfmpegRunner.detect() resolves the ffmpeg binary from config.ffmpeg.path or system PATH
+- [ ] Missing ffmpeg logs a startup warning; bolt does not exit
+- [ ] FfmpegRunner.run(args, opts) spawns ffmpeg, streams stderr, and resolves FfmpegResult on exit code 0
+- [ ] Progress lines from ffmpeg stderr are parsed and forwarded to ProgressReporter (frame, speed, time)
+- [ ] Non-zero exit code rejects with FfmpegError carrying stderr and exitCode
+- [ ] SIGKILL/SIGTERM exit is treated as retryable; other non-zero exits are non-retryable
+- [ ] All paths passed to the runner are validated to be within context.cwd (workspace confinement)
+- [ ] config.ffmpeg.path, videoCodec, crf, preset, audioCodec, audioBitrate are respected
+- [ ] Unit tests mock child_process.spawn
+```
+
+**S10-6: Video editing tools (video_merge, video_add_audio, video_add_subtitles)**
+```
+As an agent,
+I want tools to merge video clips and add audio and subtitles using FFmpeg,
+so that I can assemble a final deliverable video from scene clips.
+
+Acceptance Criteria:
+- [ ] video_merge({ clips, outputPath, reencode? }) concatenates ≥ 2 clips via ffmpeg concat demuxer
+- [ ] video_merge falls back to re-encode pass if stream-copy fails due to mismatched codecs/resolution
+- [ ] video_add_audio({ videoPath, audioPath, outputPath, mode, audioVolume, originalVolume, fitToVideo })
+      supports replace mode (discard original audio) and mix mode (amix filter)
+- [ ] video_add_subtitles({ videoPath, subtitlesPath, outputPath, mode, language, fontSize, fontColor })
+      supports soft (mov_text embedded track) and hard (subtitles filter burned in) modes
+- [ ] .vtt subtitle files are converted to .srt in a temp file before hard-burn (ffmpeg compatibility)
+- [ ] All three tools enforce workspace confinement on every path argument
+- [ ] Missing ffmpeg returns non-retryable ToolError from all three tools
+- [ ] Progress events are emitted to ProgressReporter during encoding
+- [ ] All three tools are registered as built-in tools
+- [ ] Unit tests mock FfmpegRunner
+```
+
+**S10-7: Post-production workflow integration**
+```
+As a blogger,
+I want bolt to automatically merge my scene clips and optionally add audio and subtitles,
+so that I get a polished final video without running FFmpeg commands manually.
+
+Acceptance Criteria:
+- [ ] After S10-3 video generation completes, agent creates post-production tasks in the existing DAG:
+      mergeClips → addAudio (optional) → addSubtitles (optional)
+- [ ] mergeClips task calls video_merge with all approved clips, saves to final/raw.mp4, updates manifest
+- [ ] If user has provided an audio file, addAudio task calls video_add_audio; result saved to final/audio.mp4
+- [ ] If storyboard contains dialogue, agent generates scenes/subtitles.srt from storyboard dialogue and
+      scene durations, then calls video_add_subtitles; result saved to final/video.mp4
+- [ ] The last completed post-production step's output is linked as final/video.mp4 in the manifest
+- [ ] Each post-production task has requiresApproval: true; user can reject and trigger a redo
+- [ ] project.json manifest postProduction fields are updated after each step
+- [ ] Notification is sent (S10-4) when final/video.mp4 is complete
+- [ ] Integration test covers merge + audio + subtitles with mocked FfmpegRunner and channel
 ```
 
 ---
@@ -1099,7 +1158,9 @@ S0 (Foundation)
 │                │                │
 │                └───────┬────────┘
 │                        ▼
-│                S10 (MCP + Video Production)
+│          S10 (MCP + Video Production + Post-Production)
+│              S10-1..4: MCP + production workflow
+│              S10-5..7: FFmpeg Runner + video editing tools
 │                        │
 └───────────────────────►S11 (Polish)
 ```
@@ -1119,3 +1180,4 @@ All of the following must be true before tagging v1:
 - [ ] README is complete (S11-4)
 - [ ] WebChannel is functional and tested on mobile
 - [ ] At least one full video production pipeline tested end-to-end (with mocked ComfyUI)
+- [ ] Post-production pipeline tested end-to-end: merge + audio + subtitles (with mocked FfmpegRunner)

@@ -40,9 +40,16 @@
        │  - subagent_run   │
        │  - memory_search  │    ┌────────────────────────────────┐
        │  - memory_write   │    │       MCP Client               │
-       └───────────────────┘    │  Connects to external servers  │
-                                │  (ComfyUI, etc.)               │
-                                └────────────────────────────────┘
+       │  - video_merge    │    │  Connects to external servers  │
+       │  - video_add_audio│    │  (ComfyUI, etc.)               │
+       │  - video_add_subs │    └────────────────────────────────┘
+       └─────────┬─────────┘
+                 │                ┌────────────────────────────────┐
+                 └───────────────►│       FFmpeg Runner             │
+                  video_* tools   │  Local video post-production   │
+                                  │  (merge clips, add audio,      │
+                                  │   add subtitles)               │
+                                  └────────────────────────────────┘
 ```
 
 ## Components
@@ -162,6 +169,18 @@ An interface injected into AgentCore, ToolBus (via ToolContext), and MemoryManag
 ### Tool Bus
 Registers and dispatches tool calls from the model. Each tool is a standalone module with a JSON schema definition (used by the API) and an `execute` function.
 
+### FFmpeg Runner
+
+A local module that wraps the `ffmpeg` CLI for video post-production operations. It is not exposed to the Anthropic API directly — it is an internal dependency of the `video_merge`, `video_add_audio`, and `video_add_subtitles` tools.
+
+`FfmpegRunner.detect()` resolves the ffmpeg binary at startup (from `config.ffmpeg.path` or system `PATH`). If ffmpeg is absent, a warning is logged and the three video editing tools return a non-retryable `ToolError` when called.
+
+Progress lines emitted by ffmpeg to stderr are parsed and forwarded to the `ProgressReporter` so the user sees real-time frame/speed feedback during long encoding operations.
+
+All file paths passed to the runner must fall within the workspace root — the tool implementations enforce this confinement check before constructing any ffmpeg command.
+
+See `docs/design/video-editing.md` for the full FFmpeg Runner interface and all tool specifications.
+
 ### MCP Client
 
 Connects to external MCP (Model Context Protocol) servers registered in `.bolt/config.json`. The `mcp_call` tool dispatches calls through this client.
@@ -219,6 +238,7 @@ Spawns isolated child agent processes. Each sub-agent gets its own context — n
 7. Tool Bus executes tool calls; results are appended to L1 and L2
 8. For `user_review` calls: the request is forwarded to the active Channel's `requestReview()` method; the user's response is returned as the tool result
 9. For `mcp_call` calls: the request is forwarded to the MCP Client, which routes to the appropriate server
+9a. For `video_merge`, `video_add_audio`, `video_add_subtitles` calls: the tool builds an ffmpeg command via `FfmpegRunner`; progress events stream to the `ProgressReporter` during encoding
 10. Memory Manager checks token budget; triggers compaction (L1 → L3) if needed
 11. Loop continues until the model returns a final text response with no tool calls
 12. Agent Core calls `channel.send(response)` to deliver the reply

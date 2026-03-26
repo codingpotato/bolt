@@ -106,8 +106,31 @@ User: "Make a short video about AI coding trends"
   │     user_review → approve/redo      │
   └────────────┬────────────────────────┘
                │
+  ┌────────────▼────────────────────────┐
+  │  7. video_merge                     │
+  │     Concatenate all approved clips  │
+  │     → final/raw.mp4                 │
+  │     user_review → approve/redo      │
+  └────────────┬────────────────────────┘
+               │
+  ┌────────────▼────────────────────────┐
+  │  8. video_add_audio (optional)      │
+  │     Mix in background music or      │
+  │     voiceover                       │
+  │     → final/audio.mp4              │
+  │     user_review → approve/redo      │
+  └────────────┬────────────────────────┘
+               │
+  ┌────────────▼────────────────────────┐
+  │  9. video_add_subtitles (optional)  │
+  │     Generate SRT from storyboard    │
+  │     dialogue, embed into video      │
+  │     → final/video.mp4              │
+  │     user_review → approve           │
+  └────────────┬────────────────────────┘
+               │
                ▼
-         Final output saved to disk
+         Final video saved to disk
          Notification sent to user
 ```
 
@@ -155,7 +178,9 @@ Every video production run is a **content project** — a self-contained directo
       project.json              ← manifest: tracks all artifacts and their status
       01-trend-report.md        ← output of analyze-trends
       02-storyboard.json        ← structured storyboard from generate-video-script
+      audio/                    ← user-supplied audio files (optional)
       scenes/
+        subtitles.srt           ← auto-generated from storyboard dialogue (optional)
         scene-01/
           prompt.md             ← image prompt for scene 1
           image.png             ← generated image for scene 1
@@ -164,7 +189,9 @@ Every video production run is a **content project** — a self-contained directo
         scene-02/
           ...
       final/
-        video.mp4               ← assembled final video (future)
+        raw.mp4                 ← merged clips (no extra audio/subs)
+        audio.mp4               ← merged + added audio (if step 8 ran)
+        video.mp4               ← final deliverable (last completed post-production step)
 ```
 
 `<project-id>` is a slug derived from the topic and date, e.g. `ai-coding-trends-2026-03-24`. The `projects/` directory lives inside the user's workspace root (not inside `.bolt/`) so the user can browse and manage content directly.
@@ -188,11 +215,15 @@ interface ContentProject {
     generateImages?: string;
     generateVideoPrompts?: string;
     generateVideos?: string;
+    mergeClips?: string;
+    addAudio?: string;
+    addSubtitles?: string;
   };
   artifacts: {
     trendReport?: Artifact;
     storyboard?: Artifact;
     scenes: SceneArtifacts[];
+    postProduction?: PostProductionArtifacts;
   };
 }
 
@@ -208,6 +239,13 @@ interface SceneArtifacts {
   image?: Artifact;            // scenes/scene-01/image.png
   videoPrompt?: Artifact;      // scenes/scene-01/video-prompt.md
   clip?: Artifact;             // scenes/scene-01/clip.mp4
+}
+
+interface PostProductionArtifacts {
+  subtitles?: Artifact;        // scenes/subtitles.srt  (auto-generated from storyboard)
+  rawVideo?: Artifact;         // final/raw.mp4  (merged clips, no extra audio/subs)
+  audioVideo?: Artifact;       // final/audio.mp4 (merged + audio track)
+  finalVideo?: Artifact;       // final/video.mp4 (last completed post-production step)
 }
 ```
 
@@ -233,7 +271,11 @@ Example: the `generate-images` task reads the manifest to find all approved `ima
 | Generated image | `scenes/scene-<NN>/image.png` | PNG from ComfyUI |
 | Video prompt | `scenes/scene-<NN>/video-prompt.md` | Motion prompt for img2video |
 | Video clip | `scenes/scene-<NN>/clip.mp4` | MP4 from ComfyUI |
-| Final video | `final/video.mp4` | Assembled output (future) |
+| Auto subtitles | `scenes/subtitles.srt` | SRT generated from storyboard dialogue |
+| User audio | `audio/<filename>` | Copied from user-supplied path |
+| Merged raw video | `final/raw.mp4` | Clips concatenated, no extra audio/subs |
+| Video + audio | `final/audio.mp4` | After `video_add_audio` step |
+| Final video | `final/video.mp4` | Last completed post-production step |
 
 ## MCP Integration (ComfyUI)
 
@@ -318,6 +360,9 @@ Note: for the `img2video` call to work, the local image file must be accessible 
 | `skill_run` | Invoke content generation skills (analyze-trends, generate-video-script, etc.) |
 | `task_create` | Set up the task DAG; first task result stores manifest path for all downstream tasks |
 | `task_update` | Track progress; task result JSON references project ID and manifest path |
+| `video_merge` | Concatenate approved scene clips into `final/raw.mp4` |
+| `video_add_audio` | Mix background music or voiceover into the merged video |
+| `video_add_subtitles` | Embed SRT subtitle track (soft or hard) into the final video |
 
 ## Chaining Example
 

@@ -131,7 +131,6 @@ User: "Make a short video about AI coding trends"
                │
                ▼
          Final video saved to disk
-         Notification sent to user
 ```
 
 Each step is a separate Task with `dependsOn` linking to the previous step and `requiresApproval: true`. All files are saved to a content project directory (see **Content Project** below); the manifest path is stored in the first task's result so every subsequent task knows exactly where to find its inputs.

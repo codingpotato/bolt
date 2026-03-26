@@ -996,22 +996,7 @@ Acceptance Criteria:
 - [ ] Integration test covers the full pipeline with mocked MCP and channel
 ```
 
-**S10-4: Notification system**
-```
-As a blogger,
-I want to be notified when long-running tasks complete,
-so that I don't have to watch the screen while images/videos generate.
-
-Acceptance Criteria:
-- [ ] System notification on macOS (osascript) and Linux (notify-send) when a task completes
-- [ ] Notification includes task title and status
-- [ ] Provider selected by config.notifications.provider (default: "system")
-- [ ] "none" provider disables notifications
-- [ ] WebChannel sends real-time progress via WebSocket (no extra notification needed)
-- [ ] Unit tests mock system commands
-```
-
-**S10-5: FFmpeg Runner**
+**S10-4: FFmpeg Runner**
 ```
 As a developer,
 I want a local FFmpeg wrapper that bolt's video tools can use,
@@ -1029,7 +1014,7 @@ Acceptance Criteria:
 - [ ] Unit tests mock child_process.spawn
 ```
 
-**S10-6: Video editing tools (video_merge, video_add_audio, video_add_subtitles)**
+**S10-5: Video editing tools (video_merge, video_add_audio, video_add_subtitles)**
 ```
 As an agent,
 I want tools to merge video clips and add audio and subtitles using FFmpeg,
@@ -1050,7 +1035,7 @@ Acceptance Criteria:
 - [ ] Unit tests mock FfmpegRunner
 ```
 
-**S10-7: Post-production workflow integration**
+**S10-6: Post-production workflow integration**
 ```
 As a blogger,
 I want bolt to automatically merge my scene clips and optionally add audio and subtitles,
@@ -1066,7 +1051,6 @@ Acceptance Criteria:
 - [ ] The last completed post-production step's output is linked as final/video.mp4 in the manifest
 - [ ] Each post-production task has requiresApproval: true; user can reject and trigger a redo
 - [ ] project.json manifest postProduction fields are updated after each step
-- [ ] Notification is sent (S10-4) when final/video.mp4 is complete
 - [ ] Integration test covers merge + audio + subtitles with mocked FfmpegRunner and channel
 ```
 
@@ -1160,7 +1144,7 @@ S0 (Foundation)
 │                        ▼
 │          S10 (MCP + Video Production + Post-Production)
 │              S10-1..4: MCP + production workflow
-│              S10-5..7: FFmpeg Runner + video editing tools
+│              S10-4..6: FFmpeg Runner + video editing tools
 │                        │
 └───────────────────────►S11 (Polish)
 ```

@@ -118,6 +118,9 @@ Call model again with updated messages
 | `memory_search` | Query the long-term memory store (L3); returns matching summaries |
 | `memory_write` | Write a fact or note to the long-term memory store (L3) |
 | `agent_suggest` | Propose an addition to `AGENT.md`; writes to `.bolt/suggestions/` for human review |
+| `video_merge` | Concatenate video clips into a single file via FFmpeg; returns `{ outputPath, videoDurationSec }` |
+| `video_add_audio` | Add or mix an audio track into a video via FFmpeg; supports replace and mix modes |
+| `video_add_subtitles` | Embed a subtitle file (SRT/VTT/ASS) into a video via FFmpeg; supports soft and hard modes |
 
 ### web_search
 
@@ -204,6 +207,69 @@ interface McpCallOutput {
   durationMs: number;
 }
 ```
+
+### video_merge
+
+Concatenate video clips into a single output file using FFmpeg. Requires `ffmpeg` to be installed on the host.
+
+```ts
+interface VideoMergeInput {
+  /** Ordered list of clip paths (≥ 2). All must be within the workspace root. */
+  clips: string[];
+  /** Output path within workspace root. Extension determines container (.mp4 default). */
+  outputPath: string;
+  /** Force re-encode when clips have mismatched resolutions/codecs. Default: false. */
+  reencode?: boolean;
+}
+interface VideoMergeOutput {
+  outputPath: string;
+  durationMs: number;
+  videoDurationSec: number;
+}
+```
+
+### video_add_audio
+
+Add or mix an audio track into a video file.
+
+```ts
+interface VideoAddAudioInput {
+  videoPath: string;
+  audioPath: string;   // mp3, aac, wav, ogg — within workspace root
+  outputPath: string;
+  mode?: 'replace' | 'mix';         // default: "replace"
+  audioVolume?: number;              // 0.0–2.0, default: 1.0
+  originalVolume?: number;           // 0.0–2.0, default: 1.0 (mix mode only)
+  fitToVideo?: boolean;              // trim/loop audio to video length, default: true
+}
+interface VideoAddAudioOutput {
+  outputPath: string;
+  durationMs: number;
+}
+```
+
+### video_add_subtitles
+
+Embed a subtitle file into a video as a soft track (selectable, lossless) or as hard-burned text (re-encode, universally compatible).
+
+```ts
+interface VideoAddSubtitlesInput {
+  videoPath: string;
+  subtitlesPath: string;   // .srt, .vtt, or .ass — within workspace root
+  outputPath: string;
+  mode?: 'soft' | 'hard';  // default: "soft"
+  language?: string;        // BCP-47 code, e.g. "en", "zh" (soft mode only)
+  fontSize?: number;        // default: 24 (hard mode only)
+  fontColor?: string;       // CSS hex, default: "#ffffff" (hard mode only)
+}
+interface VideoAddSubtitlesOutput {
+  outputPath: string;
+  durationMs: number;
+  subtitleCount: number;
+}
+```
+
+All three tools enforce workspace confinement on every path argument and return a non-retryable `ToolError` if `ffmpeg` is not found. See `docs/design/video-editing.md` for the full FFmpeg command forms and error table.
 
 ## Tool Registration
 

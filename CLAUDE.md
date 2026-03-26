@@ -25,6 +25,7 @@ Read these docs before making decisions in the relevant area:
 | Skills System | `docs/design/skills-system.md` | Skill definition, discovery, invocation, and chaining |
 | Code Workflows | `docs/design/code-workflows.md` | Writing code, running tests, code review |
 | Content Generation | `docs/design/content-generation.md` | Trend analysis, social posts, video production pipeline, MCP integration |
+| Video Editing | `docs/design/video-editing.md` | FFmpeg Runner, video_merge / video_add_audio / video_add_subtitles tools, post-production workflow |
 | Configuration | `docs/design/configuration.md` | All config keys, env vars, `.bolt/config.json` schema |
 | Logging | `docs/design/logging.md` | Structured logger, log levels, `.bolt/bolt.log` format, LLM request logging |
 | Unit Testing | `docs/testing/unit-testing.md` | TDD cycle, test conventions, coverage requirements |
@@ -52,6 +53,7 @@ Read these docs before making decisions in the relevant area:
 - **Code workflows** — writes code, writes tests, runs tests, performs code review
 - **Content generation** — trend analysis, social posts, articles, video scripts/storyboards, image/video prompts
 - **Media generation** — text-to-image and image-to-video via ComfyUI MCP server
+- **Video post-production** — merge scene clips, add audio tracks, and embed subtitles via local FFmpeg
 - **Notifications** — system desktop notifications for long-running tasks
 
 ## Tech Stack

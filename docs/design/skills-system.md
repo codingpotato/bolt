@@ -64,14 +64,34 @@ to research the topic before writing if needed.
 
 ## Skill Discovery
 
-bolt loads skills from two locations (in priority order):
+bolt loads skills from three locations in priority order. A name collision at a higher-priority tier silently shadows the lower-priority definition.
 
 | Priority | Location | Purpose |
 |----------|----------|---------|
-| 1 | `.bolt/skills/` | Project-local skills (gitignored by default) |
-| 2 | `~/.bolt/skills/` | User-global skills |
+| 1 (highest) | `.bolt/skills/` | Project-local overrides — committed to the project repo; replaces any built-in with the same name |
+| 2 | `~/.bolt/skills/` | User-global skills shared across all projects |
+| 3 (lowest) | `BUILTIN_SKILLS_DIR` | Skills shipped with bolt — read-only, always available |
 
-Built-in skills ship with bolt under `src/skills/`.
+### Built-in skill path resolution
+
+`src/assets.ts` exports `BUILTIN_SKILLS_DIR` anchored to `__dirname`:
+
+```ts
+// src/assets.ts
+import { join } from 'path';
+export const BUILTIN_AGENT_MD      = join(__dirname, 'AGENT.md');
+export const BUILTIN_SKILLS_DIR    = join(__dirname, 'skills');
+export const BUILTIN_WORKFLOWS_DIR = join(__dirname, 'workflows');
+```
+
+Because `package.json` sets `"type": "commonjs"`, `__dirname` resolves correctly in both phases without any environment flags or runtime checks:
+
+| Phase | Entry point | `__dirname` in `assets.ts` | Resolved path |
+|-------|-------------|---------------------------|---------------|
+| Dev (`npm run dev`) | `tsx src/cli/index.ts` | `<repo>/src` | `src/skills/` |
+| Prod (`npm start`) | `node dist/cli/index.js` | `<repo>/dist` | `dist/skills/` |
+
+The build step (`tsc && node scripts/copy-assets.js`) copies `src/skills/*.skill.md → dist/skills/` so the path is always valid at runtime.
 
 ## Invocation
 

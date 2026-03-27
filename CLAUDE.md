@@ -26,6 +26,7 @@ Read these docs before making decisions in the relevant area:
 | Code Workflows | `docs/design/code-workflows.md` | Writing code, running tests, code review |
 | Content Generation | `docs/design/content-generation.md` | Trend analysis, social posts, video production pipeline, MCP integration |
 | Video Editing | `docs/design/video-editing.md` | FFmpeg Runner, video_merge / video_add_audio / video_add_subtitles tools, post-production workflow |
+| ComfyUI Client | `docs/design/comfyui-client.md` | ComfyUIPool, server pool load balancing, workflow templates, comfyui_text2img / comfyui_img2video tools |
 | Configuration | `docs/design/configuration.md` | All config keys, env vars, `.bolt/config.json` schema |
 | Logging | `docs/design/logging.md` | Structured logger, log levels, `.bolt/bolt.log` format, LLM request logging |
 | Unit Testing | `docs/testing/unit-testing.md` | TDD cycle, test conventions, coverage requirements |

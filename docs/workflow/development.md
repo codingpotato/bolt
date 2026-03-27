@@ -33,26 +33,60 @@ bolt/
 │   ├── tools/          # tool implementations
 │   ├── memory/         # memory manager & compact store
 │   ├── tasks/          # task runner & serialization
-│   ├── channels/       # channel implementations (CLI, Discord, Web)
+│   ├── channels/       # channel implementations (CLI, Web)
 │   ├── content/        # social media content generation
-│   └── cli/            # CLI entry point & arg parsing
+│   ├── cli/            # CLI entry point & arg parsing
+│   ├── assets.ts       # exports BUILTIN_AGENT_MD, BUILTIN_SKILLS_DIR, BUILTIN_WORKFLOWS_DIR
+│   ├── AGENT.md        # built-in default agent prompt (git-tracked, copied to dist/ on build)
+│   ├── skills/         # built-in .skill.md files (git-tracked, copied to dist/ on build)
+│   └── workflows/      # ComfyUI workflow JSON + .patchmap.json sidecars (git-tracked, copied to dist/ on build)
+├── dist/               # compiled output (gitignored)
+│   ├── skills/         # copied from src/skills/ by build script
+│   └── workflows/      # copied from src/workflows/ by build script
 ├── docs/               # project documentation
 │   ├── requirements/
 │   ├── design/
 │   ├── testing/
 │   └── workflow/
 ├── scripts/
-│   └── pre-commit      # TDD enforcement hook (copy to .git/hooks/)
+│   ├── pre-commit      # TDD enforcement hook (copy to .git/hooks/)
+│   └── copy-assets.js  # post-build: copies src/skills/ and src/workflows/ to dist/
 ├── .github/
 │   └── pull_request_template.md   # PR checklist auto-loaded by GitHub
-├── .bolt/              # runtime data (gitignored)
-│   ├── tasks.json
-│   └── memory/
+├── .bolt/              # project config and runtime data
+│   ├── AGENT.md        # project-level agent prompt (git-tracked)
+│   ├── config.json     # project config — no credentials (git-tracked)
+│   ├── skills/         # custom skill overrides (git-tracked)
+│   ├── workflows/      # ComfyUI workflow configs, bootstrapped from examples (git-tracked)
+│   ├── tasks.json      # runtime task state (gitignored)
+│   ├── sessions/       # conversation history (gitignored)
+│   └── memory/         # long-term memory (gitignored)
 ├── CLAUDE.md
 ├── package.json
 ├── vitest.config.ts    # coverage thresholds enforced in CI
 └── tsconfig.json
 ```
+
+## Built-in Asset Dispatch (Dev vs Prod)
+
+bolt ships built-in skills and workflow example templates as source files in `src/skills/` and `src/workflows/`. At runtime, `src/assets.ts` exports their paths anchored to `__dirname`:
+
+```ts
+// src/assets.ts
+import { join } from 'path';
+export const BUILTIN_AGENT_MD      = join(__dirname, 'AGENT.md');
+export const BUILTIN_SKILLS_DIR    = join(__dirname, 'skills');
+export const BUILTIN_WORKFLOWS_DIR = join(__dirname, 'workflows');
+```
+
+Because `package.json` uses `"type": "commonjs"`, `__dirname` resolves correctly in both phases:
+
+| Phase | Entry point | `__dirname` in compiled `assets` | Resolved path |
+|-------|-------------|----------------------------------|---------------|
+| **Dev** (`npm run dev`) | `tsx src/cli/index.ts` | `<repo>/src` | `src/skills/`, `src/workflows/` |
+| **Prod** (`npm start`) | `node dist/cli/index.js` | `<repo>/dist` | `dist/skills/`, `dist/workflows/` |
+
+The build step (`npm run build` = `tsc && node scripts/copy-assets.js`) copies both directories so the prod paths exist. No environment flag or runtime check needed — the paths are always correct.
 
 ## Branching Strategy
 

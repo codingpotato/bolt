@@ -53,7 +53,8 @@ The task-driven principle shapes the heavier subsystems:
   - **web_fetch** — fetch a URL and return the response body
   - **web_search** — search the web using a configurable search provider (SearXNG for development, Brave/Serper for production); returns structured results with titles, URLs, snippets, and dates
   - **user_review** — present content to the user for approval or feedback; supports rich content preview (text, storyboards, image prompts) and collects approval/rejection with optional modification notes
-  - **mcp_call** — invoke a tool on a registered MCP server; enables integration with external services like ComfyUI for image/video generation
+  - **comfyui_text2img** — generate an image from a text prompt via a pool of ComfyUI servers; load-balanced and fault-tolerant
+  - **comfyui_img2video** — generate a video clip from an image and motion prompt via a pool of ComfyUI servers
   - **todo_create / todo_update / todo_list / todo_delete** — manage the todo list
   - **task_create / task_update / task_list** — manage serialized tasks
   - **skill_run** — invoke a named skill as an isolated sub-agent
@@ -65,12 +66,12 @@ The task-driven principle shapes the heavier subsystems:
 - Tools may be restricted per skill or sub-agent (allowlist model)
 - All tool calls and their results must be logged for auditability
 
-### MCP Client
-- bolt must support connecting to external MCP (Model Context Protocol) servers
-- MCP servers are registered in `.bolt/config.json` with a name, URL, and optional tool list
-- The `mcp_call` tool dispatches tool calls to the appropriate MCP server
-- Primary use case: ComfyUI MCP server for text-to-image and image-to-video generation
-- MCP server implementations are maintained as separate projects
+### ComfyUI Client
+- bolt must support connecting to one or more ComfyUI servers for image and video generation
+- Servers are declared in `config.comfyui.servers[]` with a URL and optional weight for load balancing
+- Server selection is queue-depth-aware: the server with the lowest `queue_remaining / weight` score is chosen
+- Workflow templates (API-format JSON) are stored in `.bolt/workflows/` and patched with per-call parameters before submission
+- The `comfyui_text2img` and `comfyui_img2video` tools handle the full async flow: upload → queue → poll → download
 
 ### Skills System
 - Support loadable, composable skills that extend agent capabilities

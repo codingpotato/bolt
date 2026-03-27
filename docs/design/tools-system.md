@@ -53,10 +53,10 @@ interface ToolContext {
    */
   channel?: Channel;
   /**
-   * MCP Client for dispatching mcp_call requests.
-   * See McpClient interface in docs/design/architecture.md.
+   * ComfyUI Pool for dispatching comfyui_text2img and comfyui_img2video requests.
+   * See ComfyUIPool interface in docs/design/comfyui-client.md.
    */
-  mcpClient?: McpClient;
+  comfyuiPool?: ComfyUIPool;
 }
 ```
 
@@ -105,7 +105,8 @@ Call model again with updated messages
 | `web_fetch` | GET a URL; returns `{ body, statusCode, contentType }` |
 | `web_search` | Search the web via configurable provider; returns `{ results[] }` |
 | `user_review` | Present content for user approval/feedback; returns `{ approved, feedback? }` |
-| `mcp_call` | Call a tool on an external MCP server; returns the server's response |
+| `comfyui_text2img` | Generate an image from a prompt via ComfyUI; returns `{ outputPath, seed, durationMs }` |
+| `comfyui_img2video` | Generate a video clip from an image + motion prompt via ComfyUI; returns `{ outputPath, durationMs }` |
 | `todo_create` | Add a todo item; returns `{ id }` |
 | `todo_update` | Update status or description of a todo item |
 | `todo_list` | Return the current ordered todo list |
@@ -186,27 +187,53 @@ interface UserReviewOutput {
 - **WebChannel**: Renders rich preview (markdown, images, video player), shows approve/reject buttons with a feedback text box
 - **Disconnect handling**: If the WebSocket client disconnects while `user_review` is waiting, the tool throws a retryable `ToolError("client disconnected during review")`. The agent loop surfaces this to the model, which can re-call `user_review` once the client reconnects.
 
-### mcp_call
+### comfyui_text2img
 
-Invoke a tool on a registered MCP server. Used to integrate external services like ComfyUI.
+Generate an image from a text prompt using the `image_z_image_turbo` workflow (Z-Image Turbo, AuraFlow). `ComfyUIPool` selects the least-loaded server, patches the workflow with the provided parameters, queues it, polls for completion, and writes the image to `outputPath`.
+
+No `negativePrompt` — the workflow uses `ConditioningZeroOut` for negative conditioning; there is no negative text node to patch.
 
 ```ts
-interface McpCallInput {
-  /** Name of the registered MCP server */
-  server: string;
-  /** Tool name on the server */
-  tool: string;
-  /** Tool input arguments */
-  args: Record<string, unknown>;
+interface Text2ImgInput {
+  prompt: string;     // scene description (→ node 57:27.text)
+  width?: number;     // default 1024 (→ node 57:13.width)
+  height?: number;    // default 1024 (→ node 57:13.height)
+  steps?: number;     // default 8   (→ node 57:3.steps)
+  seed?: number;      // random if omitted (→ node 57:3.seed)
+  outputPath: string; // workspace-relative path for the output image
 }
-
-interface McpCallOutput {
-  /** The result returned by the MCP server */
-  result: unknown;
-  /** Duration in milliseconds */
+interface Text2ImgOutput {
+  outputPath: string; // absolute path to saved image
+  seed: number;       // seed used — pass back to reproduce
   durationMs: number;
 }
 ```
+
+### comfyui_img2video
+
+Generate a video clip from a source image using the `video_ltx2_3_i2v` workflow (LTX-Video 2.3 22B). The tool uploads the image to the selected server, patches the workflow, queues it, polls for completion, and writes the clip to `outputPath`.
+
+The workflow routes `prompt` through a `TextGenerateLTX2Prompt` Gemma-based enhancer before CLIP encoding — provide a natural scene description rather than a heavily engineered prompt.
+
+```ts
+interface Img2VideoInput {
+  imagePath: string;        // workspace-relative source image (→ uploaded, node 269.image)
+  prompt: string;           // scene/motion description (→ node 267:266.value, Gemma-enhanced)
+  negativePrompt?: string;  // default: workflow's built-in negative (→ node 267:247.text)
+  width?: number;           // default 1280 (→ node 267:257.value)
+  height?: number;          // default 720  (→ node 267:258.value)
+  frames?: number;          // default 121  (→ node 267:225.value; ≈5s at 24fps)
+  fps?: number;             // default 24   (→ node 267:260.value)
+  seed?: number;            // patches both RandomNoise nodes 267:216 and 267:237
+  outputPath: string;       // workspace-relative path for the output clip
+}
+interface Img2VideoOutput {
+  outputPath: string; // absolute path to saved clip
+  durationMs: number;
+}
+```
+
+Both tools enforce workspace confinement on all paths and return a retryable `ToolError` on transient server failures. See `docs/design/comfyui-client.md` for the full workflow details, patchmap format, and error table.
 
 ### video_merge
 
@@ -338,7 +365,7 @@ Every tool call and result is appended to `.bolt/tool-audit.jsonl`:
 ```jsonc
 { "ts": "2026-03-21T10:00:00Z", "tool": "bash", "input": { "command": "ls" }, "result": { "stdout": "...", "exitCode": 0 } }
 { "ts": "2026-03-21T10:00:01Z", "tool": "web_search", "input": { "query": "AI coding trends" }, "result": { "results": [...] } }
-{ "ts": "2026-03-21T10:00:05Z", "tool": "mcp_call", "input": { "server": "comfyui", "tool": "text2img" }, "result": { "durationMs": 45000 } }
+{ "ts": "2026-03-21T10:00:05Z", "tool": "comfyui_text2img", "input": { "prompt": "...", "outputPath": "scenes/scene-01/image.png" }, "result": { "outputPath": "...", "seed": 42, "durationMs": 45000 } }
 ```
 
 ## Parallelism

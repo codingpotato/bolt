@@ -61,21 +61,30 @@ Configuration is resolved from three sources, in order of precedence (highest fi
     "maxResults": 10
   },
 
-  // MCP (Model Context Protocol) servers
-  "mcp": {
+  // ComfyUI image and video generation
+  "comfyui": {
+    // Pool of ComfyUI servers; load balanced by queue depth
     "servers": [
       {
-        // Unique name for this server (used in mcp_call)
-        "name": "comfyui",
-        // Server URL
-        "url": "http://gpu-server:8188/mcp",
-        // Timeout for tool calls in milliseconds (default: 300000 = 5 minutes)
-        "timeoutMs": 300000,
-        // Optional: restrict which tools are available from this server
-        // If omitted, all tools reported by the server are available
-        "tools": ["text2img", "img2video"]
+        // Server base URL (ComfyUI default port is 8188)
+        "url": "http://gpu1:8188",
+        // Relative capacity weight for load balancing (default: 1)
+        "weight": 2
       }
-    ]
+    ],
+    // Workflow name (without .json).
+    // Resolved from .bolt/workflows/<name>.json first (user override),
+    // then from the built-in src/workflows/ (shipped with bolt).
+    "workflows": {
+      "text2img": "image_z_image_turbo",
+      "img2video": "video_ltx2_3_i2v"
+    },
+    // How often to poll /history/{promptId} for completion (ms)
+    "pollIntervalMs": 2000,
+    // Max time to wait for a single generation before returning a retryable ToolError (ms)
+    "timeoutMs": 300000,
+    // Max simultaneous jobs dispatched to one server
+    "maxConcurrentPerServer": 2
   },
 
   // Memory system
@@ -172,7 +181,7 @@ Configuration is validated at startup using the schema above. Invalid values cau
 
 ```
 Error: config.memory.compactThreshold must be between 0.0 and 1.0, got: 1.5
-Error: config.mcp.servers[0].url is required when MCP servers are configured
+Error: config.comfyui.servers[0].url is required when ComfyUI servers are configured
 Error: config.search.provider must be one of: searxng, brave, serper
 ```
 

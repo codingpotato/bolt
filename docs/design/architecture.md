@@ -33,22 +33,28 @@
        │  - web_fetch      │    ├──► L2 Session Store (.bolt/sessions/)
        │  - web_search     │    │    append-only JSONL, written every turn
        │  - user_review    │    │    keyed by sessionId + taskId
-       │  - mcp_call       │    │
-       │  - todo_*         │    └──► L3 Long-term Memory (.bolt/memory/)
-       │  - task_*         │         compact entries + agent notes
-       │  - skill_run      │         queried via memory_search
+       │  - comfyui_text2img│    │
+       │  - comfyui_img2vid│    └──► L3 Long-term Memory (.bolt/memory/)
+       │  - todo_*         │         compact entries + agent notes
+       │  - task_*         │         queried via memory_search
+       │  - skill_run      │
        │  - subagent_run   │
-       │  - memory_search  │    ┌────────────────────────────────┐
-       │  - memory_write   │    │       MCP Client               │
-       │  - video_merge    │    │  Connects to external servers  │
-       │  - video_add_audio│    │  (ComfyUI, etc.)               │
-       │  - video_add_subs │    └────────────────────────────────┘
+       │  - memory_search  │
+       │  - memory_write   │
+       │  - video_merge    │
+       │  - video_add_audio│
+       │  - video_add_subs │
        └─────────┬─────────┘
                  │                ┌────────────────────────────────┐
-                 └───────────────►│       FFmpeg Runner             │
-                  video_* tools   │  Local video post-production   │
-                                  │  (merge clips, add audio,      │
-                                  │   add subtitles)               │
+                 ├──(video_*)────►│       FFmpeg Runner             │
+                 │                │  Local video post-production   │
+                 │                │  (merge clips, add audio,      │
+                 │                │   add subtitles)               │
+                 │                └────────────────────────────────┘
+                 │                ┌────────────────────────────────┐
+                 └──(comfyui_*)──►│       ComfyUI Pool              │
+                                  │  Multi-server image/video gen  │
+                                  │  Queue-depth load balancing    │
                                   └────────────────────────────────┘
 ```
 
@@ -181,30 +187,20 @@ All file paths passed to the runner must fall within the workspace root — the 
 
 See `docs/design/video-editing.md` for the full FFmpeg Runner interface and all tool specifications.
 
-### MCP Client
+### ComfyUI Pool
 
-Connects to external MCP (Model Context Protocol) servers registered in `.bolt/config.json`. The `mcp_call` tool dispatches calls through this client.
+A local module that manages a pool of ComfyUI servers for image and video generation. This mirrors the `FfmpegRunner` pattern: all network and protocol complexity is encapsulated internally; two built-in tools (`comfyui_text2img`, `comfyui_img2video`) expose generation to the LLM.
 
-```ts
-interface McpServerConfig {
-  name: string;          // e.g. "comfyui"
-  url: string;           // e.g. "http://gpu-server:8188/mcp"
-  tools?: string[];      // optional whitelist; if omitted, all server tools are available
-}
+`ComfyUIPool.init()` pings each configured server at startup and excludes unreachable servers with a warning. If the pool is empty, the `comfyui_*` tools return a non-retryable `ToolError` when called.
 
-class McpClient {
-  /** Discover available tools from all registered servers */
-  listTools(): McpToolDefinition[];
-  /** Call a tool on the appropriate server */
-  call(server: string, tool: string, input: unknown): Promise<unknown>;
-}
-```
+The pool handles:
+- Queue-depth-aware server selection (load balancing by `queue_remaining / weight`)
+- Image upload to the selected server (`POST /upload/image`)
+- Workflow template loading and parameter patching before submission
+- Async workflow execution: `POST /prompt` → poll `GET /history/{id}` → download output
+- Progress reporting to `ProgressReporter` on every poll cycle
 
-The MCP Client handles:
-- Server discovery and health checks at startup
-- Tool call routing to the correct server
-- Timeout and retry for long-running operations (e.g. image generation)
-- Progress polling for async operations (ComfyUI workflow execution)
+See `docs/design/comfyui-client.md` for the full interface, workflow template format, and all tool specifications.
 
 ### Memory Manager
 Manages the three-level memory system and assembles the context sent to the LLM on each turn. Responsibilities:
@@ -237,7 +233,7 @@ Spawns isolated child agent processes. Each sub-agent gets its own context — n
 6. Memory Manager appends the assistant response (and each tool call/result) to L2 as they occur
 7. Tool Bus executes tool calls; results are appended to L1 and L2
 8. For `user_review` calls: the request is forwarded to the active Channel's `requestReview()` method; the user's response is returned as the tool result
-9. For `mcp_call` calls: the request is forwarded to the MCP Client, which routes to the appropriate server
+9. For `comfyui_text2img` / `comfyui_img2video` calls: `ComfyUIPool.selectServer()` picks the least-loaded server; the tool uploads any required image, patches the workflow template, queues it, and polls for the result; progress events stream to `ProgressReporter` during generation
 9a. For `video_merge`, `video_add_audio`, `video_add_subtitles` calls: the tool builds an ffmpeg command via `FfmpegRunner`; progress events stream to the `ProgressReporter` during encoding
 10. Memory Manager checks token budget; triggers compaction (L1 → L3) if needed
 11. Loop continues until the model returns a final text response with no tool calls
@@ -256,10 +252,13 @@ Spawns isolated child agent processes. Each sub-agent gets its own context — n
 - 4xx errors (bad request, auth failure): fail immediately with a clear error message
 - Context window exceeded: trigger compaction first, then retry the API call
 
-### MCP Server Failures
-- Connection failures: retryable ToolError with the server name and error message
-- Timeout: configurable per-server timeout (default 300s for image/video generation)
-- Server unavailable at startup: logged as warning; `mcp_call` to that server returns ToolError
+### ComfyUI Server Failures
+- Unreachable at startup: logged as warning; server excluded from the active pool
+- All servers unreachable when a tool is called: retryable ToolError
+- Queue submission failure (5xx / network): retryable ToolError
+- Poll timeout (`comfyui.timeoutMs` exceeded): retryable ToolError
+- Bad request (4xx): non-retryable ToolError
+- No servers configured: non-retryable ToolError
 
 ### Sub-agent Crashes
 - If a sub-agent process exits with a non-zero code, the parent marks the delegated task as `failed` with the stderr as the error reason

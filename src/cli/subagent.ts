@@ -25,7 +25,7 @@ import { AgentCore } from '../agent/agent';
 import { TodoStore } from '../todo/todo-store';
 import { createTodoTools } from '../todo/todo-tools';
 import { NoopProgressReporter } from '../progress';
-import { DEFAULT_SYSTEM_PROMPT } from '../agent-prompt/agent-prompt';
+import { loadAgentPrompt } from '../agent-prompt/agent-prompt';
 import type { SubagentPayload, SubagentResult } from '../subagent/subagent-runner';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
     codeWorkflows: { testFixRetries: 3 },
   };
 
-  const agent = new AgentCore(client, channel, toolBus, ctx, config, payload.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
+  const agent = new AgentCore(client, channel, toolBus, ctx, config, payload.systemPrompt ?? await loadAgentPrompt(config));
   await agent.run();
 
   const result: SubagentResult = { output: channel.getOutput() };

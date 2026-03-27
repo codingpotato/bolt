@@ -89,7 +89,7 @@ User: "Make a short video about AI coding trends"
   └────────────┬────────────────────────┘
                │
   ┌────────────▼────────────────────────┐
-  │  4. mcp_call(comfyui, text2img) × N │
+  │  4. comfyui_text2img × N            │
   │     Generate image per scene        │
   │     user_review → approve/redo      │
   └────────────┬────────────────────────┘
@@ -101,7 +101,7 @@ User: "Make a short video about AI coding trends"
   └────────────┬────────────────────────┘
                │
   ┌────────────▼────────────────────────┐
-  │  6. mcp_call(comfyui, img2video) × N│
+  │  6. comfyui_img2video × N           │
   │     Generate video per scene        │
   │     user_review → approve/redo      │
   └────────────┬────────────────────────┘
@@ -277,86 +277,68 @@ Example: the `generate-images` task reads the manifest to find all approved `ima
 | Video + audio | `final/audio.mp4` | After `video_add_audio` step |
 | Final video | `final/video.mp4` | Last completed post-production step |
 
-## MCP Integration (ComfyUI)
+## ComfyUI Tool Integration
 
-Image and video generation are handled by an external ComfyUI MCP server (separate project).
+Image and video generation are handled by two built-in tools backed by the `ComfyUIPool` local module. See `docs/design/comfyui-client.md` for the full pool interface, load balancing strategy, and workflow template format.
 
-### File Path Mapping
-
-ComfyUI runs on a separate machine (GPU server) and produces files on its own filesystem. The ComfyUI MCP Server is responsible for making generated files accessible to bolt:
-
-- The MCP server returns an HTTP `downloadUrl`; bolt downloads the file using `web_fetch` and saves it to the project scene directory using `file_write`
-- Alternatively the MCP server may push files to a shared NFS mount and return the local path directly
-
-The `img2video` call passes the **local workspace path** of the source image (after it has been downloaded), not the remote ComfyUI path. The MCP server must accept a URL or uploaded binary for the source image.
-
-### text2img
+### comfyui_text2img
 
 ```ts
-// mcp_call input
-{
-  server: "comfyui",
-  tool: "text2img",
-  args: {
-    prompt: "detailed image prompt...",
-    negativePrompt?: "...",
-    width?: 1024,
-    height?: 1024,
-    steps?: 20,
-    seed?: 42
-  }
-}
+// Tool call
+comfyui_text2img({
+  prompt: "detailed image prompt...",
+  negativePrompt?: "...",
+  width?: 1024,
+  height?: 1024,
+  steps?: 20,
+  seed?: 42,
+  outputPath: "projects/ai-coding-trends-2026-03-24/scenes/scene-01/image.png"
+})
 
-// mcp_call result — MCP server returns a downloadUrl
+// Tool result
 {
-  result: {
-    downloadUrl: "http://gpu-server:8188/output/tmp_abc123.png",
-    seed: 42,
-    durationMs: 45000
-  }
+  outputPath: "/abs/path/to/projects/.../scenes/scene-01/image.png",
+  seed: 42,
+  durationMs: 45000
 }
-// bolt then: web_fetch(downloadUrl) → file_write("projects/<id>/scenes/scene-01/image.png")
 // then: updates project.json scene[0].image.status = 'draft'
 ```
 
-### img2video
+The tool selects the least-loaded ComfyUI server, patches the `text2img` workflow template, queues it, polls for completion, downloads the output image, and writes it to `outputPath`.
+
+### comfyui_img2video
 
 ```ts
-// mcp_call input — imageUrl is the downloadable URL of the approved local image
-{
-  server: "comfyui",
-  tool: "img2video",
-  args: {
-    imageUrl: "http://bolt-host:PORT/media/projects/ai-coding-trends-2026-03-24/scenes/scene-01/image.png",
-    motionPrompt: "slow zoom in, subtle parallax...",
-    duration?: 5,
-    fps?: 24
-  }
-}
+// Tool call
+comfyui_img2video({
+  imagePath: "projects/ai-coding-trends-2026-03-24/scenes/scene-01/image.png",
+  prompt: "slow zoom in, subtle parallax...",
+  frames: 121,   // ≈5s at 24fps; default when omitted
+  fps: 24,
+  outputPath: "projects/ai-coding-trends-2026-03-24/scenes/scene-01/clip.mp4"
+})
 
-// mcp_call result
+// Tool result
 {
-  result: {
-    downloadUrl: "http://gpu-server:8188/output/tmp_def456.mp4",
-    durationMs: 120000
-  }
+  outputPath: "/abs/path/to/projects/.../scenes/scene-01/clip.mp4",
+  durationMs: 120000
 }
-// bolt then: web_fetch(downloadUrl) → file_write("projects/<id>/scenes/scene-01/clip.mp4")
 // then: updates project.json scene[0].clip.status = 'draft'
 ```
 
-Note: for the `img2video` call to work, the local image file must be accessible to the ComfyUI server. The WebChannel static file server (S8-1) doubles as the local media server for this purpose. Alternatively, bolt can base64-encode the image and pass it inline if the MCP server supports it.
+The tool uploads the source image to the selected ComfyUI server (`POST /upload/image`), patches the `video_ltx2_3_i2v` workflow (LTX-Video 2.3 22B) with the server filename and parameters, queues it, polls for completion, and downloads the output clip. The workflow internally enhances the prompt via a Gemma-based `TextGenerateLTX2Prompt` node.
 
 ## Tool Usage Summary
 
 | Tool | Usage in content generation |
 |------|----------------------------|
 | `web_search` | Trend research, topic exploration, competitor analysis |
-| `web_fetch` | Deep-read specific articles/pages; download generated media from ComfyUI |
+| `web_fetch` | Deep-read specific articles/pages for research |
 | `file_read` | Read `project.json` manifest to locate artifacts; read prompts/storyboard for downstream steps |
-| `file_write` | Save all artifacts (trend report, storyboard, prompts, downloaded images/videos, updated manifest) |
+| `file_write` | Save all artifacts (trend report, storyboard, prompts, images, videos, updated manifest) |
 | `user_review` | Present drafts/storyboards/prompts/media for user approval; update manifest status on result |
-| `mcp_call` | Generate images (text2img) and videos (img2video) via ComfyUI |
+| `comfyui_text2img` | Generate an image from a prompt via ComfyUI; writes output to the scene directory |
+| `comfyui_img2video` | Generate a video clip from an image + motion prompt via ComfyUI; writes output to the scene directory |
 | `skill_run` | Invoke content generation skills (analyze-trends, generate-video-script, etc.) |
 | `task_create` | Set up the task DAG; first task result stores manifest path for all downstream tasks |
 | `task_update` | Track progress; task result JSON references project ID and manifest path |

@@ -15,7 +15,7 @@ Sprint 6  — Sub-agent + Skills
 Sprint 7  — Web Search + User Review Tools
 Sprint 8  — WebChannel
 Sprint 9  — Content Generation + Trend Analysis
-Sprint 10 — MCP Client + Video Production + Post-Production
+Sprint 10 — ComfyUI Client + Video Production + Post-Production
 Sprint 11 — Polish + Integration
 ```
 
@@ -494,7 +494,7 @@ so that I can tailor bolt's behaviour for my project without modifying code.
 Acceptance Criteria:
 - [x] AgentCore loads ~/.bolt/AGENT.md (user-level) and .bolt/AGENT.md (project-level) at startup
 - [x] If both exist, user-level content is prepended and project-level content is appended
-- [x] If neither exists, a built-in default system prompt is used
+- [x] If neither exists, AgentCore reads BUILTIN_AGENT_MD (src/assets.ts) — src/AGENT.md in dev, dist/AGENT.md in prod
 - [x] The assembled prompt is used as the system field in every Anthropic API call for the session
 - [x] The prompt is never modified mid-session
 - [x] Missing files are not an error — they are silently skipped
@@ -666,16 +666,21 @@ Acceptance Criteria:
 **S6-2: Skill file loader**
 ```
 As a developer,
-I want bolt to discover and load .skill.md files from .bolt/skills/ and ~/.bolt/skills/,
-so that users can add custom skills without modifying core code.
+I want bolt to discover and load .skill.md files from three locations in priority order,
+so that users can add custom skills without modifying core code and built-in skills are always available.
 
 Acceptance Criteria:
-- [x] .bolt/skills/ is searched first (higher priority than ~/.bolt/skills/)
-- [x] Name collision: .bolt/skills/ wins over ~/.bolt/skills/
+- [x] Skills are loaded from three locations in priority order:
+      1. .bolt/skills/         (project-local, highest priority)
+      2. ~/.bolt/skills/       (user-global)
+      3. BUILTIN_SKILLS_DIR    (bolt built-ins from src/skills/ or dist/skills/)
+- [x] Name collision: higher-priority tier silently shadows lower-priority definition
+- [x] BUILTIN_SKILLS_DIR is exported from src/assets.ts as join(__dirname, 'skills'),
+      resolving to src/skills/ in dev (tsx) and dist/skills/ in prod (node dist/) automatically
 - [x] Skill frontmatter (name, description, inputSchema, outputSchema, allowedTools?) is parsed
 - [x] Body of the .skill.md file becomes the system prompt
 - [x] Invalid frontmatter emits a warning and skips the skill
-- [x] /skills slash command displays all discovered skills
+- [x] /skills slash command displays all discovered skills with their source tier
 ```
 
 **S6-3: skill_run tool and execution flow**
@@ -937,43 +942,70 @@ Acceptance Criteria:
 
 ---
 
-## Sprint 10 — MCP Client + Video Production + Post-Production
+## Sprint 10 — ComfyUI Client + Video Production + Post-Production
 
-**Goal:** bolt can connect to external MCP servers, orchestrate the full video production pipeline, and assemble a final video with merged clips, audio, and subtitles using FFmpeg.
+**Goal:** bolt can generate images and videos via a pool of ComfyUI servers, orchestrate the full video production pipeline, and assemble a final video with merged clips, audio, and subtitles using FFmpeg.
 
 ### Stories
 
-**S10-1: MCP Client**
+**S10-1: ComfyUI Pool**
 ```
 As a developer,
-I want bolt to connect to external MCP servers,
-so that it can integrate with services like ComfyUI for media generation.
+I want a ComfyUIPool module that manages a pool of ComfyUI servers,
+so that image and video generation is load-balanced and fault-tolerant.
 
 Acceptance Criteria:
-- [ ] McpClient reads server configs from config.mcp.servers[]
-- [ ] McpClient.listTools() discovers tools from all registered servers
-- [ ] McpClient.call(server, tool, input) routes to the correct server
-- [ ] Connection health check at startup; unreachable servers logged as warning
-- [ ] Per-server timeout from config (default 300000ms for long-running operations)
-- [ ] Retry with backoff on transient connection failures
-- [ ] Unit tests mock the MCP protocol
+- [ ] ComfyUIPool reads server configs from config.comfyui.servers[]
+- [ ] ComfyUIPool.init() pings each server's GET /system_stats at startup; unreachable servers are excluded with a warning logged
+- [ ] ComfyUIPool.selectServer() queries GET /queue on each active server and selects the one with lowest queue_remaining / weight score
+- [ ] Falls back to round-robin if all servers fail the queue query
+- [ ] ComfyUIPool.uploadImage(localPath, server) POSTs to /upload/image and returns the server filename
+- [ ] ComfyUIPool.queueWorkflow(workflow, server) POSTs to /prompt and returns the promptId
+- [ ] ComfyUIPool.pollResult(promptId, server, timeoutMs) polls GET /history/{id} every config.comfyui.pollIntervalMs until completed or timeout
+- [ ] ComfyUIPool.downloadOutput(file, server, localPath) downloads from GET /view and writes to localPath
+- [ ] patchWorkflow(workflow, patch) deep-merges a parameter patch into a workflow JSON before submission
+- [ ] Workflow template files are loaded from config.comfyui.workflows.{text2img,img2video}
+- [ ] ComfyUIPool.resolveWorkflow(name) checks .bolt/workflows/<name>.json first (user override),
+      then BUILTIN_WORKFLOWS_DIR/<name>.json (bolt built-in); ToolError if neither exists
+- [ ] ComfyUIPool.loadWorkflow(name) loads both the workflow JSON and its companion .patchmap.json
+- [ ] WorkflowPatchmap schema: { outputNode, imageNode?, imageField?, params: Record<string, Array<{nodeId, field}>> }
+- [ ] BUILTIN_WORKFLOWS_DIR is exported from src/assets.ts alongside BUILTIN_SKILLS_DIR;
+      resolves to src/workflows/ in dev and dist/workflows/ in prod via __dirname anchor
+- [ ] scripts/copy-assets.js copies all src/workflows/*.json (workflows + patchmaps) → dist/workflows/ on build
+- [ ] All paths passed to uploadImage/downloadOutput are validated within workspace root
+- [ ] Unit tests mock HTTP calls to ComfyUI servers
+- [ ] Design documented in docs/design/comfyui-client.md
 ```
 
-**S10-2: mcp_call tool**
+**S10-2: comfyui_text2img and comfyui_img2video tools**
 ```
 As an agent,
-I want to call tools on external MCP servers,
-so that I can generate images and videos via ComfyUI.
+I want built-in tools to generate images and video clips via ComfyUI,
+so that I can produce media assets during the video production pipeline.
 
 Acceptance Criteria:
-- [ ] mcp_call({ server, tool, args }) dispatches to McpClient
-- [ ] Returns { result, durationMs }
-- [ ] Server not found → ToolError (non-retryable)
-- [ ] Tool not found on server → ToolError (non-retryable)
-- [ ] Timeout → ToolError (retryable)
-- [ ] mcp_call is registered as a built-in tool
-- [ ] Progress events emitted during long-running MCP calls
-- [ ] Unit tests mock the MCP client
+- [ ] comfyui_text2img({ prompt, width?, height?, steps?, seed?, outputPath })
+      returns { outputPath, seed, durationMs }
+      — uses image_z_image_turbo workflow; no negativePrompt (workflow uses ConditioningZeroOut)
+      — patches: 57:27.text, 57:13.{width,height}, 57:3.{steps,seed}; output from node "9"
+- [ ] comfyui_img2video({ imagePath, prompt, negativePrompt?, width?, height?, frames?, fps?, seed?, outputPath })
+      returns { outputPath, durationMs }
+      — uses video_ltx2_3_i2v workflow (LTX-Video 2.3 22B)
+      — uploads imagePath to server; patches 269.image with returned filename
+      — patches: 267:266.value (prompt → Gemma enhancer), 267:247.text (negative),
+        267:257.value (width), 267:258.value (height), 267:225.value (frames),
+        267:260.value (fps), 267:216.noise_seed + 267:237.noise_seed (seed)
+      — output from node "75"
+- [ ] Both tools call ComfyUIPool.selectServer(), load workflow+patchmap, build patch, queue, poll, download, write outputPath
+- [ ] comfyui_img2video uploads the source image to the selected server before queuing
+- [ ] Both tools emit poll-cycle progress events to ProgressReporter
+- [ ] No ComfyUI servers configured → non-retryable ToolError
+- [ ] Workflow file not found → non-retryable ToolError
+- [ ] All servers unreachable → retryable ToolError
+- [ ] Poll timeout → retryable ToolError
+- [ ] Both tools enforce workspace confinement on all path arguments
+- [ ] Both tools are registered as built-in tools
+- [ ] Unit tests mock ComfyUIPool
 ```
 
 **S10-3: Video production workflow**
@@ -990,10 +1022,10 @@ Acceptance Criteria:
 - [ ] First task result stores { projectId, manifestPath } as JSON so all downstream tasks can locate the project
 - [ ] Each task reads project.json via file_read to find input artifacts; writes outputs to the scene directory
 - [ ] Manifest artifact status is updated to 'draft' after generation, 'approved' after user_review approval
-- [ ] mcp_call(comfyui, text2img) generates images; downloaded to projects/<id>/scenes/scene-<NN>/image.png
-- [ ] mcp_call(comfyui, img2video) generates video clips; downloaded to projects/<id>/scenes/scene-<NN>/clip.mp4
+- [ ] comfyui_text2img generates images saved to projects/<id>/scenes/scene-<NN>/image.png
+- [ ] comfyui_img2video generates video clips saved to projects/<id>/scenes/scene-<NN>/clip.mp4
 - [ ] User can reject and request changes at any gate; agent revises and re-presents; manifest status reflects rejections
-- [ ] Integration test covers the full pipeline with mocked MCP and channel
+- [ ] Integration test covers the full pipeline with mocked ComfyUIPool and channel
 ```
 
 **S10-4: Task completion notification via channel**
@@ -1126,7 +1158,7 @@ Acceptance Criteria:
 - [x] README covers: prerequisites, install, auth setup, first run
 - [ ] Includes example of running a skill from the CLI
 - [ ] Includes example of using WebChannel from a phone
-- [ ] Includes example of connecting to ComfyUI via MCP
+- [ ] Includes example of connecting bolt to ComfyUI servers
 - [x] Links to docs/ for deeper reference
 ```
 
@@ -1156,10 +1188,10 @@ S0 (Foundation)
 │                │                │
 │                └───────┬────────┘
 │                        ▼
-│          S10 (MCP + Video Production + Post-Production)
-│              S10-1..4: MCP + production workflow
+│          S10 (ComfyUI Client + Video Production + Post-Production)
+│              S10-1..3: ComfyUI Pool + tools + production workflow
 │              S10-4: channel task completion notification
-│              S10-5..8: FFmpeg Runner + video editing tools
+│              S10-6..8: FFmpeg Runner + video editing tools
 │                        │
 └───────────────────────►S11 (Polish)
 ```
@@ -1178,5 +1210,5 @@ All of the following must be true before tagging v1:
 - [ ] State recovery paths tested (S11-2)
 - [ ] README is complete (S11-4)
 - [ ] WebChannel is functional and tested on mobile
-- [ ] At least one full video production pipeline tested end-to-end (with mocked ComfyUI)
+- [ ] At least one full video production pipeline tested end-to-end (with mocked ComfyUIPool)
 - [ ] Post-production pipeline tested end-to-end: merge + audio + subtitles (with mocked FfmpegRunner)

@@ -23,7 +23,11 @@ Both files are optional. If neither exists, bolt falls back to a built-in defaul
 
 ### Built-in Default
 
-If no `AGENT.md` files are found, bolt uses a minimal built-in system prompt:
+If no user/project `AGENT.md` files are found, bolt reads the built-in default from `src/AGENT.md` (dev) or `dist/AGENT.md` (prod). `src/assets.ts` exports `BUILTIN_AGENT_MD` as the resolved path using the same `__dirname` anchor as `BUILTIN_SKILLS_DIR` and `BUILTIN_WORKFLOWS_DIR`. `copy-assets.js` copies it to `dist/` on build.
+
+Keeping the default in a file (rather than a hardcoded TypeScript string) means developers can read and edit it as plain Markdown without touching code.
+
+The current content of `src/AGENT.md`:
 
 ```
 You are bolt, an autonomous AI agent operated from the command line.
@@ -55,7 +59,7 @@ At startup, AgentCore assembles the system prompt in this order:
 ```
 1. ~/.bolt/AGENT.md content      (if exists)
 2. .bolt/AGENT.md content        (if exists)
-3. Built-in default              (if neither file exists)
+3. BUILTIN_AGENT_MD              (src/AGENT.md in dev, dist/AGENT.md in prod — always exists)
 ```
 
 The assembled prompt is used as the `system` field in every Anthropic API call for the session. It is never modified mid-session.

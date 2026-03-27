@@ -4,9 +4,20 @@ node_modules/
 # Build output
 dist/
 
-# Runtime data (logs, tasks, sessions, memory) — but keep the project agent prompt
-.bolt/
-!.bolt/AGENT.md
+# Runtime data — ephemeral state that must NOT be committed
+.bolt/sessions/
+.bolt/memory/
+.bolt/corrupted/
+.bolt/tasks.json
+.bolt/tool-audit.jsonl
+.bolt/bolt.log
+# suggestions/ is debatable — omit to keep them trackable for audit purposes
+
+# The following .bolt/ entries ARE committed (project configuration):
+#   .bolt/AGENT.md      — project-level agent prompt
+#   .bolt/config.json   — project config (no credentials)
+#   .bolt/skills/       — custom skill overrides
+#   .bolt/workflows/    — ComfyUI workflow configs (site-specific, must be edited by user)
 
 # Environment
 .env

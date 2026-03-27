@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
 import type { readFile as ReadFileFn } from 'node:fs/promises';
-import { loadAgentPrompt, DEFAULT_SYSTEM_PROMPT } from './agent-prompt';
+import { loadAgentPrompt } from './agent-prompt';
+import { BUILTIN_AGENT_MD } from '../assets';
 import type { Config } from '../config/config';
 
 vi.mock('node:fs/promises');
 vi.mock('node:os');
+vi.mock('../assets', () => ({
+  BUILTIN_AGENT_MD: '/builtin/AGENT.md',
+  BUILTIN_SKILLS_DIR: '/builtin/skills',
+  BUILTIN_WORKFLOWS_DIR: '/builtin/workflows',
+}));
 
 function makeConfig(overrides?: Partial<Config['agentPrompt']>): Config {
   return {
@@ -42,12 +48,15 @@ describe('loadAgentPrompt', () => {
 
     const fs = await import('node:fs/promises');
     readFile = vi.mocked(fs.readFile) as MockInstance<typeof ReadFileFn>;
-    readFile.mockRejectedValue(ENOENT);
+    readFile.mockImplementation(async (path) => {
+      if (path === BUILTIN_AGENT_MD) return 'built-in prompt';
+      throw ENOENT;
+    });
   });
 
   it('returns built-in default when no AGENT.md files exist', async () => {
     const result = await loadAgentPrompt(makeConfig());
-    expect(result).toBe(DEFAULT_SYSTEM_PROMPT);
+    expect(result).toBe('built-in prompt');
   });
 
   it('returns user-level content when only the user file exists', async () => {

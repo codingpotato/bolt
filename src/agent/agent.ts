@@ -6,7 +6,6 @@ import type { ToolContext } from '../tools/tool';
 import type { Config } from '../config/config';
 import type { Logger } from '../logger';
 import { createNoopLogger } from '../logger';
-import { DEFAULT_SYSTEM_PROMPT } from '../agent-prompt/agent-prompt';
 import type { SessionStore } from '../memory/session-store';
 import type { MemoryManager } from '../memory/memory-manager';
 import { estimateTokens } from '../memory/memory-manager';
@@ -98,7 +97,7 @@ export class AgentCore {
     private readonly toolBus: ToolBus,
     private readonly ctx: ToolContext,
     private readonly config: Config,
-    private readonly systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
+    private readonly systemPrompt: string = '',
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise<void>((resolve) => setTimeout(resolve, ms)),
     private readonly logger: Logger = createNoopLogger(),

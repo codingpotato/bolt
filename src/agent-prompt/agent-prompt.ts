@@ -1,16 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import type { Config } from '../config/config';
-
-export const DEFAULT_SYSTEM_PROMPT = `You are bolt, an autonomous AI agent operated from the command line.
-
-You operate in two modes:
-- Simple chat: respond directly to the user's message.
-- Task-driven: for complex or multi-step goals, break work into tasks using
-  task_create, execute them step by step, and track outcomes.
-
-Prefer task-driven mode for anything that involves more than one non-trivial step.
-Always persist important decisions and learned facts using memory_write.`;
+import { BUILTIN_AGENT_MD } from '../assets';
 
 export function expandTilde(filePath: string): string {
   if (filePath.startsWith('~/')) {
@@ -50,7 +41,7 @@ export async function loadAgentPrompt(config: Config): Promise<string> {
   ]);
 
   if (userContent === null && projectContent === null) {
-    return DEFAULT_SYSTEM_PROMPT;
+    return readFile(BUILTIN_AGENT_MD, 'utf8');
   }
 
   const parts: string[] = [];

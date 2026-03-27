@@ -207,7 +207,8 @@ export class ComfyUIPool {
     try {
       buffer = await readFile(localPath);
     } catch (err) {
-      throw new ToolError(`Failed to read image file "${localPath}": ${(err as Error).message}`, true);
+      const retryable = (err as NodeJS.ErrnoException).code !== 'ENOENT';
+      throw new ToolError(`Failed to read image file "${localPath}": ${(err as Error).message}`, retryable);
     }
 
     const formData = new FormData();

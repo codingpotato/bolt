@@ -332,6 +332,15 @@ describe('ComfyUIPool.uploadImage()', () => {
     });
   });
 
+  it('throws a non-retryable ToolError when the file does not exist', async () => {
+    const { readFile } = await import('node:fs/promises');
+    vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' }));
+    const pool = makePool();
+    await expect(pool.uploadImage('projects/image.png', server)).rejects.toMatchObject({
+      retryable: false,
+    });
+  });
+
   it('throws a retryable ToolError on network failure', async () => {
     fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
     const pool = makePool();

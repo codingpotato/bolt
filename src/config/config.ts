@@ -46,6 +46,16 @@ export interface Config {
     timeoutMs: number;
     allowedTools: string[];
   };
+  comfyui: {
+    servers: Array<{ url: string; weight: number }>;
+    workflows: {
+      text2img: string;
+      img2video: string;
+    };
+    pollIntervalMs: number;
+    timeoutMs: number;
+    maxConcurrentPerServer: number;
+  };
   codeWorkflows: {
     testFixRetries: number;
   };
@@ -99,6 +109,16 @@ const DEFAULTS: Config = {
     timeoutMs: 30000,
     allowedTools: [],
   },
+  comfyui: {
+    servers: [],
+    workflows: {
+      text2img: 'image_z_image_turbo',
+      img2video: 'video_ltx2_3_i2v',
+    },
+    pollIntervalMs: 2000,
+    timeoutMs: 300000,
+    maxConcurrentPerServer: 2,
+  },
   codeWorkflows: {
     testFixRetries: 3,
   },
@@ -127,7 +147,7 @@ const CREDENTIAL_FIELDS = [
 // Intentionally excludes `logLevel` (env-var only: BOLT_LOG_LEVEL) and
 // `dataDir` (computed from BOLT_DATA_DIR, used to locate the file itself).
 const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(
-  ['model', 'auth', 'local', 'search', 'agentPrompt', 'memory', 'tasks', 'tools', 'codeWorkflows', 'cli', 'channels'] satisfies (keyof Config)[]
+  ['model', 'auth', 'local', 'search', 'agentPrompt', 'memory', 'tasks', 'tools', 'comfyui', 'codeWorkflows', 'cli', 'channels'] satisfies (keyof Config)[]
 );
 
 // Validation constants — defined once, not recreated on every call.
@@ -218,6 +238,11 @@ function applyEnvOverrides(config: Config): Config {
     memory: { ...config.memory },
     tasks: { ...config.tasks },
     tools: { ...config.tools, allowedTools: [...config.tools.allowedTools] },
+    comfyui: {
+      ...config.comfyui,
+      servers: config.comfyui.servers.map((s) => ({ ...s })),
+      workflows: { ...config.comfyui.workflows },
+    },
     codeWorkflows: { ...config.codeWorkflows },
     cli: { ...config.cli },
     channels: { web: { ...config.channels.web } },
@@ -319,6 +344,21 @@ function validate(config: Config): void {
     throw new ConfigError(
       `config.tools.timeoutMs must be >= 0, got: ${config.tools.timeoutMs}`
     );
+  }
+
+  config.comfyui.servers.forEach((server, i) => {
+    if (!server.url) {
+      throw new ConfigError(`config.comfyui.servers[${i}].url is required when ComfyUI servers are configured`);
+    }
+    if (typeof server.weight !== 'number' || server.weight <= 0) {
+      throw new ConfigError(`config.comfyui.servers[${i}].weight must be a positive number, got: ${server.weight}`);
+    }
+  });
+
+  if (config.comfyui.servers.length > 0) {
+    validatePositiveInteger(config.comfyui.pollIntervalMs, 'config.comfyui.pollIntervalMs');
+    validatePositiveInteger(config.comfyui.timeoutMs, 'config.comfyui.timeoutMs');
+    validatePositiveInteger(config.comfyui.maxConcurrentPerServer, 'config.comfyui.maxConcurrentPerServer');
   }
 }
 

@@ -119,6 +119,7 @@ async function main(): Promise<void> {
     auth: { mode: 'api-key' as const },
     local: {},
     tools: { timeoutMs: 30000, allowedTools: [] },
+    comfyui: { servers: [], workflows: { text2img: 'image_z_image_turbo', img2video: 'video_ltx2_3_i2v' }, pollIntervalMs: 2000, timeoutMs: 300000, maxConcurrentPerServer: 2 },
     codeWorkflows: { testFixRetries: 3 },
   };
 

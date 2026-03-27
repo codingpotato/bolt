@@ -1,0 +1,10 @@
+{
+  "outputNode": "9",
+  "params": {
+    "prompt": [{ "nodeId": "57:27", "field": "text" }],
+    "width":  [{ "nodeId": "57:13", "field": "width" }],
+    "height": [{ "nodeId": "57:13", "field": "height" }],
+    "steps":  [{ "nodeId": "57:3",  "field": "steps" }],
+    "seed":   [{ "nodeId": "57:3",  "field": "seed" }]
+  }
+}

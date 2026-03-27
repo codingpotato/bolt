@@ -4,7 +4,7 @@
  *
  * Handles:
  *   src/skills/*.skill.md          → dist/skills/
- *   src/workflows/*.example.json   → dist/workflows/
+ *   src/workflows/*.json            → dist/workflows/  (workflow files + .patchmap.json sidecars)
  *
  * At runtime, src/assets.ts exports BUILTIN_SKILLS_DIR and BUILTIN_WORKFLOWS_DIR
  * anchored to __dirname, so both dev (tsx → src/) and prod (node → dist/) resolve

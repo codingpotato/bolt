@@ -287,7 +287,6 @@ Image and video generation are handled by two built-in tools backed by the `Comf
 // Tool call
 comfyui_text2img({
   prompt: "detailed image prompt...",
-  negativePrompt?: "...",
   width?: 1024,
   height?: 1024,
   steps?: 20,

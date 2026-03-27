@@ -97,6 +97,7 @@ export class AgentCore {
     private readonly toolBus: ToolBus,
     private readonly ctx: ToolContext,
     private readonly config: Config,
+    /** Assembled system prompt — must be non-empty; load via loadAgentPrompt() before constructing. */
     private readonly systemPrompt: string = '',
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise<void>((resolve) => setTimeout(resolve, ms)),

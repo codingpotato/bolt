@@ -485,7 +485,7 @@ Acceptance Criteria:
 
 ### Stories
 
-**S5-1: Agent prompt system (AGENT.md)**
+**S5-1: Agent prompt system (AGENT.md)** ✅
 ```
 As a user,
 I want to define bolt's identity, rules, and domain knowledge in a Markdown file,

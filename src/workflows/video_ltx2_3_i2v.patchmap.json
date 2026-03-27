@@ -1,0 +1,17 @@
+{
+  "outputNode": "75",
+  "imageNode": "269",
+  "imageField": "image",
+  "params": {
+    "prompt":         [{ "nodeId": "267:266", "field": "value" }],
+    "negativePrompt": [{ "nodeId": "267:247", "field": "text" }],
+    "width":          [{ "nodeId": "267:257", "field": "value" }],
+    "height":         [{ "nodeId": "267:258", "field": "value" }],
+    "frames":         [{ "nodeId": "267:225", "field": "value" }],
+    "fps":            [{ "nodeId": "267:260", "field": "value" }],
+    "seed": [
+      { "nodeId": "267:216", "field": "noise_seed" },
+      { "nodeId": "267:237", "field": "noise_seed" }
+    ]
+  }
+}

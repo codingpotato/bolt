@@ -948,33 +948,33 @@ Acceptance Criteria:
 
 ### Stories
 
-**S10-1: ComfyUI Pool**
+**S10-1: ComfyUI Pool** ✅
 ```
 As a developer,
 I want a ComfyUIPool module that manages a pool of ComfyUI servers,
 so that image and video generation is load-balanced and fault-tolerant.
 
 Acceptance Criteria:
-- [ ] ComfyUIPool reads server configs from config.comfyui.servers[]
-- [ ] ComfyUIPool.init() pings each server's GET /system_stats at startup; unreachable servers are excluded with a warning logged
-- [ ] ComfyUIPool.selectServer() queries GET /queue on each active server and selects the one with lowest queue_remaining / weight score
-- [ ] Falls back to round-robin if all servers fail the queue query
-- [ ] ComfyUIPool.uploadImage(localPath, server) POSTs to /upload/image and returns the server filename
-- [ ] ComfyUIPool.queueWorkflow(workflow, server) POSTs to /prompt and returns the promptId
-- [ ] ComfyUIPool.pollResult(promptId, server, timeoutMs) polls GET /history/{id} every config.comfyui.pollIntervalMs until completed or timeout
-- [ ] ComfyUIPool.downloadOutput(file, server, localPath) downloads from GET /view and writes to localPath
-- [ ] patchWorkflow(workflow, patch) deep-merges a parameter patch into a workflow JSON before submission
-- [ ] Workflow template files are loaded from config.comfyui.workflows.{text2img,img2video}
-- [ ] ComfyUIPool.resolveWorkflow(name) checks .bolt/workflows/<name>.json first (user override),
+- [x] ComfyUIPool reads server configs from config.comfyui.servers[]
+- [x] ComfyUIPool.init() pings each server's GET /system_stats at startup; unreachable servers are excluded with a warning logged
+- [x] ComfyUIPool.selectServer() queries GET /queue on each active server and selects the one with lowest queue_remaining / weight score
+- [x] Falls back to round-robin if all servers fail the queue query
+- [x] ComfyUIPool.uploadImage(localPath, server) POSTs to /upload/image and returns the server filename
+- [x] ComfyUIPool.queueWorkflow(workflow, server) POSTs to /prompt and returns the promptId
+- [x] ComfyUIPool.pollResult(promptId, server, timeoutMs) polls GET /history/{id} every config.comfyui.pollIntervalMs until completed or timeout
+- [x] ComfyUIPool.downloadOutput(file, server, localPath) downloads from GET /view and writes to localPath
+- [x] patchWorkflow(workflow, patch) deep-merges a parameter patch into a workflow JSON before submission
+- [x] Workflow template files are loaded from config.comfyui.workflows.{text2img,img2video}
+- [x] ComfyUIPool.resolveWorkflow(name) checks .bolt/workflows/<name>.json first (user override),
       then BUILTIN_WORKFLOWS_DIR/<name>.json (bolt built-in); ToolError if neither exists
-- [ ] ComfyUIPool.loadWorkflow(name) loads both the workflow JSON and its companion .patchmap.json
-- [ ] WorkflowPatchmap schema: { outputNode, imageNode?, imageField?, params: Record<string, Array<{nodeId, field}>> }
-- [ ] BUILTIN_WORKFLOWS_DIR is exported from src/assets.ts alongside BUILTIN_SKILLS_DIR;
+- [x] ComfyUIPool.loadWorkflow(name) loads both the workflow JSON and its companion .patchmap.json
+- [x] WorkflowPatchmap schema: { outputNode, imageNode?, imageField?, params: Record<string, Array<{nodeId, field}>> }
+- [x] BUILTIN_WORKFLOWS_DIR is exported from src/assets.ts alongside BUILTIN_SKILLS_DIR;
       resolves to src/workflows/ in dev and dist/workflows/ in prod via __dirname anchor
-- [ ] scripts/copy-assets.js copies all src/workflows/*.json (workflows + patchmaps) → dist/workflows/ on build
-- [ ] All paths passed to uploadImage/downloadOutput are validated within workspace root
-- [ ] Unit tests mock HTTP calls to ComfyUI servers
-- [ ] Design documented in docs/design/comfyui-client.md
+- [x] scripts/copy-assets.js copies all src/workflows/*.json (workflows + patchmaps) → dist/workflows/ on build
+- [x] All paths passed to uploadImage/downloadOutput are validated within workspace root
+- [x] Unit tests mock HTTP calls to ComfyUI servers
+- [x] Design documented in docs/design/comfyui-client.md
 ```
 
 **S10-2: comfyui_text2img and comfyui_img2video tools**

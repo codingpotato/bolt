@@ -356,4 +356,42 @@ describe('resolveConfig', () => {
       expect(config.search.maxResults).toBe(5);
     });
   });
+
+  describe('comfyui config', () => {
+    it('returns comfyui defaults when not set', () => {
+      const config = resolveConfig();
+      expect(config.comfyui.servers).toEqual([]);
+      expect(config.comfyui.workflows.text2img).toBe('image_z_image_turbo');
+      expect(config.comfyui.workflows.img2video).toBe('video_ltx2_3_i2v');
+      expect(config.comfyui.pollIntervalMs).toBe(2000);
+      expect(config.comfyui.timeoutMs).toBe(300000);
+      expect(config.comfyui.maxConcurrentPerServer).toBe(2);
+    });
+
+    it('merges comfyui servers from config file', () => {
+      mockConfigFile({
+        comfyui: { servers: [{ url: 'http://gpu1:8188', weight: 2 }] },
+      });
+      const config = resolveConfig();
+      expect(config.comfyui.servers).toEqual([{ url: 'http://gpu1:8188', weight: 2 }]);
+    });
+
+    it('throws ConfigError when server url is missing', () => {
+      mockConfigFile({ comfyui: { servers: [{ url: '', weight: 1 }] } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+      expect(() => resolveConfig()).toThrow('url is required');
+    });
+
+    it('throws ConfigError when server weight is non-positive', () => {
+      mockConfigFile({ comfyui: { servers: [{ url: 'http://gpu1:8188', weight: 0 }] } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+      expect(() => resolveConfig()).toThrow('weight must be a positive number');
+    });
+
+    it('throws ConfigError when pollIntervalMs is zero', () => {
+      mockConfigFile({ comfyui: { servers: [{ url: 'http://gpu1:8188', weight: 1 }], pollIntervalMs: 0 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+      expect(() => resolveConfig()).toThrow('pollIntervalMs');
+    });
+  });
 });

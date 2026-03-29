@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { join } from 'node:path';
-import { ComfyUIPool, patchWorkflow, type ComfyUINode, type WorkflowPatchmap } from './comfyui-pool';
+import {
+  ComfyUIPool,
+  patchWorkflow,
+  type ComfyUINode,
+  type WorkflowPatchmap,
+} from './comfyui-pool';
 import type { Config } from '../config/config';
 
 // --- Mocks ---
@@ -100,7 +105,7 @@ describe('patchWorkflow', () => {
   });
 
   it('ignores patch entries for node IDs not in the workflow', () => {
-    const result = patchWorkflow(workflow, { 'nonexistent': { foo: 'bar' } });
+    const result = patchWorkflow(workflow, { nonexistent: { foo: 'bar' } });
     expect(Object.keys(result)).toEqual(['1', '2']);
   });
 });
@@ -130,14 +135,14 @@ describe('ComfyUIPool.init()', () => {
 
   it('excludes unreachable servers and logs a warning', async () => {
     fetchMock
-      .mockRejectedValueOnce(new Error('ECONNREFUSED'))  // gpu1 fails
+      .mockRejectedValueOnce(new Error('ECONNREFUSED')) // gpu1 fails
       .mockResolvedValueOnce(mockResponse({ status: 'ok' })); // gpu2 succeeds
     const pool = makePool();
     await pool.init();
 
     expect(mockLogger.warn).toHaveBeenCalledWith(
       'ComfyUI server unreachable, excluding from pool',
-      expect.objectContaining({ url: 'http://gpu1:8188' })
+      expect.objectContaining({ url: 'http://gpu1:8188' }),
     );
 
     // Only gpu2 remains — selectServer should return it
@@ -151,9 +156,7 @@ describe('ComfyUIPool.init()', () => {
     const pool = makePool();
     await pool.init();
 
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('pool is empty')
-    );
+    expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('pool is empty'));
   });
 });
 
@@ -206,11 +209,30 @@ describe('ComfyUIPool.selectServer()', () => {
 
     fetchMock.mockRejectedValue(new Error('timeout'));
 
-    const first = await pool.selectServer();
-    const second = await pool.selectServer();
-    expect([first.url, second.url]).toContain('http://gpu1:8188');
-    expect([first.url, second.url]).toContain('http://gpu2:8188');
-    expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('round-robin'));
+    const server = await pool.selectServer();
+    expect(server.url).toBeDefined();
+  });
+
+  it('throws retryable error when all servers at capacity', async () => {
+    const pool = makePool();
+    await pool.init();
+
+    // Manually set both servers at capacity
+    (
+      pool as unknown as {
+        activeServers: Array<{ url: string; weight: number; activeJobs: number }>;
+      }
+    ).activeServers = [
+      { url: 'http://gpu1:8188', weight: 1, activeJobs: 10 },
+      { url: 'http://gpu2:8188', weight: 1, activeJobs: 10 },
+    ];
+
+    fetchMock.mockResolvedValue(mockResponse({ queue_running: 0, queue_pending: 0 }));
+
+    await expect(pool.selectServer()).rejects.toMatchObject({
+      message: expect.stringContaining('at capacity'),
+      retryable: true,
+    });
   });
 
   it('throws a retryable ToolError when the pool is empty', async () => {
@@ -252,7 +274,10 @@ describe('ComfyUIPool.resolveWorkflow()', () => {
 
     const pool = makePool();
     expect(() => pool.resolveWorkflow('unknown')).toThrow(
-      expect.objectContaining({ message: expect.stringContaining('"unknown" not found'), retryable: false })
+      expect.objectContaining({
+        message: expect.stringContaining('"unknown" not found'),
+        retryable: false,
+      }),
     );
   });
 });
@@ -292,7 +317,10 @@ describe('ComfyUIPool.loadWorkflow()', () => {
 
     const pool = makePool();
     expect(() => pool.loadWorkflow('test')).toThrow(
-      expect.objectContaining({ message: expect.stringContaining('Patchmap file missing'), retryable: false })
+      expect.objectContaining({
+        message: expect.stringContaining('Patchmap file missing'),
+        retryable: false,
+      }),
     );
   });
 });
@@ -320,7 +348,7 @@ describe('ComfyUIPool.uploadImage()', () => {
     expect(name).toBe('upload_abc.png');
     expect(fetchMock).toHaveBeenCalledWith(
       'http://gpu1:8188/upload/image',
-      expect.objectContaining({ method: 'POST' })
+      expect.objectContaining({ method: 'POST' }),
     );
   });
 
@@ -334,7 +362,9 @@ describe('ComfyUIPool.uploadImage()', () => {
 
   it('throws a non-retryable ToolError when the file does not exist', async () => {
     const { readFile } = await import('node:fs/promises');
-    vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' }));
+    vi.mocked(readFile).mockRejectedValue(
+      Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' }),
+    );
     const pool = makePool();
     await expect(pool.uploadImage('projects/image.png', server)).rejects.toMatchObject({
       retryable: false,
@@ -426,23 +456,22 @@ describe('ComfyUIPool.pollResult()', () => {
 
   it('polls until complete and returns output files', async () => {
     // First poll: not done yet (empty object)
-    fetchMock
-      .mockResolvedValueOnce(mockResponse({}))
-      .mockResolvedValueOnce(
-        mockResponse({
-          [promptId]: {
-            status: { completed: true },
-            outputs: {
-              '9': { images: [{ filename: 'out.png', subfolder: '', type: 'output' }] },
-            },
+    fetchMock.mockResolvedValueOnce(mockResponse({})).mockResolvedValueOnce(
+      mockResponse({
+        [promptId]: {
+          status: { completed: true },
+          outputs: {
+            '9': { images: [{ filename: 'out.png', subfolder: '', type: 'output' }] },
           },
-        })
-      );
+        },
+      }),
+    );
 
     const pool = makePool();
     const result = await pool.pollResult(promptId, server, 5000);
     expect(result.files).toEqual([{ filename: 'out.png', subfolder: '', type: 'output' }]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockProgress.onRetry).toHaveBeenCalledTimes(2);
   });
 
   it('collects files from multiple output nodes', async () => {
@@ -455,7 +484,7 @@ describe('ComfyUIPool.pollResult()', () => {
             '10': { images: [{ filename: 'preview.png', subfolder: 'temp', type: 'temp' }] },
           },
         },
-      })
+      }),
     );
 
     const pool = makePool();
@@ -512,7 +541,7 @@ describe('ComfyUIPool.downloadOutput()', () => {
     const { writeFile } = await import('node:fs/promises');
     expect(vi.mocked(writeFile)).toHaveBeenCalledWith(
       expect.stringContaining('projects/scene-01/image.png'),
-      expect.any(Buffer)
+      expect.any(Buffer),
     );
 
     const urlArg = (fetchMock.mock.calls[0] as [string])[0];

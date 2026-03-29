@@ -977,18 +977,18 @@ Acceptance Criteria:
 - [x] Design documented in docs/design/comfyui-client.md
 ```
 
-**S10-2: comfyui_text2img and comfyui_img2video tools**
+**S10-2: comfyui_text2img and comfyui_img2video tools** ✅
 ```
 As an agent,
 I want built-in tools to generate images and video clips via ComfyUI,
 so that I can produce media assets during the video production pipeline.
 
 Acceptance Criteria:
-- [ ] comfyui_text2img({ prompt, width?, height?, steps?, seed?, outputPath })
+- [x] comfyui_text2img({ prompt, width?, height?, steps?, seed?, outputPath })
       returns { outputPath, seed, durationMs }
       — uses image_z_image_turbo workflow; no negativePrompt (workflow uses ConditioningZeroOut)
       — patches: 57:27.text, 57:13.{width,height}, 57:3.{steps,seed}; output from node "9"
-- [ ] comfyui_img2video({ imagePath, prompt, negativePrompt?, width?, height?, frames?, fps?, seed?, outputPath })
+- [x] comfyui_img2video({ imagePath, prompt, negativePrompt?, width?, height?, frames?, fps?, seed?, outputPath })
       returns { outputPath, durationMs }
       — uses video_ltx2_3_i2v workflow (LTX-Video 2.3 22B)
       — uploads imagePath to server; patches 269.image with returned filename
@@ -996,16 +996,16 @@ Acceptance Criteria:
         267:257.value (width), 267:258.value (height), 267:225.value (frames),
         267:260.value (fps), 267:216.noise_seed + 267:237.noise_seed (seed)
       — output from node "75"
-- [ ] Both tools call ComfyUIPool.selectServer(), load workflow+patchmap, build patch, queue, poll, download, write outputPath
-- [ ] comfyui_img2video uploads the source image to the selected server before queuing
-- [ ] Both tools emit poll-cycle progress events to ProgressReporter
-- [ ] No ComfyUI servers configured → non-retryable ToolError
-- [ ] Workflow file not found → non-retryable ToolError
-- [ ] All servers unreachable → retryable ToolError
-- [ ] Poll timeout → retryable ToolError
-- [ ] Both tools enforce workspace confinement on all path arguments
-- [ ] Both tools are registered as built-in tools
-- [ ] Unit tests mock ComfyUIPool
+- [x] Both tools call ComfyUIPool.selectServer(), load workflow+patchmap, build patch, queue, poll, download, write outputPath
+- [x] comfyui_img2video uploads the source image to the selected server before queuing
+- [x] Both tools emit poll-cycle progress events to ProgressReporter
+- [x] No ComfyUI servers configured → non-retryable ToolError
+- [x] Workflow file not found → non-retryable ToolError
+- [x] All servers unreachable → retryable ToolError
+- [x] Poll timeout → retryable ToolError
+- [x] Both tools enforce workspace confinement on all path arguments
+- [x] Both tools are registered as built-in tools
+- [x] Unit tests mock ComfyUIPool
 ```
 
 **S10-3: Video production workflow**

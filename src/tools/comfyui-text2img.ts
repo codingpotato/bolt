@@ -19,7 +19,7 @@ export interface ComfyUIText2ImgOutput {
 }
 
 export function createComfyUIText2ImgTool(
-  pool: ComfyUIPool,
+  pool: ComfyUIPool | null,
   timeoutMs: number,
 ): Tool<ComfyUIText2ImgInput, ComfyUIText2ImgOutput> {
   return {
@@ -52,6 +52,13 @@ export function createComfyUIText2ImgTool(
     },
 
     async execute(input: ComfyUIText2ImgInput, ctx: ToolContext): Promise<ComfyUIText2ImgOutput> {
+      if (!pool) {
+        throw new ToolError(
+          'No ComfyUI servers configured — add servers to config.comfyui.servers',
+          false,
+        );
+      }
+
       const resolvedOutputPath = input.outputPath ?? `${Date.now()}-text2img.png`;
 
       const { workflow, patchmap } = pool.loadWorkflow('image_z_image_turbo');

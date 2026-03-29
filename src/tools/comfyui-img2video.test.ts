@@ -122,4 +122,15 @@ describe('comfyuiImg2VideoTool', () => {
       'Workflow completed but produced no output files',
     );
   });
+
+  it('throws a non-retryable ToolError when no servers are configured', async () => {
+    const unconfiguredTool = createComfyUIImg2VideoTool(null, 300000);
+
+    await expect(
+      unconfiguredTool.execute({ imagePath: 'test.png', prompt: 'motion' }, ctx),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('No ComfyUI servers configured'),
+      retryable: false,
+    });
+  });
 });

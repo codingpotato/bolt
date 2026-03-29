@@ -21,7 +21,7 @@ export interface ComfyUIImg2VideoOutput {
 }
 
 export function createComfyUIImg2VideoTool(
-  pool: ComfyUIPool,
+  pool: ComfyUIPool | null,
   timeoutMs: number,
 ): Tool<ComfyUIImg2VideoInput, ComfyUIImg2VideoOutput> {
   return {
@@ -67,6 +67,13 @@ export function createComfyUIImg2VideoTool(
     },
 
     async execute(input: ComfyUIImg2VideoInput, ctx: ToolContext): Promise<ComfyUIImg2VideoOutput> {
+      if (!pool) {
+        throw new ToolError(
+          'No ComfyUI servers configured — add servers to config.comfyui.servers',
+          false,
+        );
+      }
+
       const resolvedOutputPath = input.outputPath ?? `${Date.now()}-img2video.mp4`;
 
       const { workflow, patchmap } = pool.loadWorkflow('video_ltx2_3_i2v');

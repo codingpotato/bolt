@@ -209,8 +209,14 @@ describe('ComfyUIPool.selectServer()', () => {
 
     fetchMock.mockRejectedValue(new Error('timeout'));
 
-    const server = await pool.selectServer();
-    expect(server.url).toBeDefined();
+    const first = await pool.selectServer();
+    const second = await pool.selectServer();
+    expect([first.url, second.url]).toContain('http://gpu1:8188');
+    expect([first.url, second.url]).toContain('http://gpu2:8188');
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('round-robin'),
+      expect.anything(),
+    );
   });
 
   it('throws retryable error when all servers at capacity', async () => {

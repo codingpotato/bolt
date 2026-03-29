@@ -176,13 +176,14 @@ async function serve(serveArgs: string[]): Promise<void> {
   toolBus.register(createWebSearchTool(searchProvider, config.search.maxResults));
   toolBus.register(createUserReviewTool());
 
+  const userWorkflowsDir = join(dataDir, 'workflows');
+  let comfyuiPool: ComfyUIPool | null = null;
   if (config.comfyui.servers.length > 0) {
-    const userWorkflowsDir = join(dataDir, 'workflows');
-    const comfyuiPool = new ComfyUIPool(config.comfyui, userWorkflowsDir, cwd, logger, progress);
+    comfyuiPool = new ComfyUIPool(config.comfyui, userWorkflowsDir, cwd, logger, progress);
     await comfyuiPool.init();
-    toolBus.register(createComfyUIText2ImgTool(comfyuiPool, config.comfyui.timeoutMs));
-    toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
   }
+  toolBus.register(createComfyUIText2ImgTool(comfyuiPool, config.comfyui.timeoutMs));
+  toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
 
   const shutdown = async (): Promise<void> => {
     process.off('SIGTERM', handleSignal);
@@ -351,13 +352,14 @@ async function main(): Promise<void> {
   toolBus.register(createWebSearchTool(searchProvider, config.search.maxResults));
   toolBus.register(createUserReviewTool());
 
+  const userWorkflowsDir = join(dataDir, 'workflows');
+  let comfyuiPool: ComfyUIPool | null = null;
   if (config.comfyui.servers.length > 0) {
-    const userWorkflowsDir = join(dataDir, 'workflows');
-    const comfyuiPool = new ComfyUIPool(config.comfyui, userWorkflowsDir, cwd, logger, progress);
+    comfyuiPool = new ComfyUIPool(config.comfyui, userWorkflowsDir, cwd, logger, progress);
     await comfyuiPool.init();
-    toolBus.register(createComfyUIText2ImgTool(comfyuiPool, config.comfyui.timeoutMs));
-    toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
   }
+  toolBus.register(createComfyUIText2ImgTool(comfyuiPool, config.comfyui.timeoutMs));
+  toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });
 

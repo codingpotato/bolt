@@ -40,6 +40,9 @@ import { createSearchProvider, validateSearchProvider } from '../search';
 import { createWebSearchTool } from '../tools/web-search';
 import { createUserReviewTool } from '../tools/user-review';
 import { WebChannel } from '../channels/web-channel';
+import { ComfyUIPool } from '../comfyui/comfyui-pool';
+import { createComfyUIText2ImgTool } from '../tools/comfyui-text2img';
+import { createComfyUIImg2VideoTool } from '../tools/comfyui-img2video';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -48,17 +51,22 @@ async function serve(serveArgs: string[]): Promise<void> {
 
   // Parse --port and --token overrides
   const portFlagIndex = serveArgs.indexOf('--port');
-  const port = portFlagIndex !== -1
-    ? parseInt(serveArgs[portFlagIndex + 1] ?? String(config.channels.web.port), 10)
-    : config.channels.web.port;
+  const port =
+    portFlagIndex !== -1
+      ? parseInt(serveArgs[portFlagIndex + 1] ?? String(config.channels.web.port), 10)
+      : config.channels.web.port;
   if (isNaN(port)) {
     process.stderr.write('bolt serve: --port must be a number\n');
     process.exit(1);
   }
   const tokenFlagIndex = serveArgs.indexOf('--token');
-  const token = tokenFlagIndex !== -1 ? (serveArgs[tokenFlagIndex + 1] ?? undefined) : config.channels.web.token;
+  const token =
+    tokenFlagIndex !== -1
+      ? (serveArgs[tokenFlagIndex + 1] ?? undefined)
+      : config.channels.web.token;
   const hostFlagIndex = serveArgs.indexOf('--host');
-  const host = hostFlagIndex !== -1 ? (serveArgs[hostFlagIndex + 1] ?? undefined) : config.channels.web.host;
+  const host =
+    hostFlagIndex !== -1 ? (serveArgs[hostFlagIndex + 1] ?? undefined) : config.channels.web.host;
 
   const auth = resolveAuth();
   const client = createAnthropicClient(auth);
@@ -78,7 +86,14 @@ async function serve(serveArgs: string[]): Promise<void> {
   const corruptedDir = join(dataDir, 'corrupted');
   const memoryStore = new MemoryStore(memoryStoreDir, corruptedDir, logger);
   await memoryStore.loadAll();
-  const memoryManager = new MemoryManager(sessionStore, config.memory, logger, memoryStore, client, config.model);
+  const memoryManager = new MemoryManager(
+    sessionStore,
+    config.memory,
+    logger,
+    memoryStore,
+    client,
+    config.model,
+  );
 
   const toolBus = new ToolBus();
   toolBus.register(bashTool);
@@ -99,11 +114,18 @@ async function serve(serveArgs: string[]): Promise<void> {
   const projectSkillsDir = join(dataDir, 'skills');
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
   const builtinSkillsDir = join(__dirname, '../skills');
-  const skills = await loadSkills(projectSkillsDir, userSkillsDir, (msg) => logger.warn(msg), builtinSkillsDir);
+  const skills = await loadSkills(
+    projectSkillsDir,
+    userSkillsDir,
+    (msg) => logger.warn(msg),
+    builtinSkillsDir,
+  );
   toolBus.register(createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent));
   const slashRegistry = createSlashCommandRegistry();
   slashRegistry.register(createSkillsSlashCommand(skills));
-  slashRegistry.register(createRunSkillSlashCommand(skills, auth, config.model, subagentScript, runSubagent));
+  slashRegistry.register(
+    createRunSkillSlashCommand(skills, auth, config.model, subagentScript, runSubagent),
+  );
   // /exit is console-only in daemon mode — disable it from the web UI.
   slashRegistry.register({
     name: 'exit',
@@ -154,6 +176,14 @@ async function serve(serveArgs: string[]): Promise<void> {
   toolBus.register(createWebSearchTool(searchProvider, config.search.maxResults));
   toolBus.register(createUserReviewTool());
 
+  if (config.comfyui.servers.length > 0) {
+    const userWorkflowsDir = join(dataDir, 'workflows');
+    const comfyuiPool = new ComfyUIPool(config.comfyui, userWorkflowsDir, cwd, logger, progress);
+    await comfyuiPool.init();
+    toolBus.register(createComfyUIText2ImgTool(comfyuiPool, config.comfyui.timeoutMs));
+    toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
+  }
+
   const shutdown = async (): Promise<void> => {
     process.off('SIGTERM', handleSignal);
     process.off('SIGINT', handleSignal);
@@ -163,7 +193,9 @@ async function serve(serveArgs: string[]): Promise<void> {
   };
   const handleSignal = (): void => {
     shutdown().catch((err: unknown) => {
-      process.stderr.write(`bolt serve: shutdown error: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(
+        `bolt serve: shutdown error: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
       process.exit(1);
     });
   };
@@ -172,8 +204,15 @@ async function serve(serveArgs: string[]): Promise<void> {
 
   await channel.listen();
   const boundHost = host ?? '127.0.0.1';
-  logger.info('bolt serve started', { port, host: boundHost, model: config.model, auth: auth.mode });
-  process.stderr.write(`bolt serve: listening on http://${boundHost}:${port} (model: ${config.model})\n`);
+  logger.info('bolt serve started', {
+    port,
+    host: boundHost,
+    model: config.model,
+    auth: auth.mode,
+  });
+  process.stderr.write(
+    `bolt serve: listening on http://${boundHost}:${port} (model: ${config.model})\n`,
+  );
 
   await agent.run();
   await shutdown();
@@ -203,7 +242,6 @@ async function main(): Promise<void> {
     await handleSuggestionsCli(args.slice(1), store, paths, (s) => process.stdout.write(s + '\n'));
     return;
   }
-
 
   const auth = resolveAuth();
   const client = createAnthropicClient(auth);
@@ -235,7 +273,14 @@ async function main(): Promise<void> {
   const corruptedDir = join(dataDir, 'corrupted');
   const memoryStore = new MemoryStore(memoryStoreDir, corruptedDir, logger);
   await memoryStore.loadAll();
-  const memoryManager = new MemoryManager(sessionStore, config.memory, logger, memoryStore, client, config.model);
+  const memoryManager = new MemoryManager(
+    sessionStore,
+    config.memory,
+    logger,
+    memoryStore,
+    client,
+    config.model,
+  );
 
   const toolBus = new ToolBus();
   toolBus.register(bashTool);
@@ -257,13 +302,22 @@ async function main(): Promise<void> {
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
   // Built-in skills are co-located with this file in src/skills/ (dev) or dist/skills/ (prod).
   const builtinSkillsDir = join(__dirname, '../skills');
-  const skills = await loadSkills(projectSkillsDir, userSkillsDir, (msg) => logger.warn(msg), builtinSkillsDir);
+  const skills = await loadSkills(
+    projectSkillsDir,
+    userSkillsDir,
+    (msg) => logger.warn(msg),
+    builtinSkillsDir,
+  );
   toolBus.register(createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent));
   const slashRegistry = createSlashCommandRegistry();
   slashRegistry.register(createSkillsSlashCommand(skills));
-  slashRegistry.register(createRunSkillSlashCommand(skills, auth, config.model, subagentScript, runSubagent));
+  slashRegistry.register(
+    createRunSkillSlashCommand(skills, auth, config.model, subagentScript, runSubagent),
+  );
 
-  const channel = new CliChannel(process.stdin, process.stdout, () => progress.clearPendingThinking());
+  const channel = new CliChannel(process.stdin, process.stdout, () =>
+    progress.clearPendingThinking(),
+  );
   const ctx = {
     cwd,
     log,
@@ -296,6 +350,14 @@ async function main(): Promise<void> {
   await validateSearchProvider(searchProvider, logger);
   toolBus.register(createWebSearchTool(searchProvider, config.search.maxResults));
   toolBus.register(createUserReviewTool());
+
+  if (config.comfyui.servers.length > 0) {
+    const userWorkflowsDir = join(dataDir, 'workflows');
+    const comfyuiPool = new ComfyUIPool(config.comfyui, userWorkflowsDir, cwd, logger, progress);
+    await comfyuiPool.init();
+    toolBus.register(createComfyUIText2ImgTool(comfyuiPool, config.comfyui.timeoutMs));
+    toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
+  }
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });
 

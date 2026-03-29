@@ -42,7 +42,7 @@ export interface WorkflowPatchmap {
  */
 export function patchWorkflow(
   workflow: Record<string, ComfyUINode>,
-  patch: Record<string, Record<string, unknown>>
+  patch: Record<string, Record<string, unknown>>,
 ): Record<string, ComfyUINode> {
   const result: Record<string, ComfyUINode> = {};
   for (const [nodeId, node] of Object.entries(workflow)) {
@@ -56,8 +56,14 @@ export function patchWorkflow(
   return result;
 }
 
+interface ActiveServer {
+  url: string;
+  weight: number;
+  activeJobs: number;
+}
+
 export class ComfyUIPool {
-  private activeServers: Array<{ url: string; weight: number }> = [];
+  private activeServers: ActiveServer[] = [];
   private roundRobinIndex = 0;
 
   constructor(
@@ -65,7 +71,7 @@ export class ComfyUIPool {
     private readonly userWorkflowsDir: string,
     private readonly cwd: string,
     private readonly logger: Logger,
-    private readonly progress: ProgressReporter
+    private readonly progress: ProgressReporter,
   ) {}
 
   /**
@@ -82,13 +88,13 @@ export class ComfyUIPool {
           throw new Error(`HTTP ${response.status}`);
         }
         return server;
-      })
+      }),
     );
 
     this.activeServers = [];
     results.forEach((result, i) => {
       if (result.status === 'fulfilled') {
-        this.activeServers.push(result.value);
+        this.activeServers.push({ ...result.value, activeJobs: 0 });
       } else {
         this.logger.warn(`ComfyUI server unreachable, excluding from pool`, {
           url: this.config.servers[i]?.url,
@@ -98,21 +104,27 @@ export class ComfyUIPool {
     });
 
     if (this.activeServers.length === 0) {
-      this.logger.warn('ComfyUI pool is empty — all servers unreachable; comfyui_* tools will return errors');
+      this.logger.warn(
+        'ComfyUI pool is empty — all servers unreachable; comfyui_* tools will return errors',
+      );
     } else {
       this.logger.info(`ComfyUI pool initialised`, { servers: this.activeServers.length });
     }
   }
 
   /**
-   * Select the least-loaded active server.
+   * Select the least-loaded active server that has capacity.
    * Queries GET /queue on each server; picks the one with the lowest queue_remaining / weight.
+   * Skips servers at maxConcurrentPerServer capacity.
    * Falls back to round-robin if all queue queries fail.
-   * Throws a retryable ToolError if the pool is empty.
+   * Throws a retryable ToolError if the pool is empty or all servers at capacity.
    */
   async selectServer(): Promise<{ url: string; weight: number }> {
     if (this.activeServers.length === 0) {
-      throw new ToolError('No ComfyUI servers available — all servers were unreachable at startup', true);
+      throw new ToolError(
+        'No ComfyUI servers available — all servers were unreachable at startup',
+        true,
+      );
     }
 
     const scores = await Promise.allSettled(
@@ -122,16 +134,23 @@ export class ComfyUIPool {
         const data = (await response.json()) as { queue_running: number; queue_pending: number };
         const queueRemaining = data.queue_running + data.queue_pending;
         return { server, score: queueRemaining / server.weight };
-      })
+      }),
     );
 
-    // Find the server with the lowest effective load score
+    const maxConcurrent = this.config.maxConcurrentPerServer;
+
     let best: { url: string; weight: number } | null = null;
     let bestScore = Infinity;
     for (const result of scores) {
-      if (result.status === 'fulfilled' && result.value.score < bestScore) {
-        bestScore = result.value.score;
-        best = result.value.server;
+      if (result.status === 'fulfilled') {
+        const { server, score } = result.value;
+        if (server.activeJobs >= maxConcurrent) {
+          continue;
+        }
+        if (score < bestScore) {
+          bestScore = score;
+          best = server;
+        }
       }
     }
 
@@ -139,11 +158,25 @@ export class ComfyUIPool {
       return best;
     }
 
-    // All queue queries failed — fall back to round-robin
-    this.logger.warn('ComfyUI queue queries failed for all servers, falling back to round-robin');
-    const idx = this.roundRobinIndex % this.activeServers.length;
-    this.roundRobinIndex++;
-    return this.activeServers[idx]!;
+    const availableServers = this.activeServers.filter((s) => s.activeJobs < maxConcurrent);
+    if (availableServers.length > 0) {
+      this.logger.warn(
+        'ComfyUI queue queries failed for all servers, falling back to round-robin',
+        {
+          available: availableServers.length,
+          atCapacity: this.activeServers.length - availableServers.length,
+        },
+      );
+      const idx = this.roundRobinIndex % availableServers.length;
+      this.roundRobinIndex++;
+      const server = availableServers[idx]!;
+      return { url: server.url, weight: server.weight };
+    }
+
+    throw new ToolError(
+      `All ComfyUI servers at capacity (max ${maxConcurrent} concurrent jobs per server). Please retry.`,
+      true,
+    );
   }
 
   /**
@@ -162,7 +195,7 @@ export class ComfyUIPool {
     }
     throw new ToolError(
       `Workflow "${name}" not found in ${this.userWorkflowsDir} or built-in workflows`,
-      false
+      false,
     );
   }
 
@@ -171,7 +204,10 @@ export class ComfyUIPool {
    * Returns the parsed workflow object and patchmap.
    * Throws a non-retryable ToolError if the patchmap is missing or malformed.
    */
-  loadWorkflow(name: string): { workflow: Record<string, ComfyUINode>; patchmap: WorkflowPatchmap } {
+  loadWorkflow(name: string): {
+    workflow: Record<string, ComfyUINode>;
+    patchmap: WorkflowPatchmap;
+  } {
     const workflowPath = this.resolveWorkflow(name);
     const patchmapPath = workflowPath.replace(/\.json$/, '.patchmap.json');
 
@@ -189,7 +225,10 @@ export class ComfyUIPool {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
         throw new ToolError(`Patchmap file missing for workflow "${name}": ${patchmapPath}`, false);
       }
-      throw new ToolError(`Failed to load patchmap for "${name}": ${(err as Error).message}`, false);
+      throw new ToolError(
+        `Failed to load patchmap for "${name}": ${(err as Error).message}`,
+        false,
+      );
     }
 
     return { workflow, patchmap };
@@ -208,7 +247,10 @@ export class ComfyUIPool {
       buffer = await readFile(localPath);
     } catch (err) {
       const retryable = (err as NodeJS.ErrnoException).code !== 'ENOENT';
-      throw new ToolError(`Failed to read image file "${localPath}": ${(err as Error).message}`, retryable);
+      throw new ToolError(
+        `Failed to read image file "${localPath}": ${(err as Error).message}`,
+        retryable,
+      );
     }
 
     const formData = new FormData();
@@ -226,7 +268,7 @@ export class ComfyUIPool {
       const body = await response.text().catch(() => '');
       throw new ToolError(
         `Image upload to ${server.url} failed with HTTP ${response.status}: ${body}`,
-        response.status >= 500
+        response.status >= 500,
       );
     }
 
@@ -236,10 +278,13 @@ export class ComfyUIPool {
 
   /**
    * Queue a workflow on a ComfyUI server.
+   * Increments the active job counter for the server.
    * Returns the prompt ID.
    * Throws retryable ToolError on 5xx/network; non-retryable on 4xx.
    */
   async queueWorkflow(workflow: object, server: { url: string; weight: number }): Promise<string> {
+    this.incrementJobCount(server.url);
+
     let response: Response;
     try {
       response = await fetch(`${server.url}/prompt`, {
@@ -248,14 +293,19 @@ export class ComfyUIPool {
         body: JSON.stringify({ prompt: workflow }),
       });
     } catch (err) {
-      throw new ToolError(`Workflow queue to ${server.url} failed: ${(err as Error).message}`, true);
+      this.decrementJobCount(server.url);
+      throw new ToolError(
+        `Workflow queue to ${server.url} failed: ${(err as Error).message}`,
+        true,
+      );
     }
 
     if (!response.ok) {
+      this.decrementJobCount(server.url);
       const body = await response.text().catch(() => '');
       throw new ToolError(
         `Workflow queue to ${server.url} failed with HTTP ${response.status}: ${body}`,
-        response.status >= 500
+        response.status >= 500,
       );
     }
 
@@ -265,17 +315,22 @@ export class ComfyUIPool {
 
   /**
    * Poll GET /history/{promptId} until the workflow completes or timeoutMs elapses.
+   * Decrements the active job counter when the workflow completes.
    * Returns the output file list from all output nodes.
    * Throws a retryable ToolError on timeout.
    */
   async pollResult(
     promptId: string,
     server: { url: string; weight: number },
-    timeoutMs: number
+    timeoutMs: number,
   ): Promise<ComfyUIOutput> {
     const deadline = Date.now() + timeoutMs;
 
+    let pollCount = 0;
     while (Date.now() < deadline) {
+      pollCount++;
+      this.progress.onRetry(pollCount, Math.ceil(timeoutMs / this.config.pollIntervalMs), `waiting for prompt ${promptId}`);
+
       let response: Response;
       try {
         response = await fetch(`${server.url}/history/${promptId}`);
@@ -286,10 +341,23 @@ export class ComfyUIPool {
       if (response.ok) {
         const history = (await response.json()) as Record<
           string,
-          { status: { completed: boolean }; outputs: Record<string, { images?: Array<{ filename: string; subfolder: string; type: 'output' | 'temp' | 'input' }> }> }
+          {
+            status: { completed: boolean };
+            outputs: Record<
+              string,
+              {
+                images?: Array<{
+                  filename: string;
+                  subfolder: string;
+                  type: 'output' | 'temp' | 'input';
+                }>;
+              }
+            >;
+          }
         >;
         const entry = history[promptId];
         if (entry?.status?.completed) {
+          this.decrementJobCount(server.url);
           const files: ComfyUIOutput['files'] = [];
           for (const node of Object.values(entry.outputs)) {
             if (node.images) {
@@ -303,10 +371,8 @@ export class ComfyUIPool {
       await new Promise<void>((resolve) => setTimeout(resolve, this.config.pollIntervalMs));
     }
 
-    throw new ToolError(
-      `Workflow ${promptId} timed out after ${timeoutMs}ms`,
-      true
-    );
+    this.decrementJobCount(server.url);
+    throw new ToolError(`Workflow ${promptId} timed out after ${timeoutMs}ms`, true);
   }
 
   /**
@@ -316,7 +382,7 @@ export class ComfyUIPool {
   async downloadOutput(
     file: ComfyUIOutput['files'][number],
     server: { url: string; weight: number },
-    localPath: string
+    localPath: string,
   ): Promise<void> {
     this.assertWithinWorkspace(localPath);
 
@@ -333,16 +399,27 @@ export class ComfyUIPool {
     }
 
     if (!response.ok) {
-      throw new ToolError(
-        `Download from ${server.url} failed with HTTP ${response.status}`,
-        true
-      );
+      throw new ToolError(`Download from ${server.url} failed with HTTP ${response.status}`, true);
     }
 
     const buffer = await response.arrayBuffer();
     const abs = resolve(this.cwd, localPath);
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, Buffer.from(buffer));
+  }
+
+  private incrementJobCount(url: string): void {
+    const server = this.activeServers.find((s) => s.url === url);
+    if (server) {
+      server.activeJobs++;
+    }
+  }
+
+  private decrementJobCount(url: string): void {
+    const server = this.activeServers.find((s) => s.url === url);
+    if (server && server.activeJobs > 0) {
+      server.activeJobs--;
+    }
   }
 
   private assertWithinWorkspace(filePath: string): void {

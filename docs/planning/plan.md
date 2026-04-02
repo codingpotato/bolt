@@ -1008,24 +1008,34 @@ Acceptance Criteria:
 - [x] Unit tests mock ComfyUIPool
 ```
 
-**S10-3: Video production workflow**
+**S10-3: Video production workflow** ✅
 ```
 As a blogger,
 I want bolt to orchestrate the full video production pipeline,
 so that I can go from a topic to finished video clips with human-in-the-loop review.
 
 Acceptance Criteria:
-- [ ] Agent creates a content project directory projects/<project-id>/ with project.json manifest at workflow start
-- [ ] project.json manifest schema matches docs/design/content-generation.md (ContentProject interface)
-- [ ] Agent creates a task DAG for video production (analyze → script → image prompts → images → video prompts → videos)
-- [ ] Each task has dependsOn linking to previous step; each task has requiresApproval: true
-- [ ] First task result stores { projectId, manifestPath } as JSON so all downstream tasks can locate the project
-- [ ] Each task reads project.json via file_read to find input artifacts; writes outputs to the scene directory
-- [ ] Manifest artifact status is updated to 'draft' after generation, 'approved' after user_review approval
-- [ ] comfyui_text2img generates images saved to projects/<id>/scenes/scene-<NN>/image.png
-- [ ] comfyui_img2video generates video clips saved to projects/<id>/scenes/scene-<NN>/clip.mp4
-- [ ] User can reject and request changes at any gate; agent revises and re-presents; manifest status reflects rejections
-- [ ] Integration test covers the full pipeline with mocked ComfyUIPool and channel
+- [x] Agent creates a content project directory projects/<project-id>/ with project.json manifest at workflow start
+- [x] project.json manifest schema matches docs/design/content-generation.md (ContentProject interface)
+- [x] Agent creates a task DAG for video production (analyze → script → image prompts → images → video prompts → videos)
+- [x] Each task has dependsOn linking to previous step; each task has requiresApproval: true
+- [x] First task result stores { projectId, manifestPath } as JSON so all downstream tasks can locate the project
+- [x] Each task reads project.json via file_read to find input artifacts; writes outputs to the scene directory
+- [x] Manifest artifact status is updated to 'draft' after generation, 'approved' after user_review approval
+- [x] comfyui_text2img generates images saved to projects/<id>/scenes/scene-<NN>/image.png
+- [x] comfyui_img2video generates video clips saved to projects/<id>/scenes/scene-<NN>/clip.mp4
+- [x] User can reject and request changes at any gate; agent revises and re-presents; manifest status reflects rejections
+- [x] Integration test covers the full pipeline with mocked ComfyUIPool and channel
+
+Review Fixes:
+- [x] createProject() detects existing project directories and disambiguates ID with -2, -3, etc.
+- [x] updateArtifactStatus() clears approvedAt when status changes from approved
+- [x] updateArtifactStatus() returns boolean indicating success/failure
+- [x] getProjectFilePath() validates path containment to prevent directory traversal
+- [x] Test "detects circular dependencies" renamed to accurately reflect it tests DAG shapes
+- [x] Test assertions parse JSON result instead of substring matching
+- [x] Added tests for comfyui_text2img/comfyui_img2video optional parameters
+- [x] Added tests for tool-bus summariseResult and validateRequired branches
 ```
 
 **S10-4: Task completion notification via channel**

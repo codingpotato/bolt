@@ -72,6 +72,44 @@ describe('ContentProjectManager', () => {
       expect(project.title).toBe('Custom Title');
       expect(project.topic).toBe('test topic');
     });
+
+    it('disambiguates project ID when creating same topic on same day', async () => {
+      // Create first project
+      const project1 = await manager.createProject('Duplicate Topic');
+      expect(project1.id).toMatch(/^duplicate-topic-\d{4}-\d{2}-\d{2}$/);
+
+      // Create second project with same topic
+      const project2 = await manager.createProject('Duplicate Topic');
+      expect(project2.id).toMatch(/^duplicate-topic-\d{4}-\d{2}-\d{2}-2$/);
+
+      // Create third project
+      const project3 = await manager.createProject('Duplicate Topic');
+      expect(project3.id).toMatch(/^duplicate-topic-\d{4}-\d{2}-\d{2}-3$/);
+
+      // All should have different IDs and directories
+      expect(project1.id).not.toBe(project2.id);
+      expect(project2.id).not.toBe(project3.id);
+      expect(project1.dir).not.toBe(project2.dir);
+    });
+
+    it('preserves existing project data when creating duplicate', async () => {
+      // Create first project and add some data
+      const project1 = await manager.createProject('Test Data');
+      project1.title = 'Modified Title';
+      await manager.writeManifest(project1);
+
+      // Create second project with same topic
+      const project2 = await manager.createProject('Test Data');
+
+      // First project should be unchanged
+      const readProject1 = await manager.readProject(project1.id);
+      expect(readProject1?.title).toBe('Modified Title');
+
+      // Second project should be separate
+      expect(project2.id).not.toBe(project1.id);
+      const readProject2 = await manager.readProject(project2.id);
+      expect(readProject2?.title).toBe('Test Data');
+    });
   });
 
   describe('readProject', () => {
@@ -175,6 +213,64 @@ describe('ContentProjectManager', () => {
 
       expect(project.artifacts.postProduction?.rawVideo?.status).toBe('approved');
     });
+
+    it('clears approvedAt when status changes from approved to draft', async () => {
+      project.artifacts.trendReport = {
+        path: '01-trend-report.md',
+        status: 'approved',
+        approvedAt: '2026-04-01T12:00:00Z',
+      };
+      await manager.writeManifest(project);
+
+      await manager.updateArtifactStatus(project, '01-trend-report.md', 'draft');
+
+      expect(project.artifacts.trendReport?.status).toBe('draft');
+      expect(project.artifacts.trendReport?.approvedAt).toBeUndefined();
+    });
+
+    it('clears approvedAt when status changes from approved to failed', async () => {
+      project.artifacts.scenes = [
+        {
+          sceneNumber: 1,
+          image: {
+            path: 'scenes/scene-01/image.png',
+            status: 'approved',
+            approvedAt: '2026-04-01T12:00:00Z',
+          },
+        },
+      ];
+      await manager.writeManifest(project);
+
+      await manager.updateArtifactStatus(project, 'scenes/scene-01/image.png', 'failed');
+
+      const scene = project.artifacts.scenes[0];
+      expect(scene?.image?.status).toBe('failed');
+      expect(scene?.image?.approvedAt).toBeUndefined();
+    });
+
+    it('returns true when artifact is found and updated', async () => {
+      project.artifacts.trendReport = {
+        path: '01-trend-report.md',
+        status: 'draft',
+      };
+      await manager.writeManifest(project);
+
+      const result = await manager.updateArtifactStatus(project, '01-trend-report.md', 'approved');
+
+      expect(result).toBe(true);
+    });
+
+    it('returns false when artifact is not found', async () => {
+      project.artifacts.trendReport = {
+        path: '01-trend-report.md',
+        status: 'draft',
+      };
+      await manager.writeManifest(project);
+
+      const result = await manager.updateArtifactStatus(project, 'non-existent.md', 'approved');
+
+      expect(result).toBe(false);
+    });
   });
 
   describe('initializeScenes', () => {
@@ -237,6 +333,34 @@ describe('ContentProjectManager', () => {
     it('returns the absolute path for a project file', () => {
       const path = manager.getProjectFilePath('my-project', 'scenes/scene-01/image.png');
       expect(path).toBe(join(testDir, 'projects', 'my-project', 'scenes', 'scene-01', 'image.png'));
+    });
+
+    it('throws error for path traversal attempt with ../', () => {
+      expect(() => manager.getProjectFilePath('my-project', '../secrets.txt')).toThrow(
+        'Path traversal attempt detected'
+      );
+    });
+
+    it('throws error for path traversal attempt with multiple ../', () => {
+      expect(() => manager.getProjectFilePath('my-project', '../../etc/passwd')).toThrow(
+        'Path traversal attempt detected'
+      );
+    });
+
+    it('throws error for path traversal attempt with mixed path', () => {
+      expect(() =>
+        manager.getProjectFilePath('my-project', 'scenes/../../../secrets.txt')
+      ).toThrow('Path traversal attempt detected');
+    });
+
+    it('accepts valid paths with dots in filename', () => {
+      const path = manager.getProjectFilePath('my-project', 'file.backup.txt');
+      expect(path).toBe(join(testDir, 'projects', 'my-project', 'file.backup.txt'));
+    });
+
+    it('normalizes path with ./ prefix', () => {
+      const path = manager.getProjectFilePath('my-project', './scenes/image.png');
+      expect(path).toBe(join(testDir, 'projects', 'my-project', 'scenes', 'image.png'));
     });
   });
 });

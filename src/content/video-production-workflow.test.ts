@@ -72,11 +72,17 @@ describe('Video Production Workflow (S10-3)', () => {
       });
       await taskStore.update(taskId, { status: 'completed', result });
 
-      // Verify task result contains project reference
+      // Verify task result contains project reference as structured JSON
       const tasks = taskStore.list();
       const completedTask = tasks.find((t) => t.id === taskId);
-      expect(completedTask?.result).toContain('projectId');
-      expect(completedTask?.result).toContain(project.id);
+      expect(completedTask).toBeDefined();
+      expect(completedTask?.result).toBeDefined();
+      const parsedResult = JSON.parse(completedTask!.result as string) as {
+        projectId: string;
+        manifestPath: string;
+      };
+      expect(parsedResult.projectId).toBe(project.id);
+      expect(parsedResult.manifestPath).toBe(`projects/${project.id}/project.json`);
     });
   });
 
@@ -173,32 +179,21 @@ describe('Video Production Workflow (S10-3)', () => {
       expect(taskStore.list().find((t) => t.id === task2)?.status).toBe('pending');
     });
 
-    it('detects circular dependencies at creation time', async () => {
+    it('creates valid DAG shapes (linear chain, diamond pattern)', async () => {
       const task1 = await taskStore.create('Task 1', 'Description', []);
       const task2 = await taskStore.create('Task 2', 'Description', [task1]);
-
-      // Attempting to create task3 that depends on task2, and then making task1 depend on task3
-      // would create a cycle. But since we can only set deps at creation, we test a different case:
-      // Creating a task that would complete a cycle if we traverse its deps.
-      // This is actually tested at the store level - we need to verify the store rejects cycles.
 
       // Valid: task1 -> task2 -> task3 (linear chain)
       const task3 = await taskStore.create('Task 3', 'Description', [task2]);
       expect(task3).toBe('task-3');
 
-      // Valid: task1 -> task3 (direct dependency, no cycle)
+      // Valid: task1 -> task4 (direct dependency, no cycle)
       const task4 = await taskStore.create('Task 4', 'Description', [task1]);
       expect(task4).toBe('task-4');
 
       // Valid: task3 -> task5 AND task4 -> task5 (diamond pattern, no cycle)
       const task5 = await taskStore.create('Task 5', 'Description', [task3, task4]);
       expect(task5).toBe('task-5');
-
-      // The TaskStore's cycle detection prevents creating a cycle when:
-      // - task A depends on B, B depends on C, and we try to create C depending on A
-      // But since we can't modify existing tasks' deps, the only way to trigger
-      // the cycle detection is if the store checks for self-referential deps.
-      // This is covered in task-store.test.ts
     });
   });
 

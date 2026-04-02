@@ -1,5 +1,5 @@
-import { join } from 'node:path';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 
 /**
@@ -135,9 +135,13 @@ export class ContentProjectManager {
    * Create a new content project with the given topic.
    * Creates the project directory and writes the initial manifest.
    * Returns the project manifest.
+   *
+   * If a project with the same ID already exists, appends a suffix (-2, -3, etc.)
+   * to ensure uniqueness and avoid overwriting existing data.
    */
   async createProject(topic: string, title?: string): Promise<ContentProject> {
-    const id = generateProjectId(topic);
+    const baseId = generateProjectId(topic);
+    const id = await this.findUniqueProjectId(baseId);
     const projectDir = join(this.projectsDir, id);
     const now = new Date().toISOString();
 
@@ -166,6 +170,39 @@ export class ContentProjectManager {
   }
 
   /**
+   * Find a unique project ID by appending a suffix if necessary.
+   * If the base ID is available, returns it as-is.
+   * Otherwise, tries baseId-2, baseId-3, etc. until an available ID is found.
+   */
+  private async findUniqueProjectId(baseId: string): Promise<string> {
+    const manifestPath = join(this.projectsDir, baseId, 'project.json');
+
+    // Check if base ID is available
+    try {
+      await access(manifestPath);
+      // File exists, need to find a unique ID
+    } catch {
+      // File doesn't exist, base ID is available
+      return baseId;
+    }
+
+    // Find unique ID by appending counter
+    let counter = 2;
+    while (true) {
+      const newId = `${baseId}-${counter}`;
+      const newManifestPath = join(this.projectsDir, newId, 'project.json');
+      try {
+        await access(newManifestPath);
+        // Exists, try next counter
+        counter++;
+      } catch {
+        // Doesn't exist, this ID is available
+        return newId;
+      }
+    }
+  }
+
+  /**
    * Read a project manifest from disk.
    * Returns undefined if the project doesn't exist.
    */
@@ -189,18 +226,21 @@ export class ContentProjectManager {
 
   /**
    * Update an artifact's status in the project manifest.
+   * Returns true if an artifact was found and updated, false if no matching artifact was found.
    */
   async updateArtifactStatus(
     project: ContentProject,
     artifactPath: string,
     status: ArtifactStatus,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const updateArtifact = (artifact: Artifact | undefined): boolean => {
       if (!artifact) return false;
       if (artifact.path !== artifactPath) return false;
       artifact.status = status;
       if (status === 'approved') {
         artifact.approvedAt = new Date().toISOString();
+      } else {
+        delete artifact.approvedAt;
       }
       return true;
     };
@@ -208,11 +248,11 @@ export class ContentProjectManager {
     // Check top-level artifacts
     if (updateArtifact(project.artifacts.trendReport)) {
       await this.writeManifest(project);
-      return;
+      return true;
     }
     if (updateArtifact(project.artifacts.storyboard)) {
       await this.writeManifest(project);
-      return;
+      return true;
     }
 
     // Check scene artifacts
@@ -224,7 +264,7 @@ export class ContentProjectManager {
         updateArtifact(scene.clip)
       ) {
         await this.writeManifest(project);
-        return;
+        return true;
       }
     }
 
@@ -238,9 +278,11 @@ export class ContentProjectManager {
         updateArtifact(pp.finalVideo)
       ) {
         await this.writeManifest(project);
-        return;
+        return true;
       }
     }
+
+    return false;
   }
 
   /**
@@ -268,8 +310,20 @@ export class ContentProjectManager {
 
   /**
    * Get the absolute path for a project file.
+   * Validates that the resolved path stays within the project directory.
+   * @throws Error if the path would escape the project directory
    */
   getProjectFilePath(projectId: string, relativePath: string): string {
-    return join(this.projectsDir, projectId, relativePath);
+    const projectDir = join(this.projectsDir, projectId);
+    const resolvedPath = resolve(projectDir, relativePath);
+
+    // Ensure the resolved path is within the project directory
+    if (!resolvedPath.startsWith(projectDir + '/') && resolvedPath !== projectDir) {
+      throw new Error(
+        `Path traversal attempt detected: "${relativePath}" resolves outside project directory`
+      );
+    }
+
+    return resolvedPath;
   }
 }

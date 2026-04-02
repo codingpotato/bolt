@@ -245,6 +245,56 @@ describe('ToolBus', () => {
       await bus.dispatch(makeCall('greet', { value: 'hi' }), restrictedCtx);
       expect(restrictedCtx.progress.onToolCall).not.toHaveBeenCalled();
     });
+
+    it('succeeds when tool has no required fields', async () => {
+      const toolWithNoRequired: Tool = {
+        name: 'optional',
+        description: 'no required fields',
+        inputSchema: { type: 'object', properties: {} },
+        execute: async () => ({ ok: true }),
+      };
+      bus.register(toolWithNoRequired);
+      const result = await bus.dispatch(makeCall('optional', {}), ctx);
+      expect(result.is_error).toBeFalsy();
+    });
+
+    it('handles non-JSON string result in summariseResult', async () => {
+      bus.register(
+        makeTool('textResult', async () => 'plain text string not json'),
+      );
+      await bus.dispatch(makeCall('textResult', { value: 'x' }), ctx);
+      expect(ctx.progress.onToolResult).toHaveBeenCalledWith(
+        'textResult',
+        true,
+        'plain text string not json',
+      );
+    });
+
+    it('summarises exitCode from JSON result', async () => {
+      bus.register(makeTool('bash', async () => ({ exitCode: 0, stdout: '' })));
+      await bus.dispatch(makeCall('bash', { value: 'x' }), ctx);
+      expect(ctx.progress.onToolResult).toHaveBeenCalledWith('bash', true, 'exit 0');
+    });
+
+    it('summarises path from JSON result', async () => {
+      bus.register(makeTool('file', async () => ({ path: '/tmp/file.txt' })));
+      await bus.dispatch(makeCall('file', { value: 'x' }), ctx);
+      expect(ctx.progress.onToolResult).toHaveBeenCalledWith('file', true, '/tmp/file.txt');
+    });
+
+    it('summarises tasks count from JSON result', async () => {
+      bus.register(
+        makeTool('listTasks', async () => ({ tasks: [{ id: '1' }, { id: '2' }] })),
+      );
+      await bus.dispatch(makeCall('listTasks', { value: 'x' }), ctx);
+      expect(ctx.progress.onToolResult).toHaveBeenCalledWith('listTasks', true, '2 tasks');
+    });
+
+    it('summarises id from JSON result', async () => {
+      bus.register(makeTool('create', async () => ({ id: 'task-123' })));
+      await bus.dispatch(makeCall('create', { value: 'x' }), ctx);
+      expect(ctx.progress.onToolResult).toHaveBeenCalledWith('create', true, 'task-123');
+    });
   });
 
   // ── input validation — null guard ─────────────────────────────────────────

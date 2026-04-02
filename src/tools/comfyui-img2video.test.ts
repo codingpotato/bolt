@@ -133,4 +133,80 @@ describe('comfyuiImg2VideoTool', () => {
       retryable: false,
     });
   });
+
+  it('executes successfully with negativePrompt parameter', async () => {
+    const input: ComfyUIImg2VideoInput = {
+      imagePath: 'test.png',
+      prompt: 'motion',
+      negativePrompt: 'blur, distortion',
+    };
+    const result = await tool.execute(input, ctx);
+
+    expect(result.outputPath).toBeDefined();
+    expect(mockPool.queueWorkflow).toHaveBeenCalled();
+  });
+
+  it('executes successfully with width parameter', async () => {
+    const input: ComfyUIImg2VideoInput = {
+      imagePath: 'test.png',
+      prompt: 'motion',
+      width: 1920,
+    };
+    const result = await tool.execute(input, ctx);
+
+    expect(result.outputPath).toBeDefined();
+    expect(mockPool.queueWorkflow).toHaveBeenCalled();
+  });
+
+  it('executes successfully with height parameter', async () => {
+    const input: ComfyUIImg2VideoInput = {
+      imagePath: 'test.png',
+      prompt: 'motion',
+      height: 1080,
+    };
+    const result = await tool.execute(input, ctx);
+
+    expect(result.outputPath).toBeDefined();
+    expect(mockPool.queueWorkflow).toHaveBeenCalled();
+  });
+
+  it('executes successfully with frames parameter', async () => {
+    const input: ComfyUIImg2VideoInput = {
+      imagePath: 'test.png',
+      prompt: 'motion',
+      frames: 60,
+    };
+    const result = await tool.execute(input, ctx);
+
+    expect(result.outputPath).toBeDefined();
+    expect(mockPool.queueWorkflow).toHaveBeenCalled();
+  });
+
+  it('executes successfully with fps parameter', async () => {
+    const input: ComfyUIImg2VideoInput = {
+      imagePath: 'test.png',
+      prompt: 'motion',
+      fps: 30,
+    };
+    const result = await tool.execute(input, ctx);
+
+    expect(result.outputPath).toBeDefined();
+    expect(mockPool.queueWorkflow).toHaveBeenCalled();
+  });
+
+  it('executes successfully with all optional parameters', async () => {
+    const input: ComfyUIImg2VideoInput = {
+      imagePath: 'test.png',
+      prompt: 'motion',
+      negativePrompt: 'blur',
+      width: 1920,
+      height: 1080,
+      frames: 60,
+      fps: 30,
+    };
+    const result = await tool.execute(input, ctx);
+
+    expect(result.outputPath).toBeDefined();
+    expect(mockPool.queueWorkflow).toHaveBeenCalled();
+  });
 });

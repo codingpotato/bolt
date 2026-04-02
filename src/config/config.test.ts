@@ -18,6 +18,10 @@ describe('resolveConfig', () => {
     delete process.env['BOLT_LOG_LEVEL'];
     delete process.env['BOLT_LOCAL_ENDPOINT'];
     delete process.env['BOLT_LOCAL_API_KEY'];
+    delete process.env['BOLT_SEARCH_ENDPOINT'];
+    delete process.env['BOLT_WEB_TOKEN'];
+    delete process.env['BOLT_WEB_HOST'];
+    delete process.env['BOLT_WEB_PORT'];
     delete process.env['DISCORD_BOT_TOKEN'];
     delete process.env['DISCORD_CHANNEL_ID'];
 

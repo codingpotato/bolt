@@ -117,4 +117,41 @@ describe('comfyuiText2ImgTool', () => {
       retryable: false,
     });
   });
+
+  it('executes successfully with width parameter', async () => {
+    const input: ComfyUIText2ImgInput = { prompt: 'test', width: 512 };
+    const result = await tool.execute(input, ctx);
+
+    expect(result.outputPath).toBeDefined();
+    expect(mockPool.queueWorkflow).toHaveBeenCalled();
+  });
+
+  it('executes successfully with height parameter', async () => {
+    const input: ComfyUIText2ImgInput = { prompt: 'test', height: 768 };
+    const result = await tool.execute(input, ctx);
+
+    expect(result.outputPath).toBeDefined();
+    expect(mockPool.queueWorkflow).toHaveBeenCalled();
+  });
+
+  it('executes successfully with steps parameter', async () => {
+    const input: ComfyUIText2ImgInput = { prompt: 'test', steps: 20 };
+    const result = await tool.execute(input, ctx);
+
+    expect(result.outputPath).toBeDefined();
+    expect(mockPool.queueWorkflow).toHaveBeenCalled();
+  });
+
+  it('executes successfully with all optional parameters', async () => {
+    const input: ComfyUIText2ImgInput = {
+      prompt: 'test',
+      width: 512,
+      height: 768,
+      steps: 15,
+    };
+    const result = await tool.execute(input, ctx);
+
+    expect(result.outputPath).toBeDefined();
+    expect(mockPool.queueWorkflow).toHaveBeenCalled();
+  });
 });

@@ -28,6 +28,7 @@ Sprint 11 — Polish + Integration
 ### Stories
 
 **S0-1: TypeScript project skeleton**
+
 ```
 As a developer,
 I want a compiling TypeScript project with strict mode enforced,
@@ -41,6 +42,7 @@ Acceptance Criteria:
 ```
 
 **S0-2: Testing infrastructure**
+
 ```
 As a developer,
 I want Vitest configured with per-module coverage thresholds,
@@ -54,6 +56,7 @@ Acceptance Criteria:
 ```
 
 **S0-3: Linting and formatting**
+
 ```
 As a developer,
 I want ESLint and Prettier configured,
@@ -66,6 +69,7 @@ Acceptance Criteria:
 ```
 
 **S0-4: Pre-commit TDD hook**
+
 ```
 As a developer,
 I want the pre-commit hook installed and working,
@@ -79,6 +83,7 @@ Acceptance Criteria:
 ```
 
 **S0-5: Configuration system**
+
 ```
 As a developer,
 I want a configuration resolver that merges env vars, .bolt/config.json, and defaults,
@@ -94,6 +99,7 @@ Acceptance Criteria:
 ```
 
 **S0-6: Audit logger**
+
 ```
 As a developer,
 I want a structured audit logger that writes to .bolt/tool-audit.jsonl,
@@ -107,6 +113,7 @@ Acceptance Criteria:
 ```
 
 **S0-7: CI pipeline**
+
 ```
 As a developer,
 I want a CI pipeline that enforces all quality gates on every PR,
@@ -119,6 +126,7 @@ Acceptance Criteria:
 ```
 
 **S0-8: Structured logging system**
+
 ```
 As a developer,
 I want a structured JSON-line logger that writes operational logs to .bolt/bolt.log,
@@ -145,6 +153,7 @@ Acceptance Criteria:
 ### Stories
 
 **S1-1: Authentication — API key mode**
+
 ```
 As a CLI user,
 I want to authenticate with an ANTHROPIC_API_KEY environment variable,
@@ -158,6 +167,7 @@ Acceptance Criteria:
 ```
 
 **S1-2: Authentication — subscription mode**
+
 ```
 As a subscriber,
 I want to authenticate with ANTHROPIC_SESSION_TOKEN,
@@ -171,6 +181,7 @@ Acceptance Criteria:
 ```
 
 **S1-2b: Authentication — local mode**
+
 ```
 As a local user,
 I want to point bolt at a local Anthropic-compatible server via BOLT_LOCAL_ENDPOINT,
@@ -187,6 +198,7 @@ Acceptance Criteria:
 ```
 
 **S1-3: Channel interface and UserTurn type**
+
 ```
 As a developer,
 I want a Channel interface that abstracts all inbound/outbound communication,
@@ -200,6 +212,7 @@ Acceptance Criteria:
 ```
 
 **S1-4: CliChannel**
+
 ```
 As a CLI user,
 I want to interact with bolt by typing messages in the terminal,
@@ -213,6 +226,7 @@ Acceptance Criteria:
 ```
 
 **S1-5: CLI slash commands**
+
 ```
 As a CLI user,
 I want to type slash commands like /exit and /help,
@@ -242,6 +256,7 @@ Acceptance Criteria:
 ### Stories
 
 **S2-1: Tool interface and Tool Bus**
+
 ```
 As a developer,
 I want a Tool Bus that registers and dispatches tool calls from the model,
@@ -257,6 +272,7 @@ Acceptance Criteria:
 ```
 
 **S2-2: Tool allowlisting**
+
 ```
 As a developer,
 I want the Tool Bus to enforce allowlists per agent scope,
@@ -270,6 +286,7 @@ Acceptance Criteria:
 ```
 
 **S2-3: ToolError and audit logging**
+
 ```
 As a developer,
 I want tools to signal failure via ToolError and have all calls logged,
@@ -283,6 +300,7 @@ Acceptance Criteria:
 ```
 
 **S2-4: bash tool**
+
 ```
 As an agent,
 I want to run shell commands and get stdout/stderr/exitCode back,
@@ -296,6 +314,7 @@ Acceptance Criteria:
 ```
 
 **S2-5: file_read, file_write, file_edit tools**
+
 ```
 As an agent,
 I want to read, write, and edit files on disk,
@@ -311,6 +330,7 @@ Acceptance Criteria:
 ```
 
 **S2-6: web_fetch tool**
+
 ```
 As an agent,
 I want to GET a URL and receive the response body,
@@ -324,6 +344,7 @@ Acceptance Criteria:
 ```
 
 **S2-7: Workspace safety — file confinement and dangerous bash confirmation**
+
 ```
 As a user,
 I want bolt to be confined to the workspace directory and to ask before running dangerous commands,
@@ -351,6 +372,7 @@ Acceptance Criteria:
 ### Stories
 
 **S3-1: Anthropic API integration**
+
 ```
 As a developer,
 I want the Agent Core to call the Anthropic API with the current context and tools,
@@ -367,6 +389,7 @@ Acceptance Criteria:
 ```
 
 **S3-2: API error handling and retries**
+
 ```
 As a developer,
 I want the Agent Core to retry on transient API failures,
@@ -380,6 +403,7 @@ Acceptance Criteria:
 ```
 
 **S3-3: Context overflow handling**
+
 ```
 As an agent,
 I want the agent loop to trigger compaction when the context window is nearly full,
@@ -401,6 +425,7 @@ Acceptance Criteria:
 ### Stories
 
 **S4-1: Todo tools**
+
 ```
 As an agent,
 I want to create, update, list, and delete todo items,
@@ -416,6 +441,7 @@ Acceptance Criteria:
 ```
 
 **S4-2: Task model and serialization**
+
 ```
 As an agent,
 I want tasks to be serialized to .bolt/tasks.json after every mutation,
@@ -432,6 +458,7 @@ Acceptance Criteria:
 ```
 
 **S4-3: Task execution loop**
+
 ```
 As an agent,
 I want to execute tasks from my task list step by step,
@@ -446,6 +473,7 @@ Acceptance Criteria:
 ```
 
 **S4-4: Task dependencies**
+
 ```
 As an agent,
 I want tasks to declare dependencies on other tasks,
@@ -462,6 +490,7 @@ Acceptance Criteria:
 ```
 
 **S4-5: Task approval gates**
+
 ```
 As an agent,
 I want tasks to require user approval before completing,
@@ -486,6 +515,7 @@ Acceptance Criteria:
 ### Stories
 
 **S5-1: Agent prompt system (AGENT.md)** ✅
+
 ```
 As a user,
 I want to define bolt's identity, rules, and domain knowledge in a Markdown file,
@@ -503,6 +533,7 @@ Acceptance Criteria:
 ```
 
 **S5-2: ProgressReporter interface and CliProgressReporter**
+
 ```
 As a CLI user,
 I want to see what the agent is doing at each significant step in real time,
@@ -527,6 +558,7 @@ Acceptance Criteria:
 ```
 
 **S5-3: Session Store (L2) — per-turn persistence**
+
 ```
 As a developer,
 I want every turn written to disk immediately,
@@ -545,6 +577,7 @@ Acceptance Criteria:
 ```
 
 **S5-4: Long-term memory store (L3) — persistence**
+
 ```
 As an agent,
 I want compacted summaries and agent notes persisted to disk,
@@ -558,6 +591,7 @@ Acceptance Criteria:
 ```
 
 **S5-5: Memory Manager — context assembly and task history injection**
+
 ```
 As an agent,
 I want prior work on my current task automatically included in my context,
@@ -576,6 +610,7 @@ Acceptance Criteria:
 ```
 
 **S5-6: Memory Manager — compaction (L1 → L3)**
+
 ```
 As an agent,
 I want my active context compacted before messages are dropped,
@@ -592,6 +627,7 @@ Acceptance Criteria:
 ```
 
 **S5-7: memory_search tool — keyword backend**
+
 ```
 As an agent,
 I want to search my long-term memory by keyword,
@@ -608,6 +644,7 @@ Acceptance Criteria:
 ```
 
 **S5-8: memory_write tool**
+
 ```
 As an agent,
 I want to explicitly write facts and notes to long-term memory,
@@ -622,6 +659,7 @@ Acceptance Criteria:
 ```
 
 **S5-9: agent_suggest tool and suggestions CLI**
+
 ```
 As an agent,
 I want to propose improvements to my own rules without being able to apply them directly,
@@ -649,6 +687,7 @@ Acceptance Criteria:
 ### Stories
 
 **S6-1: Sub-agent runner**
+
 ```
 As an agent,
 I want to spawn isolated child agent processes for subtasks,
@@ -664,6 +703,7 @@ Acceptance Criteria:
 ```
 
 **S6-2: Skill file loader**
+
 ```
 As a developer,
 I want bolt to discover and load .skill.md files from three locations in priority order,
@@ -684,6 +724,7 @@ Acceptance Criteria:
 ```
 
 **S6-3: skill_run tool and execution flow**
+
 ```
 As an agent,
 I want to invoke a named skill with typed arguments,
@@ -698,6 +739,7 @@ Acceptance Criteria:
 ```
 
 **S6-4: Built-in skills**
+
 ```
 As a developer,
 I want the built-in skills shipped with bolt,
@@ -725,6 +767,7 @@ Acceptance Criteria:
 ### Stories
 
 **S7-1: Web search provider abstraction**
+
 ```
 As a developer,
 I want a pluggable search provider interface,
@@ -741,6 +784,7 @@ Acceptance Criteria:
 ```
 
 **S7-2: web_search tool**
+
 ```
 As an agent,
 I want to search the web by keyword and receive structured results,
@@ -758,6 +802,7 @@ Acceptance Criteria:
 ```
 
 **S7-3: user_review tool**
+
 ```
 As an agent,
 I want to present content for user review and collect approval or feedback,
@@ -783,6 +828,7 @@ Acceptance Criteria:
 ### Stories
 
 **S8-1: WebChannel HTTP + WebSocket server**
+
 ```
 As a blogger,
 I want to access bolt via a web browser on my phone,
@@ -800,6 +846,7 @@ Acceptance Criteria:
 ```
 
 **S8-2: Web chat frontend**
+
 ```
 As a blogger,
 I want a responsive chat UI in my browser,
@@ -818,6 +865,7 @@ Acceptance Criteria:
 ```
 
 **S8-3: Rich review UI in WebChannel**
+
 ```
 As a blogger,
 I want to review content with approve/reject buttons and see image/video previews,
@@ -834,6 +882,7 @@ Acceptance Criteria:
 ```
 
 **S8-4: WebChannel daemon mode**
+
 ```
 As a blogger,
 I want bolt to stay running as a background service,
@@ -848,6 +897,7 @@ Acceptance Criteria:
 ```
 
 **S8-5: Multi-user shared conversation**
+
 ```
 As a team of bloggers,
 I want multiple people to send messages to bolt from their own devices,
@@ -881,6 +931,7 @@ Acceptance Criteria:
 ### Stories
 
 **S9-1: analyze-trends skill**
+
 ```
 As a blogger,
 I want bolt to search and analyse trending topics,
@@ -896,6 +947,7 @@ Acceptance Criteria:
 ```
 
 **S9-2: Content generation skills**
+
 ```
 As a blogger,
 I want bolt to generate blog posts, social posts, and video scripts,
@@ -913,6 +965,7 @@ Acceptance Criteria:
 ```
 
 **S9-3: Code review skill**
+
 ```
 As a developer,
 I want bolt to review code and return a structured report,
@@ -927,6 +980,7 @@ Acceptance Criteria:
 ```
 
 **S9-4: Automated test-and-fix workflow**
+
 ```
 As an agent,
 I want to run a test suite, read failures, attempt fixes, and retry,
@@ -949,6 +1003,7 @@ Acceptance Criteria:
 ### Stories
 
 **S10-1: ComfyUI Pool** ✅
+
 ```
 As a developer,
 I want a ComfyUIPool module that manages a pool of ComfyUI servers,
@@ -978,6 +1033,7 @@ Acceptance Criteria:
 ```
 
 **S10-2: comfyui_text2img and comfyui_img2video tools** ✅
+
 ```
 As an agent,
 I want built-in tools to generate images and video clips via ComfyUI,
@@ -1009,6 +1065,7 @@ Acceptance Criteria:
 ```
 
 **S10-3: Video production workflow** ✅
+
 ```
 As a blogger,
 I want bolt to orchestrate the full video production pipeline,
@@ -1039,6 +1096,7 @@ Review Fixes:
 ```
 
 **S10-4: Task completion notification via channel** ✅
+
 ```
 As a user,
 I want bolt to tell me when a long-running task finishes,
@@ -1053,6 +1111,7 @@ Acceptance Criteria:
 ```
 
 **S10-6: FFmpeg Runner** ✅
+
 ```
 As a developer,
 I want a local FFmpeg wrapper that bolt's video tools can use,
@@ -1071,6 +1130,7 @@ Acceptance Criteria:
 ```
 
 **S10-7: Video editing tools (video_merge, video_add_audio, video_add_subtitles)** ✅
+
 ```
 As an agent,
 I want tools to merge video clips and add audio and subtitles using FFmpeg,
@@ -1092,22 +1152,23 @@ Acceptance Criteria:
 ```
 
 **S10-8: Post-production workflow integration**
+
 ```
 As a blogger,
 I want bolt to automatically merge my scene clips and optionally add audio and subtitles,
 so that I get a polished final video without running FFmpeg commands manually.
 
 Acceptance Criteria:
-- [ ] After S10-3 video generation completes, agent creates post-production tasks in the existing DAG:
+- [x] After S10-3 video generation completes, agent creates post-production tasks in the existing DAG:
       mergeClips → addAudio (optional) → addSubtitles (optional)
-- [ ] mergeClips task calls video_merge with all approved clips, saves to final/raw.mp4, updates manifest
-- [ ] If user has provided an audio file, addAudio task calls video_add_audio; result saved to final/audio.mp4
-- [ ] If storyboard contains dialogue, agent generates scenes/subtitles.srt from storyboard dialogue and
+- [x] mergeClips task calls video_merge with all approved clips, saves to final/raw.mp4, updates manifest
+- [x] If user has provided an audio file, addAudio task calls video_add_audio; result saved to final/audio.mp4
+- [x] If storyboard contains dialogue, agent generates scenes/subtitles.srt from storyboard dialogue and
       scene durations, then calls video_add_subtitles; result saved to final/video.mp4
-- [ ] The last completed post-production step's output is linked as final/video.mp4 in the manifest
-- [ ] Each post-production task has requiresApproval: true; user can reject and trigger a redo
-- [ ] project.json manifest postProduction fields are updated after each step
-- [ ] Integration test covers merge + audio + subtitles with mocked FfmpegRunner and channel
+- [x] The last completed post-production step's output is linked as final/video.mp4 in the manifest
+- [x] Each post-production task has requiresApproval: true; user can reject and trigger a redo
+- [x] project.json manifest postProduction fields are updated after each step
+- [x] Integration test covers merge + audio + subtitles with mocked FfmpegRunner and channel
 ```
 
 ---
@@ -1119,6 +1180,7 @@ Acceptance Criteria:
 ### Stories
 
 **S11-1: End-to-end CLI session test**
+
 ```
 As a developer,
 I want an end-to-end test that runs a full agent session via CliChannel,
@@ -1132,6 +1194,7 @@ Acceptance Criteria:
 ```
 
 **S11-2: State recovery from corrupt files**
+
 ```
 As a developer,
 I want bolt to recover gracefully from corrupt state files,
@@ -1146,6 +1209,7 @@ Acceptance Criteria:
 ```
 
 **S11-3: Embedding memory search backend (optional)**
+
 ```
 As a power user,
 I want to switch memory search to an embedding-based backend,
@@ -1159,6 +1223,7 @@ Acceptance Criteria:
 ```
 
 **S11-4: README and getting-started documentation**
+
 ```
 As a new user,
 I want clear setup instructions in the README,

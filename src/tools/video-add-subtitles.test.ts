@@ -1,11 +1,13 @@
+import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolContext } from './tool';
 import {
   createVideoAddSubtitlesTool,
+  countSrtEntries,
   type VideoAddSubtitlesInput,
   vttToSrt,
 } from './video-add-subtitles';
-import { FfmpegError } from '../ffmpeg/ffmpeg-runner';
+import { FfmpegRunner, FfmpegError } from '../ffmpeg/ffmpeg-runner';
 
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn().mockResolvedValue('1\n00:00:01,000 --> 00:00:04,000\nHello'),
@@ -87,7 +89,7 @@ describe('videoAddSubtitlesTool', () => {
       },
     };
 
-    tool = createVideoAddSubtitlesTool(mockRunner as never);
+    tool = createVideoAddSubtitlesTool(mockRunner as unknown as FfmpegRunner);
 
     ctx = {
       cwd: '/workspace',
@@ -253,5 +255,71 @@ describe('videoAddSubtitlesTool', () => {
     const result = await tool.execute(input, ctx);
 
     expect(result.subtitleCount).toBeGreaterThanOrEqual(0);
+  });
+
+  it('throws ToolError when readFile fails for .srt', async () => {
+    vi.mocked(readFile).mockRejectedValueOnce(new Error('EACCES: permission denied'));
+
+    const input: VideoAddSubtitlesInput = {
+      videoPath: 'video.mp4',
+      subtitlesPath: 'subs.srt',
+      outputPath: 'output.mp4',
+    };
+    await expect(tool.execute(input, ctx)).rejects.toThrow();
+  });
+
+  it('throws ToolError when readFile fails for .vtt', async () => {
+    vi.mocked(readFile).mockRejectedValueOnce(new Error('ENOENT: no such file'));
+
+    const input: VideoAddSubtitlesInput = {
+      videoPath: 'video.mp4',
+      subtitlesPath: 'subs.vtt',
+      outputPath: 'output.mp4',
+    };
+    await expect(tool.execute(input, ctx)).rejects.toThrow();
+  });
+
+  it('throws ToolError for invalid fontColor in hard mode', async () => {
+    const input: VideoAddSubtitlesInput = {
+      videoPath: 'video.mp4',
+      subtitlesPath: 'subs.srt',
+      outputPath: 'output.mp4',
+      mode: 'hard',
+      fontColor: 'notahex',
+    };
+    await expect(tool.execute(input, ctx)).rejects.toMatchObject({
+      message: expect.stringContaining('Invalid fontColor'),
+      retryable: false,
+    });
+  });
+});
+
+describe('countSrtEntries', () => {
+  it('counts entries in a valid SRT string', () => {
+    const srt = `1
+00:00:01,000 --> 00:00:04,000
+Hello
+
+2
+00:00:05,000 --> 00:00:08,000
+World
+`;
+    expect(countSrtEntries(srt)).toBe(2);
+  });
+
+  it('returns 0 for empty string', () => {
+    expect(countSrtEntries('')).toBe(0);
+  });
+
+  it('returns 0 for SRT with no numbered entries', () => {
+    expect(countSrtEntries('just some text')).toBe(0);
+  });
+
+  it('counts a single entry', () => {
+    const srt = `1
+00:00:00,000 --> 00:00:02,000
+One entry
+`;
+    expect(countSrtEntries(srt)).toBe(1);
   });
 });

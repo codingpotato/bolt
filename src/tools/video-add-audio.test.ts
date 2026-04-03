@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolContext } from './tool';
 import { createVideoAddAudioTool, type VideoAddAudioInput } from './video-add-audio';
-import { FfmpegError } from '../ffmpeg/ffmpeg-runner';
+import { FfmpegRunner, FfmpegError } from '../ffmpeg/ffmpeg-runner';
 
 describe('videoAddAudioTool', () => {
   let mockRunner: {
@@ -38,7 +38,7 @@ describe('videoAddAudioTool', () => {
       },
     };
 
-    tool = createVideoAddAudioTool(mockRunner as never);
+    tool = createVideoAddAudioTool(mockRunner as unknown as FfmpegRunner);
 
     ctx = {
       cwd: '/workspace',

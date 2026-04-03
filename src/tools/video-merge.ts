@@ -21,7 +21,7 @@ export interface VideoMergeOutput {
 }
 
 /** Parse the total duration in seconds from ffmpeg stderr. */
-function parseDurationSec(stderr: string): number {
+export function parseDurationSec(stderr: string): number {
   // ffmpeg prints: Duration: HH:MM:SS.mm, ...
   const match = /Duration:\s*(\d+):(\d+):([\d.]+)/.exec(stderr);
   if (!match) return 0;
@@ -86,6 +86,7 @@ export function createVideoMergeTool(
 
       const onProgress = (p: { frame?: number; time?: string; speed?: string }): void => {
         ctx.logger.debug('video_merge progress', { frame: p.frame, time: p.time, speed: p.speed });
+        ctx.progress.onToolCall('video_merge', { frame: p.frame, time: p.time, speed: p.speed });
       };
 
       try {
@@ -153,7 +154,7 @@ async function runMerge(
         '-i',
         listPath,
         '-vf',
-        'scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2',
+        'scale=-2:1080:force_original_aspect_ratio=decrease',
         '-c:v',
         videoCodec,
         '-crf',

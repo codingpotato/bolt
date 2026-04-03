@@ -28,7 +28,9 @@ export interface VideoAddAudioOutput {
   durationMs: number;
 }
 
-export function createVideoAddAudioTool(runner: FfmpegRunner | null): Tool<VideoAddAudioInput, VideoAddAudioOutput> {
+export function createVideoAddAudioTool(
+  runner: FfmpegRunner | null,
+): Tool<VideoAddAudioInput, VideoAddAudioOutput> {
   return {
     name: 'video_add_audio',
     description:
@@ -45,7 +47,8 @@ export function createVideoAddAudioTool(runner: FfmpegRunner | null): Tool<Video
         mode: {
           type: 'string',
           enum: ['replace', 'mix'],
-          description: '"replace" discards original audio; "mix" blends it with the new track. Default: "replace".',
+          description:
+            '"replace" discards original audio; "mix" blends it with the new track. Default: "replace".',
         },
         audioVolume: {
           type: 'number',
@@ -65,7 +68,10 @@ export function createVideoAddAudioTool(runner: FfmpegRunner | null): Tool<Video
 
     async execute(input: VideoAddAudioInput, ctx: ToolContext): Promise<VideoAddAudioOutput> {
       if (!runner) {
-        throw new ToolError('ffmpeg is not available — install ffmpeg or set config.ffmpeg.path', false);
+        throw new ToolError(
+          'ffmpeg is not available — install ffmpeg or set config.ffmpeg.path',
+          false,
+        );
       }
 
       const mode = input.mode ?? 'replace';
@@ -86,29 +92,59 @@ export function createVideoAddAudioTool(runner: FfmpegRunner | null): Tool<Video
 
       const { audioCodec, audioBitrate } = runner.config;
       const onProgress = (p: { frame?: number; time?: string; speed?: string }): void => {
-        ctx.logger.debug('video_add_audio progress', { frame: p.frame, time: p.time, speed: p.speed });
+        ctx.logger.debug('video_add_audio progress', {
+          frame: p.frame,
+          time: p.time,
+          speed: p.speed,
+        });
+        ctx.progress.onToolCall('video_add_audio', {
+          frame: p.frame,
+          time: p.time,
+          speed: p.speed,
+        });
       };
 
       let args: string[];
       if (mode === 'replace') {
         args = [
-          '-i', input.videoPath,
-          '-i', input.audioPath,
-          '-map', '0:v:0', '-map', '1:a:0',
-          '-c:v', 'copy', '-c:a', audioCodec, '-b:a', audioBitrate,
+          '-i',
+          input.videoPath,
+          '-i',
+          input.audioPath,
+          '-map',
+          '0:v:0',
+          '-map',
+          '1:a:0',
+          '-c:v',
+          'copy',
+          '-c:a',
+          audioCodec,
+          '-b:a',
+          audioBitrate,
           '-shortest',
           input.outputPath,
         ];
       } else {
         // mix mode: blend original and added audio with amix
-        const streamLoop = fitToVideo ? ['-stream_loop', '-1', '-i', input.audioPath] : ['-i', input.audioPath];
+        const streamLoop = fitToVideo
+          ? ['-stream_loop', '-1', '-i', input.audioPath]
+          : ['-i', input.audioPath];
         args = [
-          '-i', input.videoPath,
+          '-i',
+          input.videoPath,
           ...streamLoop,
           '-filter_complex',
           `[0:a]volume=${originalVolume}[orig];[1:a]volume=${audioVolume}[added];[orig][added]amix=inputs=2:duration=first[aout]`,
-          '-map', '0:v:0', '-map', '[aout]',
-          '-c:v', 'copy', '-c:a', audioCodec, '-b:a', audioBitrate,
+          '-map',
+          '0:v:0',
+          '-map',
+          '[aout]',
+          '-c:v',
+          'copy',
+          '-c:a',
+          audioCodec,
+          '-b:a',
+          audioBitrate,
           '-shortest',
           input.outputPath,
         ];

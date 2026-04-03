@@ -39,7 +39,13 @@ const SUPPORTED_FORMATS = new Set(['.srt', '.vtt', '.ass']);
  * Alpha is hardcoded to 00 (fully opaque).
  */
 function cssHexToAbgr(hex: string): string {
-  const clean = hex.replace('#', '').padEnd(6, 'f');
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
+    throw new ToolError(
+      `Invalid fontColor "${hex}". Must be a CSS hex color like "#ffffff".`,
+      false,
+    );
+  }
+  const clean = hex.replace('#', '');
   const r = clean.slice(0, 2);
   const g = clean.slice(2, 4);
   const b = clean.slice(4, 6);
@@ -91,9 +97,9 @@ export function vttToSrt(vtt: string): { srt: string; count: number } {
 }
 
 /** Count the number of entries in an SRT file (sequences of: number, timing, text, blank). */
-function countSrtEntries(srt: string): number {
+export function countSrtEntries(srt: string): number {
   // Each entry starts with a line containing only a number
-  return (srt.match(/^\d+\s*$/m) ?? []).length;
+  return (srt.match(/^\d+\s*$/gm) ?? []).length;
 }
 
 export function createVideoAddSubtitlesTool(
@@ -165,6 +171,11 @@ export function createVideoAddSubtitlesTool(
 
       const onProgress = (p: { frame?: number; time?: string; speed?: string }): void => {
         ctx.logger.debug('video_add_subtitles progress', {
+          frame: p.frame,
+          time: p.time,
+          speed: p.speed,
+        });
+        ctx.progress.onToolCall('video_add_subtitles', {
           frame: p.frame,
           time: p.time,
           speed: p.speed,

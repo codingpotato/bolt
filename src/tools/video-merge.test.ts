@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolContext } from './tool';
-import { createVideoMergeTool, type VideoMergeInput } from './video-merge';
-import { FfmpegError } from '../ffmpeg/ffmpeg-runner';
+import { createVideoMergeTool, parseDurationSec, type VideoMergeInput } from './video-merge';
+import { FfmpegRunner, FfmpegError } from '../ffmpeg/ffmpeg-runner';
 
 describe('videoMergeTool', () => {
   let mockRunner: {
@@ -38,7 +38,7 @@ describe('videoMergeTool', () => {
       },
     };
 
-    tool = createVideoMergeTool(mockRunner as never);
+    tool = createVideoMergeTool(mockRunner as unknown as FfmpegRunner);
 
     ctx = {
       cwd: '/workspace',
@@ -164,5 +164,27 @@ describe('videoMergeTool', () => {
       message: expect.stringContaining('ffmpeg is not available'),
       retryable: false,
     });
+  });
+});
+
+describe('parseDurationSec', () => {
+  it('parses a standard duration string', () => {
+    const stderr = 'Duration: 00:00:10.50, start: 0.000000, bitrate: 1000 kb/s';
+    expect(parseDurationSec(stderr)).toBe(10.5);
+  });
+
+  it('parses hours, minutes, and seconds', () => {
+    const stderr = 'Duration: 01:30:45.25, start: 0.000000';
+    expect(parseDurationSec(stderr)).toBe(1 * 3600 + 30 * 60 + 45.25);
+  });
+
+  it('returns 0 when Duration line is missing', () => {
+    const stderr = 'some random ffmpeg output';
+    expect(parseDurationSec(stderr)).toBe(0);
+  });
+
+  it('returns 0 for malformed duration', () => {
+    const stderr = 'Duration: not-a-time';
+    expect(parseDurationSec(stderr)).toBe(0);
   });
 });

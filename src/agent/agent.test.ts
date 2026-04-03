@@ -27,6 +27,7 @@ function makeConfig(model = 'claude-test'): Config {
     tasks: { maxSubtaskDepth: 5, maxRetries: 3 },
     tools: { timeoutMs: 30000, allowedTools: [] },
     comfyui: { servers: [], workflows: { text2img: 'image_z_image_turbo', img2video: 'video_ltx2_3_i2v' }, pollIntervalMs: 2000, timeoutMs: 300000, maxConcurrentPerServer: 2 },
+    ffmpeg: { videoCodec: 'libx264', crf: 23, preset: 'fast', audioCodec: 'aac', audioBitrate: '128k' },
     codeWorkflows: { testFixRetries: 3 },
     cli: { progress: true, verbose: false },
     channels: { web: { enabled: false, port: 3000, mode: 'websocket' } },

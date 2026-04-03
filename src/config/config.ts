@@ -56,6 +56,20 @@ export interface Config {
     timeoutMs: number;
     maxConcurrentPerServer: number;
   };
+  ffmpeg: {
+    /** Explicit path to ffmpeg binary. If omitted, resolved via system PATH. */
+    path?: string;
+    /** Default output video codec for re-encode operations. */
+    videoCodec: string;
+    /** Default CRF quality value (0–51; lower = better quality). */
+    crf: number;
+    /** Default encoding preset (ultrafast..veryslow). */
+    preset: string;
+    /** Default audio codec for operations that re-encode audio. */
+    audioCodec: string;
+    /** Default audio bitrate (e.g. "128k"). */
+    audioBitrate: string;
+  };
   codeWorkflows: {
     testFixRetries: number;
   };
@@ -119,6 +133,13 @@ const DEFAULTS: Config = {
     timeoutMs: 300000,
     maxConcurrentPerServer: 2,
   },
+  ffmpeg: {
+    videoCodec: 'libx264',
+    crf: 23,
+    preset: 'fast',
+    audioCodec: 'aac',
+    audioBitrate: '128k',
+  },
   codeWorkflows: {
     testFixRetries: 3,
   },
@@ -147,7 +168,7 @@ const CREDENTIAL_FIELDS = [
 // Intentionally excludes `logLevel` (env-var only: BOLT_LOG_LEVEL) and
 // `dataDir` (computed from BOLT_DATA_DIR, used to locate the file itself).
 const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(
-  ['model', 'auth', 'local', 'search', 'agentPrompt', 'memory', 'tasks', 'tools', 'comfyui', 'codeWorkflows', 'cli', 'channels'] satisfies (keyof Config)[]
+  ['model', 'auth', 'local', 'search', 'agentPrompt', 'memory', 'tasks', 'tools', 'comfyui', 'ffmpeg', 'codeWorkflows', 'cli', 'channels'] satisfies (keyof Config)[]
 );
 
 // Validation constants — defined once, not recreated on every call.
@@ -156,6 +177,9 @@ const VALID_AUTH_MODES = ['api-key', 'subscription', 'local'] as const;
 const VALID_SEARCH_BACKENDS = ['keyword', 'embedding'] as const;
 const VALID_SEARCH_PROVIDERS = ['searxng', 'brave', 'serper'] as const;
 const VALID_WEB_MODES = ['http', 'websocket'] as const;
+const VALID_FFMPEG_PRESETS = [
+  'ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow',
+] as const;
 
 function deepMerge(
   base: Record<string, unknown>,
@@ -243,11 +267,15 @@ function applyEnvOverrides(config: Config): Config {
       servers: config.comfyui.servers.map((s) => ({ ...s })),
       workflows: { ...config.comfyui.workflows },
     },
+    ffmpeg: { ...config.ffmpeg },
     codeWorkflows: { ...config.codeWorkflows },
     cli: { ...config.cli },
     channels: { web: { ...config.channels.web } },
   };
 
+  if (process.env['BOLT_FFMPEG_PATH']) {
+    result.ffmpeg.path = process.env['BOLT_FFMPEG_PATH'];
+  }
   if (process.env['BOLT_MODEL']) {
     result.model = process.env['BOLT_MODEL'];
   }
@@ -296,6 +324,18 @@ function validate(config: Config): void {
   validatePositiveInteger(config.tasks.maxSubtaskDepth, 'config.tasks.maxSubtaskDepth');
   validatePositiveInteger(config.tasks.maxRetries, 'config.tasks.maxRetries');
   validatePositiveInteger(config.codeWorkflows.testFixRetries, 'config.codeWorkflows.testFixRetries');
+
+  const { crf, preset } = config.ffmpeg;
+  if (!Number.isInteger(crf) || crf < 0 || crf > 51) {
+    throw new ConfigError(
+      `config.ffmpeg.crf must be an integer between 0 and 51, got: ${crf}`
+    );
+  }
+  if (!(VALID_FFMPEG_PRESETS as readonly string[]).includes(preset)) {
+    throw new ConfigError(
+      `config.ffmpeg.preset must be one of ${VALID_FFMPEG_PRESETS.join(', ')}, got: ${preset}`
+    );
+  }
 
   if (!(VALID_LOG_LEVELS as readonly string[]).includes(config.logLevel)) {
     throw new ConfigError(

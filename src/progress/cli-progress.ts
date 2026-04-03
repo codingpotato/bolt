@@ -1,7 +1,12 @@
-import type { ProgressReporter } from './progress';
+import type { LlmCallInfo, LlmResponseInfo, ProgressReporter } from './progress';
 
 /** ANSI: move up one line then erase it. */
 const ERASE_LINE = '\x1b[1A\x1b[2K';
+
+/** Format a number with comma separators for readability. */
+function fmt(n: number): string {
+  return n.toLocaleString('en-US');
+}
 
 /**
  * Produces a concise, human-readable summary of a tool's input for display.
@@ -93,6 +98,26 @@ export class CliProgressReporter implements ProgressReporter {
     this.pendingThinking = true;
   }
 
+  onLlmCall(info: LlmCallInfo): void {
+    if (!this.active) return;
+    // Replace the plain "Thinking…" line with context stats.
+    this.eraseThinking();
+    this.out.write(`⟳ Thinking… [${info.messageCount} msgs · inj: ${fmt(info.injectedTokens)} tokens]\n`);
+    this.pendingThinking = true;
+  }
+
+  onLlmResponse(info: LlmResponseInfo): void {
+    if (!this.active) return;
+    const pct = ((info.inputTokens / 200_000) * 100).toFixed(1);
+    // Replace the thinking/call line with actual token usage — will be erased
+    // by the next onToolCall() or clearPendingThinking() before response text.
+    this.eraseThinking();
+    this.out.write(
+      `⟳ [in: ${fmt(info.inputTokens)} / 200k · ${pct}% · out: ${fmt(info.outputTokens)} · ${info.stopReason}]\n`,
+    );
+    this.pendingThinking = true;
+  }
+
   onToolCall(name: string, input: unknown): void {
     if (!this.active) return;
     this.eraseThinking();
@@ -119,8 +144,10 @@ export class CliProgressReporter implements ProgressReporter {
     }
   }
 
-  onMemoryCompaction(evictedCount: number): void {
-    this.write(`⟳ Compacting ${evictedCount} messages…\n`);
+  onMemoryCompaction(evictedCount: number, summary: string, tags: string[]): void {
+    const tagStr = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
+    const truncated = summary.length > 60 ? `${summary.slice(0, 60)}…` : summary;
+    this.write(`⟳ Compacted ${evictedCount} msgs → "${truncated}"${tagStr}\n`);
   }
 
   onRetry(attempt: number, maxAttempts: number, reason: string): void {

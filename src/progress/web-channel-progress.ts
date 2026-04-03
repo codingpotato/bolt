@@ -1,4 +1,4 @@
-import type { ProgressReporter } from './progress';
+import type { LlmCallInfo, LlmResponseInfo, ProgressReporter } from './progress';
 import { summariseInput } from './cli-progress';
 
 /**
@@ -29,6 +29,17 @@ export class WebChannelProgressReporter implements ProgressReporter {
     this.emit('⟳ Thinking…');
   }
 
+  onLlmCall(info: LlmCallInfo): void {
+    this.emit(`⟳ Thinking… [${info.messageCount} msgs · inj: ${info.injectedTokens.toLocaleString('en-US')} tokens]`);
+  }
+
+  onLlmResponse(info: LlmResponseInfo): void {
+    const pct = ((info.inputTokens / 200_000) * 100).toFixed(1);
+    this.emit(
+      `⟳ [in: ${info.inputTokens.toLocaleString('en-US')} / 200k · ${pct}% · out: ${info.outputTokens.toLocaleString('en-US')} · ${info.stopReason}]`,
+    );
+  }
+
   onToolCall(name: string, input: unknown): void {
     const summary = summariseInput(name, input);
     this.emit(`⚙ ${name}\n   ${summary}`);
@@ -52,8 +63,10 @@ export class WebChannelProgressReporter implements ProgressReporter {
     }
   }
 
-  onMemoryCompaction(evictedCount: number): void {
-    this.emit(`⟳ Compacting ${evictedCount} messages…`);
+  onMemoryCompaction(evictedCount: number, summary: string, tags: string[]): void {
+    const tagStr = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
+    const truncated = summary.length > 60 ? `${summary.slice(0, 60)}…` : summary;
+    this.emit(`⟳ Compacted ${evictedCount} msgs → "${truncated}"${tagStr}`);
   }
 
   onRetry(attempt: number, maxAttempts: number, reason: string): void {

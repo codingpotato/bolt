@@ -91,6 +91,8 @@ function makeCtx(): ToolContext {
     progress: {
       onSessionStart: vi.fn(),
       onThinking: vi.fn(),
+      onLlmCall: vi.fn(),
+      onLlmResponse: vi.fn(),
       onToolCall: vi.fn(),
       onToolResult: vi.fn(),
       onTaskStatusChange: vi.fn(),
@@ -345,6 +347,41 @@ describe('AgentCore', () => {
 
       // onThinking is called before each API call — 2 calls = 2 emissions
       expect(ctx.progress.onThinking).toHaveBeenCalledTimes(2);
+    });
+
+    it('emits onLlmCall before each API call with message count', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      expect(ctx.progress.onLlmCall).toHaveBeenCalledOnce();
+      expect(ctx.progress.onLlmCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messageCount: expect.any(Number),
+          injectedTokens: expect.any(Number),
+        }),
+      );
+    });
+
+    it('emits onLlmResponse after each API call with token usage', async () => {
+      const { client } = makeClient([makeTextResponse('ok')]);
+      const { channel } = makeChannel(['hi']);
+      const toolBus = makeToolBus();
+
+      const agent = new AgentCore(client, channel, toolBus, ctx, makeConfig());
+      await agent.run();
+
+      expect(ctx.progress.onLlmResponse).toHaveBeenCalledOnce();
+      expect(ctx.progress.onLlmResponse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inputTokens: expect.any(Number),
+          outputTokens: expect.any(Number),
+          stopReason: expect.any(String),
+        }),
+      );
     });
 
     it('emits onRetry on each transient failure', async () => {

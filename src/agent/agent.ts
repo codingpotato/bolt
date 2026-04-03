@@ -180,6 +180,10 @@ export class AgentCore {
         });
 
         this.ctx.progress.onThinking();
+        this.ctx.progress.onLlmCall({
+          messageCount: this.l1.length,
+          injectedTokens: this.injectedTokenEstimate,
+        });
 
         // Build stable params (messages snapshot is taken fresh each attempt).
         const buildParams = () => ({
@@ -219,6 +223,11 @@ export class AgentCore {
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
           stopReason: response.stop_reason,
+        });
+        this.ctx.progress.onLlmResponse({
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          stopReason: response.stop_reason ?? 'end_turn',
         });
 
         if (response.stop_reason === 'tool_use') {

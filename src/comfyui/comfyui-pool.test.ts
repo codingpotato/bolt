@@ -42,6 +42,8 @@ const mockProgress = {
   onTaskStatusChange: vi.fn(),
   onContextInjection: vi.fn(),
   onMemoryCompaction: vi.fn(),
+  onLlmCall: vi.fn(),
+  onLlmResponse: vi.fn(),
   onRetry: vi.fn(),
 };
 

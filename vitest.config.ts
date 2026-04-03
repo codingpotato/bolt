@@ -12,6 +12,7 @@ export default defineConfig({
       // 70% (integration boundary). src/cli is skipped — index.ts is an entry point
       // with 0% coverage by design. src/content is not yet implemented (Sprint 9).
       thresholds: {
+        'src/ffmpeg/**':          { lines: 90, functions: 90, branches: 90 },
         'src/tools/**':          { lines: 90, functions: 90, branches: 90 },
         'src/memory/**':         { lines: 85, functions: 85, branches: 85 },
         'src/tasks/**':          { lines: 85, functions: 85, branches: 85 },

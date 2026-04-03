@@ -398,4 +398,51 @@ describe('resolveConfig', () => {
       expect(() => resolveConfig()).toThrow('pollIntervalMs');
     });
   });
+
+  describe('ffmpeg config', () => {
+    it('returns ffmpeg defaults when not set', () => {
+      const config = resolveConfig();
+      expect(config.ffmpeg.path).toBeUndefined();
+      expect(config.ffmpeg.videoCodec).toBe('libx264');
+      expect(config.ffmpeg.crf).toBe(23);
+      expect(config.ffmpeg.preset).toBe('fast');
+      expect(config.ffmpeg.audioCodec).toBe('aac');
+      expect(config.ffmpeg.audioBitrate).toBe('128k');
+    });
+
+    it('merges ffmpeg config from file', () => {
+      mockConfigFile({ ffmpeg: { crf: 18, preset: 'slow', path: '/usr/local/bin/ffmpeg' } });
+      const config = resolveConfig();
+      expect(config.ffmpeg.crf).toBe(18);
+      expect(config.ffmpeg.preset).toBe('slow');
+      expect(config.ffmpeg.path).toBe('/usr/local/bin/ffmpeg');
+      // unset fields still get defaults
+      expect(config.ffmpeg.videoCodec).toBe('libx264');
+    });
+
+    it('applies BOLT_FFMPEG_PATH env override', () => {
+      process.env['BOLT_FFMPEG_PATH'] = '/opt/ffmpeg/bin/ffmpeg';
+      const config = resolveConfig();
+      expect(config.ffmpeg.path).toBe('/opt/ffmpeg/bin/ffmpeg');
+      delete process.env['BOLT_FFMPEG_PATH'];
+    });
+
+    it('throws ConfigError for crf below 0', () => {
+      mockConfigFile({ ffmpeg: { crf: -1 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+      expect(() => resolveConfig()).toThrow('config.ffmpeg.crf');
+    });
+
+    it('throws ConfigError for crf above 51', () => {
+      mockConfigFile({ ffmpeg: { crf: 52 } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+      expect(() => resolveConfig()).toThrow('config.ffmpeg.crf');
+    });
+
+    it('throws ConfigError for invalid preset', () => {
+      mockConfigFile({ ffmpeg: { preset: 'turbo' } });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+      expect(() => resolveConfig()).toThrow('config.ffmpeg.preset');
+    });
+  });
 });

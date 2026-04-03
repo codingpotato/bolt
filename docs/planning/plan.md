@@ -1052,22 +1052,22 @@ Acceptance Criteria:
 - [x] Unit tests cover CliChannel and WebChannel completion message paths
 ```
 
-**S10-6: FFmpeg Runner**
+**S10-6: FFmpeg Runner** ✅
 ```
 As a developer,
 I want a local FFmpeg wrapper that bolt's video tools can use,
 so that post-production operations run reliably on the host machine.
 
 Acceptance Criteria:
-- [ ] FfmpegRunner.detect() resolves the ffmpeg binary from config.ffmpeg.path or system PATH
-- [ ] Missing ffmpeg logs a startup warning; bolt does not exit
-- [ ] FfmpegRunner.run(args, opts) spawns ffmpeg, streams stderr, and resolves FfmpegResult on exit code 0
-- [ ] Progress lines from ffmpeg stderr are parsed and forwarded to ProgressReporter (frame, speed, time)
-- [ ] Non-zero exit code rejects with FfmpegError carrying stderr and exitCode
-- [ ] SIGKILL/SIGTERM exit is treated as retryable; other non-zero exits are non-retryable
-- [ ] All paths passed to the runner are validated to be within context.cwd (workspace confinement)
-- [ ] config.ffmpeg.path, videoCodec, crf, preset, audioCodec, audioBitrate are respected
-- [ ] Unit tests mock child_process.spawn
+- [x] FfmpegRunner.detect() resolves the ffmpeg binary from config.ffmpeg.path or system PATH
+- [x] Missing ffmpeg logs a startup warning; bolt does not exit
+- [x] FfmpegRunner.run(args, opts) spawns ffmpeg, streams stderr, and resolves FfmpegResult on exit code 0
+- [x] Progress lines from ffmpeg stderr are parsed and forwarded to ProgressReporter (frame, speed, time)
+- [x] Non-zero exit code rejects with FfmpegError carrying stderr and exitCode
+- [x] SIGKILL/SIGTERM exit is treated as retryable; other non-zero exits are non-retryable
+- [x] All paths passed to the runner are validated to be within context.cwd (workspace confinement)
+- [x] config.ffmpeg.path, videoCodec, crf, preset, audioCodec, audioBitrate are respected
+- [x] Unit tests mock child_process.spawn
 ```
 
 **S10-7: Video editing tools (video_merge, video_add_audio, video_add_subtitles)**

@@ -59,10 +59,12 @@ function runCommand(command: string, cwd: string): Promise<string> {
         const parts: string[] = [];
         if (stdout) parts.push(stdout);
         if (stderr) parts.push(stderr);
-        if (exitCode !== 0) parts.push(`Exit code: ${exitCode}`);
         let output = parts.join('\n') || '(no output)';
         if (output.length > MAX_OUTPUT_CHARS) {
-          output = output.slice(0, MAX_OUTPUT_CHARS) + `\n\n[truncated — output exceeded ${MAX_OUTPUT_CHARS} characters]`;
+          const exitSuffix = exitCode !== 0 ? `; exit code: ${exitCode}` : '';
+          output = output.slice(0, MAX_OUTPUT_CHARS) + `\n\n[truncated — output exceeded ${MAX_OUTPUT_CHARS} characters${exitSuffix}]`;
+        } else if (exitCode !== 0) {
+          output += `\nExit code: ${exitCode}`;
         }
         resolve(output);
       }

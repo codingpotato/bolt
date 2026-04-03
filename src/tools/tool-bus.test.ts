@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ToolBus } from './tool-bus';
+import { ToolBus, MAX_RESULT_CHARS } from './tool-bus';
 import { ToolError } from './tool';
 import type { Tool, ToolContext, ToolCall } from './tool';
-
-const MAX_RESULT_CHARS = 100_000;
 
 // ---------------------------------------------------------------------------
 // Helpers

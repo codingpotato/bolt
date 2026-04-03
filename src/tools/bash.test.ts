@@ -166,6 +166,18 @@ describe('bashTool', () => {
     expect(result).toContain('[truncated');
   });
 
+  it('preserves exit code in truncation notice when command fails with large output', async () => {
+    const largeOutput = 'x'.repeat(MAX_OUTPUT_CHARS + 100);
+    vi.mocked(childProcess.spawn).mockReturnValue(
+      makeMockProcess({ stdout: largeOutput, stderr: '', exitCode: 2 }),
+    );
+
+    const result = await bashTool.execute({ command: 'cmd' }, ctx);
+    expect(result).toContain('[truncated');
+    expect(result).toContain('exit code: 2');
+    expect(result).not.toMatch(/^Exit code:/m);
+  });
+
   it('does not truncate output within MAX_OUTPUT_CHARS', async () => {
     const smallOutput = 'x'.repeat(MAX_OUTPUT_CHARS);
     vi.mocked(childProcess.spawn).mockReturnValue(

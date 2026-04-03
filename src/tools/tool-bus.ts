@@ -2,7 +2,7 @@ import { ToolError } from './tool';
 import type { Tool, ToolCall, ToolContext, ToolResult, JSONSchema } from './tool';
 
 /** Hard ceiling on any single tool result sent to the LLM. */
-const MAX_RESULT_CHARS = 100_000;
+export const MAX_RESULT_CHARS = 100_000;
 
 /** Anthropic API tool definition format. */
 export interface AnthropicToolDefinition {

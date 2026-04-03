@@ -111,6 +111,27 @@ export class CliChannel implements Channel {
     return { approved: false };
   }
 
+  async notifyTaskCompletion(
+    _taskId: string,
+    title: string,
+    status: 'completed' | 'failed',
+    _result?: string,
+    error?: string,
+  ): Promise<void> {
+    const icon = status === 'completed' ? '✓' : '✗';
+    const label = status === 'completed' ? 'Task completed' : 'Task failed';
+    const message = error ? `${icon} ${label}: ${title} — ${error}` : `${icon} ${label}: ${title}`;
+
+    this.beforeSend?.();
+
+    await new Promise<void>((resolve, reject) => {
+      this.output.write(`${message}\n`, (err?: Error | null) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+
   async send(response: string): Promise<void> {
     this.beforeSend?.();
 

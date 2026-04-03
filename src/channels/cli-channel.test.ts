@@ -129,6 +129,57 @@ describe('CliChannel', () => {
     });
   });
 
+  describe('notifyTaskCompletion()', () => {
+    it('writes a success line for completed status', async () => {
+      const { stream, data } = makeOutput();
+      const channel = new CliChannel(Readable.from(''), stream);
+
+      await channel.notifyTaskCompletion('t-1', 'My Task', 'completed');
+
+      expect(data()).toBe('✓ Task completed: My Task\n');
+    });
+
+    it('writes a failure line for failed status', async () => {
+      const { stream, data } = makeOutput();
+      const channel = new CliChannel(Readable.from(''), stream);
+
+      await channel.notifyTaskCompletion('t-1', 'My Task', 'failed');
+
+      expect(data()).toBe('✗ Task failed: My Task\n');
+    });
+
+    it('appends the error reason when provided', async () => {
+      const { stream, data } = makeOutput();
+      const channel = new CliChannel(Readable.from(''), stream);
+
+      await channel.notifyTaskCompletion('t-1', 'My Task', 'failed', undefined, 'network timeout');
+
+      expect(data()).toBe('✗ Task failed: My Task — network timeout\n');
+    });
+
+    it('calls beforeSend hook before writing', async () => {
+      const { stream } = makeOutput();
+      const beforeSend = vi.fn();
+      const channel = new CliChannel(Readable.from(''), stream, beforeSend);
+
+      await channel.notifyTaskCompletion('t-1', 'My Task', 'completed');
+
+      expect(beforeSend).toHaveBeenCalledOnce();
+    });
+
+    it('rejects if the stream errors', async () => {
+      const errorStream = new Writable({
+        write(_chunk, _encoding, callback) {
+          callback(new Error('write failed'));
+        },
+      });
+      errorStream.on('error', () => {});
+      const channel = new CliChannel(Readable.from(''), errorStream);
+
+      await expect(channel.notifyTaskCompletion('t-1', 'My Task', 'completed')).rejects.toThrow('write failed');
+    });
+  });
+
   describe('implements Channel interface', () => {
     it('uses process.stdin and process.stdout by default', () => {
       const channel = new CliChannel();

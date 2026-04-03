@@ -15,7 +15,7 @@ interface ClientMessage {
 
 /** Shape of messages sent from server → client. */
 export interface ServerMessage {
-  type: 'response' | 'review' | 'error' | 'status' | 'media' | 'progress' | 'user_message' | 'processing' | 'queue_status';
+  type: 'response' | 'review' | 'error' | 'status' | 'media' | 'progress' | 'user_message' | 'processing' | 'queue_status' | 'task_complete';
   content?: string;
   reviewId?: string;
   reviewRequest?: UserReviewRequest;
@@ -35,6 +35,12 @@ export interface ServerMessage {
   queueDepth?: number;
   /** Current queue depth for queue_status events. */
   depth?: number;
+  /** Task title for task_complete events. */
+  title?: string;
+  /** Task completion status for task_complete events. */
+  status?: 'completed' | 'failed';
+  /** Task result for task_complete events. */
+  result?: string;
 }
 
 /** Shape of the client's reply to a review request. */
@@ -459,6 +465,23 @@ export class WebChannel implements Channel {
     return new Promise<UserReviewResponse>((resolve, reject) => {
       this.pendingReviews.set(reviewId, { resolve, reject });
     });
+  }
+
+  async notifyTaskCompletion(
+    _taskId: string,
+    title: string,
+    status: 'completed' | 'failed',
+    result?: string,
+    _error?: string,
+  ): Promise<void> {
+    const msg: ServerMessage = {
+      type: 'task_complete',
+      title,
+      status,
+      ...(result !== undefined ? { result } : {}),
+    };
+    this.broadcastWs(msg);
+    this.broadcastSse(msg);
   }
 
   sendProgress(text: string): void {

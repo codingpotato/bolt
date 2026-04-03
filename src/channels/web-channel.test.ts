@@ -786,4 +786,58 @@ describe('WebSocket upgrade — token auth via ?token= query param', () => {
       expect(res.statusCode).toBe(404);
     });
   });
+
+  describe('notifyTaskCompletion()', () => {
+    it('broadcasts task_complete event to WebSocket clients for completed status', async () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel._onConnection(ws, 'Alice');
+
+      await channel.notifyTaskCompletion('t-1', 'My Task', 'completed');
+
+      expect(ws.lastSent()).toMatchObject({ type: 'task_complete', title: 'My Task', status: 'completed' });
+    });
+
+    it('broadcasts task_complete event to WebSocket clients for failed status', async () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel._onConnection(ws, 'Alice');
+
+      await channel.notifyTaskCompletion('t-1', 'My Task', 'failed');
+
+      expect(ws.lastSent()).toMatchObject({ type: 'task_complete', title: 'My Task', status: 'failed' });
+    });
+
+    it('includes result field when provided', async () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel._onConnection(ws, 'Alice');
+
+      await channel.notifyTaskCompletion('t-1', 'My Task', 'completed', 'output data');
+
+      expect(ws.lastSent()).toMatchObject({ type: 'task_complete', result: 'output data' });
+    });
+
+    it('omits result field when not provided', async () => {
+      const { channel } = makeChannel();
+      const ws = new FakeWs();
+      channel._onConnection(ws, 'Alice');
+
+      await channel.notifyTaskCompletion('t-1', 'My Task', 'completed');
+
+      const msg = ws.lastSent();
+      expect(msg.result).toBeUndefined();
+    });
+
+    it('broadcasts to SSE streams', async () => {
+      const { channel, server } = makeChannel({ mode: 'http' });
+      const { res } = server.simulateRequest('GET', '/events', {}, '');
+      await new Promise((r) => setTimeout(r, 10));
+
+      await channel.notifyTaskCompletion('t-1', 'My Task', 'completed');
+
+      expect(res.body).toContain('"task_complete"');
+      expect(res.body).toContain('"My Task"');
+    });
+  });
 });

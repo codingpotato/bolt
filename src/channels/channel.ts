@@ -54,4 +54,17 @@ export interface Channel {
    * Optional — channels without media support may omit this.
    */
   sendMedia?(filePath: string, caption?: string): Promise<void>;
+  /**
+   * Notify the user that a task has completed or failed.
+   * Optional — channels without completion notification support may omit this.
+   * Called by task_update when a task transitions to 'completed' or 'failed',
+   * regardless of whether the agent is in an active conversation turn.
+   */
+  notifyTaskCompletion?(
+    taskId: string,
+    title: string,
+    status: 'completed' | 'failed',
+    result?: string,
+    error?: string,
+  ): Promise<void>;
 }

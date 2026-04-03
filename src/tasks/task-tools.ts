@@ -99,6 +99,13 @@ export function createTaskTools(store: TaskStore): Tool[] {
         ctx.activeTaskId = undefined;
       }
       ctx.progress.onTaskStatusChange(input.id, title, input.status);
+      if ((input.status === 'completed' || input.status === 'failed') && ctx.channel) {
+        try {
+          await ctx.channel.notifyTaskCompletion?.(input.id, title, input.status, input.result, input.error);
+        } catch {
+          // Never let a notification failure surface to the agent
+        }
+      }
       return { id: input.id };
     },
   };

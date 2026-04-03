@@ -1038,18 +1038,18 @@ Review Fixes:
 - [x] Added tests for tool-bus summariseResult and validateRequired branches
 ```
 
-**S10-4: Task completion notification via channel**
+**S10-4: Task completion notification via channel** ✅
 ```
 As a user,
 I want bolt to tell me when a long-running task finishes,
 so that I know the result without having to watch the screen.
 
 Acceptance Criteria:
-- [ ] When a task completes (success or failure), AgentCore sends a completion message through the active channel
-- [ ] CliChannel: prints a formatted completion line to stdout, e.g. "✓ Task completed: <title>" or "✗ Task failed: <title> — <reason>"
-- [ ] WebChannel: broadcasts a { type: "task_complete", title, status, result? } WebSocket event to all connected clients
-- [ ] Completion message is sent regardless of whether the agent is still in an active conversation turn
-- [ ] Unit tests cover CliChannel and WebChannel completion message paths
+- [x] When a task completes (success or failure), AgentCore sends a completion message through the active channel
+- [x] CliChannel: prints a formatted completion line to stdout, e.g. "✓ Task completed: <title>" or "✗ Task failed: <title> — <reason>"
+- [x] WebChannel: broadcasts a { type: "task_complete", title, status, result? } WebSocket event to all connected clients
+- [x] Completion message is sent regardless of whether the agent is still in an active conversation turn
+- [x] Unit tests cover CliChannel and WebChannel completion message paths
 ```
 
 **S10-6: FFmpeg Runner**

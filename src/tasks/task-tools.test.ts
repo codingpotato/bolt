@@ -229,4 +229,56 @@ describe('task tools', () => {
       expect(result.tasks[0]?.status).toBe('waiting');
     });
   });
+
+  // ── task completion notification ──────────────────────────────────────────────
+
+  describe('task_update completion notification', () => {
+    it('calls notifyTaskCompletion when status transitions to completed', async () => {
+      const notifyTaskCompletion = vi.fn().mockResolvedValue(undefined);
+      ctx.channel = { receive: vi.fn(), send: vi.fn(), notifyTaskCompletion };
+      store.list.mockReturnValue([makeTask({ id: 'task-1', title: 'My Task' })]);
+
+      await getTool('task_update').execute({ id: 'task-1', status: 'completed', result: 'done' }, ctx);
+
+      expect(notifyTaskCompletion).toHaveBeenCalledWith('task-1', 'My Task', 'completed', 'done', undefined);
+    });
+
+    it('calls notifyTaskCompletion when status transitions to failed', async () => {
+      const notifyTaskCompletion = vi.fn().mockResolvedValue(undefined);
+      ctx.channel = { receive: vi.fn(), send: vi.fn(), notifyTaskCompletion };
+      store.list.mockReturnValue([makeTask({ id: 'task-1', title: 'My Task' })]);
+
+      await getTool('task_update').execute({ id: 'task-1', status: 'failed', error: 'network timeout' }, ctx);
+
+      expect(notifyTaskCompletion).toHaveBeenCalledWith('task-1', 'My Task', 'failed', undefined, 'network timeout');
+    });
+
+    it('does not call notifyTaskCompletion for intermediate statuses', async () => {
+      const notifyTaskCompletion = vi.fn().mockResolvedValue(undefined);
+      ctx.channel = { receive: vi.fn(), send: vi.fn(), notifyTaskCompletion };
+
+      for (const status of ['pending', 'in_progress', 'blocked', 'waiting', 'awaiting_approval'] as TaskStatus[]) {
+        await getTool('task_update').execute({ id: 'task-1', status }, ctx);
+      }
+
+      expect(notifyTaskCompletion).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when channel is absent', async () => {
+      store.list.mockReturnValue([makeTask()]);
+      await expect(
+        getTool('task_update').execute({ id: 'task-1', status: 'completed' }, ctx),
+      ).resolves.toBeDefined();
+    });
+
+    it('swallows errors from notifyTaskCompletion', async () => {
+      const notifyTaskCompletion = vi.fn().mockRejectedValue(new Error('channel error'));
+      ctx.channel = { receive: vi.fn(), send: vi.fn(), notifyTaskCompletion };
+      store.list.mockReturnValue([makeTask()]);
+
+      await expect(
+        getTool('task_update').execute({ id: 'task-1', status: 'completed' }, ctx),
+      ).resolves.toBeDefined();
+    });
+  });
 });

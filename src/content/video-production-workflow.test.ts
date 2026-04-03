@@ -710,8 +710,8 @@ describe('Post-production workflow (S10-8)', () => {
 
       // Mark clips as approved in manifest
       const scene = project.artifacts.scenes[i - 1];
-      expect(scene).toBeDefined();
-      scene!.clip = {
+      if (!scene) throw new Error(`Scene ${i} not found`);
+      scene.clip = {
         path: `scenes/scene-0${i}/clip.mp4`,
         status: 'approved',
         approvedAt: new Date().toISOString(),

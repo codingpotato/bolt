@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ContentProjectManager, type ContentProject, type Storyboard } from './content-project';
 import { TaskStore } from '../tasks/task-store';
+import { FfmpegRunner } from '../ffmpeg/ffmpeg-runner';
+import { createVideoMergeTool } from '../tools/video-merge';
+import { createVideoAddAudioTool } from '../tools/video-add-audio';
+import type { ToolContext } from '../tools/tool';
 
 /**
  * Integration test for S10-3: Video production workflow.
@@ -1045,5 +1049,128 @@ Thanks for watching`;
     expect(audioTask?.error).toBe('dependency task-1 failed');
     expect(subtitlesTask?.status).toBe('failed');
     expect(subtitlesTask?.error).toBe('dependency task-2 failed');
+  });
+
+  it('video_merge and video_add_audio execute through mocked FfmpegRunner and update manifest', async () => {
+    const project = await setupCompletedVideoGeneration();
+
+    const mockRun = vi.fn();
+    const mockRunner = {
+      assertWithinWorkspace: vi.fn(),
+      run: mockRun,
+      config: {
+        videoCodec: 'libx264',
+        crf: 23,
+        preset: 'medium',
+        audioCodec: 'aac',
+        audioBitrate: '192k',
+      },
+    };
+
+    const ctx: ToolContext = {
+      cwd: project.dir,
+      log: { log: vi.fn().mockResolvedValue(undefined) },
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      progress: {
+        onSessionStart: vi.fn(),
+        onThinking: vi.fn(),
+        onToolCall: vi.fn(),
+        onToolResult: vi.fn(),
+        onTaskStatusChange: vi.fn(),
+        onContextInjection: vi.fn(),
+        onMemoryCompaction: vi.fn(),
+        onRetry: vi.fn(),
+      },
+    };
+
+    // Step 1: merge all approved clips via video_merge tool
+    const rawPath = join(project.dir, 'final', 'raw.mp4');
+    mockRun.mockResolvedValueOnce({
+      outputPath: rawPath,
+      durationMs: 30000,
+      stderr: 'Duration: 00:00:30.00, start: 0.000000, bitrate: 1000 kb/s',
+    });
+
+    const mergeTool = createVideoMergeTool(mockRunner as unknown as FfmpegRunner);
+    const clipPaths = project.artifacts.scenes.map((_, i) => `scenes/scene-0${i + 1}/clip.mp4`);
+    const mergeResult = await mergeTool.execute(
+      { clips: clipPaths, outputPath: 'final/raw.mp4' },
+      ctx,
+    );
+
+    expect(mergeResult.outputPath).toBe(rawPath);
+    expect(mergeResult.videoDurationSec).toBeCloseTo(30, 1);
+    expect(mockRun).toHaveBeenCalledOnce();
+
+    // Agent updates manifest after merge completes
+    project.artifacts.postProduction!.rawVideo = { path: 'final/raw.mp4', status: 'draft' };
+    await projectManager.writeManifest(project);
+    await projectManager.updateArtifactStatus(project, 'final/raw.mp4', 'approved');
+
+    // Step 2: add background audio via video_add_audio tool
+    const audioVideoPath = join(project.dir, 'final', 'audio.mp4');
+    mockRun.mockResolvedValueOnce({
+      outputPath: audioVideoPath,
+      durationMs: 30000,
+      stderr: '',
+    });
+
+    const addAudioTool = createVideoAddAudioTool(mockRunner as unknown as FfmpegRunner);
+    const audioResult = await addAudioTool.execute(
+      {
+        videoPath: 'final/raw.mp4',
+        audioPath: 'audio/bgm.mp3',
+        outputPath: 'final/audio.mp4',
+      },
+      ctx,
+    );
+
+    expect(audioResult.outputPath).toBe(audioVideoPath);
+    expect(mockRun).toHaveBeenCalledTimes(2);
+
+    // Agent updates manifest after addAudio completes
+    project.artifacts.postProduction!.audioVideo = { path: 'final/audio.mp4', status: 'draft' };
+    await projectManager.writeManifest(project);
+    await projectManager.updateArtifactStatus(project, 'final/audio.mp4', 'approved');
+
+    const reloaded = await projectManager.readProject(project.id);
+    expect(reloaded?.artifacts.postProduction?.rawVideo?.status).toBe('approved');
+    expect(reloaded?.artifacts.postProduction?.audioVideo?.status).toBe('approved');
+    expect(reloaded?.artifacts.postProduction?.audioVideo?.approvedAt).toBeDefined();
+  });
+
+  it('merge + audio with no subtitles: finalVideo links to final/audio.mp4 in manifest', async () => {
+    const project = await setupCompletedVideoGeneration();
+
+    // Merge step approved
+    project.artifacts.postProduction!.rawVideo = {
+      path: 'final/raw.mp4',
+      status: 'approved',
+      approvedAt: new Date().toISOString(),
+    };
+    await projectManager.writeManifest(project);
+
+    // addAudio step approved; subtitles skipped so agent links finalVideo to audio output
+    project.artifacts.postProduction!.audioVideo = {
+      path: 'final/audio.mp4',
+      status: 'approved',
+      approvedAt: new Date().toISOString(),
+    };
+    project.artifacts.postProduction!.finalVideo = {
+      path: 'final/audio.mp4',
+      status: 'approved',
+      approvedAt: new Date().toISOString(),
+    };
+    await projectManager.writeManifest(project);
+
+    const reloaded = await projectManager.readProject(project.id);
+    expect(reloaded?.artifacts.postProduction?.rawVideo?.status).toBe('approved');
+    expect(reloaded?.artifacts.postProduction?.audioVideo?.status).toBe('approved');
+    // finalVideo must point to the last completed output (audio.mp4) when subtitles are skipped
+    expect(reloaded?.artifacts.postProduction?.finalVideo?.path).toBe('final/audio.mp4');
+    expect(reloaded?.artifacts.postProduction?.finalVideo?.status).toBe('approved');
+    expect(reloaded?.artifacts.postProduction?.finalVideo?.approvedAt).toBeDefined();
+    // No subtitles artifact in manifest
+    expect(reloaded?.artifacts.postProduction?.subtitles).toBeUndefined();
   });
 });

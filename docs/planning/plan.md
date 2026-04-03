@@ -1070,25 +1070,25 @@ Acceptance Criteria:
 - [x] Unit tests mock child_process.spawn
 ```
 
-**S10-7: Video editing tools (video_merge, video_add_audio, video_add_subtitles)**
+**S10-7: Video editing tools (video_merge, video_add_audio, video_add_subtitles)** ✅
 ```
 As an agent,
 I want tools to merge video clips and add audio and subtitles using FFmpeg,
 so that I can assemble a final deliverable video from scene clips.
 
 Acceptance Criteria:
-- [ ] video_merge({ clips, outputPath, reencode? }) concatenates ≥ 2 clips via ffmpeg concat demuxer
-- [ ] video_merge falls back to re-encode pass if stream-copy fails due to mismatched codecs/resolution
-- [ ] video_add_audio({ videoPath, audioPath, outputPath, mode, audioVolume, originalVolume, fitToVideo })
+- [x] video_merge({ clips, outputPath, reencode? }) concatenates ≥ 2 clips via ffmpeg concat demuxer
+- [x] video_merge falls back to re-encode pass if stream-copy fails due to mismatched codecs/resolution
+- [x] video_add_audio({ videoPath, audioPath, outputPath, mode, audioVolume, originalVolume, fitToVideo })
       supports replace mode (discard original audio) and mix mode (amix filter)
-- [ ] video_add_subtitles({ videoPath, subtitlesPath, outputPath, mode, language, fontSize, fontColor })
+- [x] video_add_subtitles({ videoPath, subtitlesPath, outputPath, mode, language, fontSize, fontColor })
       supports soft (mov_text embedded track) and hard (subtitles filter burned in) modes
-- [ ] .vtt subtitle files are converted to .srt in a temp file before hard-burn (ffmpeg compatibility)
-- [ ] All three tools enforce workspace confinement on every path argument
-- [ ] Missing ffmpeg returns non-retryable ToolError from all three tools
-- [ ] Progress events are emitted to ProgressReporter during encoding
-- [ ] All three tools are registered as built-in tools
-- [ ] Unit tests mock FfmpegRunner
+- [x] .vtt subtitle files are converted to .srt in a temp file before hard-burn (ffmpeg compatibility)
+- [x] All three tools enforce workspace confinement on every path argument
+- [x] Missing ffmpeg returns non-retryable ToolError from all three tools
+- [x] Progress events are emitted to ProgressReporter during encoding
+- [x] All three tools are registered as built-in tools
+- [x] Unit tests mock FfmpegRunner
 ```
 
 **S10-8: Post-production workflow integration**

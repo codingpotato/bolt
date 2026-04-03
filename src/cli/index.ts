@@ -43,6 +43,10 @@ import { WebChannel } from '../channels/web-channel';
 import { ComfyUIPool } from '../comfyui/comfyui-pool';
 import { createComfyUIText2ImgTool } from '../tools/comfyui-text2img';
 import { createComfyUIImg2VideoTool } from '../tools/comfyui-img2video';
+import { createVideoMergeTool } from '../tools/video-merge';
+import { createVideoAddAudioTool } from '../tools/video-add-audio';
+import { createVideoAddSubtitlesTool } from '../tools/video-add-subtitles';
+import { FfmpegRunner } from '../ffmpeg/ffmpeg-runner';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -184,6 +188,12 @@ async function serve(serveArgs: string[]): Promise<void> {
   }
   toolBus.register(createComfyUIText2ImgTool(comfyuiPool, config.comfyui.timeoutMs));
   toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
+
+  const ffmpegPath = await FfmpegRunner.detect(config.ffmpeg.path);
+  const ffmpegRunner = ffmpegPath ? new FfmpegRunner(ffmpegPath, config.ffmpeg, cwd) : null;
+  toolBus.register(createVideoMergeTool(ffmpegRunner));
+  toolBus.register(createVideoAddAudioTool(ffmpegRunner));
+  toolBus.register(createVideoAddSubtitlesTool(ffmpegRunner));
 
   const shutdown = async (): Promise<void> => {
     process.off('SIGTERM', handleSignal);
@@ -360,6 +370,12 @@ async function main(): Promise<void> {
   }
   toolBus.register(createComfyUIText2ImgTool(comfyuiPool, config.comfyui.timeoutMs));
   toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
+
+  const ffmpegPath = await FfmpegRunner.detect(config.ffmpeg.path);
+  const ffmpegRunner = ffmpegPath ? new FfmpegRunner(ffmpegPath, config.ffmpeg, cwd) : null;
+  toolBus.register(createVideoMergeTool(ffmpegRunner));
+  toolBus.register(createVideoAddAudioTool(ffmpegRunner));
+  toolBus.register(createVideoAddSubtitlesTool(ffmpegRunner));
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });
 

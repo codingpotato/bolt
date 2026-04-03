@@ -14,6 +14,8 @@ export interface LlmResponseInfo {
   outputTokens: number;
   /** Why the model stopped: 'end_turn' | 'tool_use' | 'max_tokens' | etc. */
   stopReason: string;
+  /** Total context window capacity for the model, in tokens. */
+  windowCapacity: number;
 }
 
 /**

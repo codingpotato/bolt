@@ -228,6 +228,7 @@ export class AgentCore {
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
           stopReason: response.stop_reason ?? 'end_turn',
+          windowCapacity: MODEL_CONTEXT_WINDOW,
         });
 
         if (response.stop_reason === 'tool_use') {

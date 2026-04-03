@@ -26,7 +26,9 @@ export class WebChannelProgressReporter implements ProgressReporter {
   }
 
   onThinking(): void {
-    this.emit('⟳ Thinking…');
+    // No-op: onLlmCall fires immediately after with richer context info,
+    // so emitting a bare "Thinking…" here would create duplicate messages
+    // for WebSocket/SSE clients that have no way to erase a prior line.
   }
 
   onLlmCall(info: LlmCallInfo): void {
@@ -34,9 +36,10 @@ export class WebChannelProgressReporter implements ProgressReporter {
   }
 
   onLlmResponse(info: LlmResponseInfo): void {
-    const pct = ((info.inputTokens / 200_000) * 100).toFixed(1);
+    const pct = ((info.inputTokens / info.windowCapacity) * 100).toFixed(1);
+    const capacityK = `${Math.round(info.windowCapacity / 1000)}k`;
     this.emit(
-      `⟳ [in: ${info.inputTokens.toLocaleString('en-US')} / 200k · ${pct}% · out: ${info.outputTokens.toLocaleString('en-US')} · ${info.stopReason}]`,
+      `⟳ [in: ${info.inputTokens.toLocaleString('en-US')} / ${capacityK} · ${pct}% · out: ${info.outputTokens.toLocaleString('en-US')} · ${info.stopReason}]`,
     );
   }
 

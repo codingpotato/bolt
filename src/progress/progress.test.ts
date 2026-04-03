@@ -32,7 +32,7 @@ describe('NoopProgressReporter', () => {
       r.onContextInjection('task', 5, 't1');
       r.onContextInjection('chat', 3);
       r.onLlmCall({ messageCount: 5, injectedTokens: 1000 });
-      r.onLlmResponse({ inputTokens: 5000, outputTokens: 200, stopReason: 'end_turn' });
+      r.onLlmResponse({ inputTokens: 5000, outputTokens: 200, stopReason: 'end_turn', windowCapacity: 200_000 });
       r.onMemoryCompaction(42, 'Discussion summary', ['auth', 'jwt']);
       r.onRetry(1, 3, 'ECONNREFUSED');
     }).not.toThrow();
@@ -85,7 +85,7 @@ describe('CliProgressReporter', () => {
       const fake = makeFakeStream(true);
       reporter = new CliProgressReporter(fake.stream);
       reporter.onThinking();
-      reporter.onLlmResponse({ inputTokens: 12450, outputTokens: 234, stopReason: 'tool_use' });
+      reporter.onLlmResponse({ inputTokens: 12450, outputTokens: 234, stopReason: 'tool_use', windowCapacity: 200_000 });
       const out = fake.output();
       expect(out).toContain('\x1b[1A\x1b[2K');
       expect(out).toContain('12,450');
@@ -203,6 +203,8 @@ describe('CliProgressReporter', () => {
 
       reporter.onSessionStart('abc', false);
       reporter.onThinking();
+      reporter.onLlmCall({ messageCount: 5, injectedTokens: 1000 });
+      reporter.onLlmResponse({ inputTokens: 5000, outputTokens: 100, stopReason: 'end_turn', windowCapacity: 200_000 });
       reporter.onToolCall('bash', { command: 'ls' });
       reporter.onToolResult('bash', true, 'ok');
       reporter.onTaskStatusChange('t1', 'My task', 'completed');

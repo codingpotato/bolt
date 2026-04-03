@@ -108,12 +108,13 @@ export class CliProgressReporter implements ProgressReporter {
 
   onLlmResponse(info: LlmResponseInfo): void {
     if (!this.active) return;
-    const pct = ((info.inputTokens / 200_000) * 100).toFixed(1);
+    const pct = ((info.inputTokens / info.windowCapacity) * 100).toFixed(1);
+    const capacityK = `${Math.round(info.windowCapacity / 1000)}k`;
     // Replace the thinking/call line with actual token usage — will be erased
     // by the next onToolCall() or clearPendingThinking() before response text.
     this.eraseThinking();
     this.out.write(
-      `⟳ [in: ${fmt(info.inputTokens)} / 200k · ${pct}% · out: ${fmt(info.outputTokens)} · ${info.stopReason}]\n`,
+      `⟳ [in: ${fmt(info.inputTokens)} / ${capacityK} · ${pct}% · out: ${fmt(info.outputTokens)} · ${info.stopReason}]\n`,
     );
     this.pendingThinking = true;
   }

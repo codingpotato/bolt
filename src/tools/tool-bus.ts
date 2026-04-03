@@ -1,6 +1,9 @@
 import { ToolError } from './tool';
 import type { Tool, ToolCall, ToolContext, ToolResult, JSONSchema } from './tool';
 
+/** Hard ceiling on any single tool result sent to the LLM. */
+const MAX_RESULT_CHARS = 100_000;
+
 /** Anthropic API tool definition format. */
 export interface AnthropicToolDefinition {
   name: string;
@@ -136,7 +139,10 @@ export class ToolBus {
     }
 
     await ctx.log.log(call.name, call.input, result);
-    const content = typeof result === 'string' ? result : JSON.stringify(result);
+    let content = typeof result === 'string' ? result : JSON.stringify(result);
+    if (content.length > MAX_RESULT_CHARS) {
+      content = content.slice(0, MAX_RESULT_CHARS) + `\n\n[truncated — result exceeded ${MAX_RESULT_CHARS} characters]`;
+    }
     ctx.progress.onToolResult(call.name, true, summariseResult(content));
     return { id: call.id, content };
   }

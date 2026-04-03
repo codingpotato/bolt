@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fsPromises from 'node:fs/promises';
 import * as nodePath from 'node:path';
 import type { ToolContext } from './tool';
-import { fileReadTool, fileWriteTool, fileEditTool } from './file';
+import { fileReadTool, fileWriteTool, fileEditTool, MAX_FILE_CHARS } from './file';
 
 vi.mock('node:fs/promises');
 
@@ -92,6 +92,24 @@ describe('file tools', () => {
       await expect(fileReadTool.execute({ path: '/workspace' }, ctx)).rejects.toBeInstanceOf(
         ToolError,
       );
+    });
+
+    it('truncates content exceeding MAX_FILE_CHARS', async () => {
+      const largeContent = 'a'.repeat(MAX_FILE_CHARS + 100);
+      vi.mocked(fsPromises.readFile).mockResolvedValue(largeContent as never);
+
+      const result = await fileReadTool.execute({ path: 'big.txt' }, ctx);
+      expect(result.content.length).toBeLessThan(largeContent.length);
+      expect(result.content).toContain('[truncated');
+    });
+
+    it('does not truncate content within MAX_FILE_CHARS', async () => {
+      const smallContent = 'a'.repeat(MAX_FILE_CHARS);
+      vi.mocked(fsPromises.readFile).mockResolvedValue(smallContent as never);
+
+      const result = await fileReadTool.execute({ path: 'small.txt' }, ctx);
+      expect(result.content).toBe(smallContent);
+      expect(result.content).not.toContain('[truncated');
     });
   });
 

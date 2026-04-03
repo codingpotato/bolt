@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as childProcess from 'node:child_process';
 import type { ToolContext } from './tool';
-import { bashTool } from './bash';
+import { bashTool, MAX_OUTPUT_CHARS } from './bash';
 
 vi.mock('node:child_process');
 
@@ -151,6 +151,30 @@ describe('bashTool', () => {
     const result = await bashTool.execute({ command: 'echo hello' }, ctx);
     expect(result).toBe('hello\n');
     expect(vi.mocked(childProcess.spawn)).toHaveBeenCalledOnce();
+  });
+
+  // ── output truncation ──────────────────────────────────────────────────────
+
+  it('truncates output exceeding MAX_OUTPUT_CHARS', async () => {
+    const largeOutput = 'x'.repeat(MAX_OUTPUT_CHARS + 100);
+    vi.mocked(childProcess.spawn).mockReturnValue(
+      makeMockProcess({ stdout: largeOutput, stderr: '', exitCode: 0 }),
+    );
+
+    const result = await bashTool.execute({ command: 'cat big-file' }, ctx);
+    expect(result.length).toBeLessThan(largeOutput.length);
+    expect(result).toContain('[truncated');
+  });
+
+  it('does not truncate output within MAX_OUTPUT_CHARS', async () => {
+    const smallOutput = 'x'.repeat(MAX_OUTPUT_CHARS);
+    vi.mocked(childProcess.spawn).mockReturnValue(
+      makeMockProcess({ stdout: smallOutput, stderr: '', exitCode: 0 }),
+    );
+
+    const result = await bashTool.execute({ command: 'cat small-file' }, ctx);
+    expect(result).toBe(smallOutput);
+    expect(result).not.toContain('[truncated');
   });
 });
 

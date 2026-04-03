@@ -3,6 +3,8 @@ import { resolve, dirname, sep } from 'node:path';
 import { ToolError } from './tool';
 import type { Tool, ToolContext } from './tool';
 
+export const MAX_FILE_CHARS = 20_000;
+
 function resolvePath(cwd: string, filePath: string): string {
   return resolve(cwd, filePath);
 }
@@ -58,7 +60,10 @@ export const fileReadTool: Tool<FileReadInput, FileReadOutput> = {
     const abs = resolvePath(ctx.cwd, input.path);
     assertWithinWorkspace(ctx.cwd, abs, input.path);
     try {
-      const content = await readFile(abs, 'utf-8');
+      let content = await readFile(abs, 'utf-8');
+      if (content.length > MAX_FILE_CHARS) {
+        content = content.slice(0, MAX_FILE_CHARS) + `\n\n[truncated — file exceeded ${MAX_FILE_CHARS} characters]`;
+      }
       return { content };
     } catch (err) {
       if (isEnoent(err)) throw new ToolError(`file not found: ${input.path}`);

@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import { ToolError } from './tool';
 import type { Tool, ToolContext } from './tool';
 
+export const MAX_OUTPUT_CHARS = 20_000;
+
 export interface BashInput {
   command: string;
 }
@@ -58,7 +60,11 @@ function runCommand(command: string, cwd: string): Promise<string> {
         if (stdout) parts.push(stdout);
         if (stderr) parts.push(stderr);
         if (exitCode !== 0) parts.push(`Exit code: ${exitCode}`);
-        resolve(parts.join('\n') || '(no output)');
+        let output = parts.join('\n') || '(no output)';
+        if (output.length > MAX_OUTPUT_CHARS) {
+          output = output.slice(0, MAX_OUTPUT_CHARS) + `\n\n[truncated — output exceeded ${MAX_OUTPUT_CHARS} characters]`;
+        }
+        resolve(output);
       }
     });
   });

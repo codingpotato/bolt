@@ -3,6 +3,8 @@ import { ToolBus } from './tool-bus';
 import { ToolError } from './tool';
 import type { Tool, ToolContext, ToolCall } from './tool';
 
+const MAX_RESULT_CHARS = 100_000;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -294,6 +296,25 @@ describe('ToolBus', () => {
       bus.register(makeTool('create', async () => ({ id: 'task-123' })));
       await bus.dispatch(makeCall('create', { value: 'x' }), ctx);
       expect(ctx.progress.onToolResult).toHaveBeenCalledWith('create', true, 'task-123');
+    });
+
+    // ── result truncation ──────────────────────────────────────────────────────
+
+    it('truncates string result exceeding MAX_RESULT_CHARS', async () => {
+      const hugeOutput = 'z'.repeat(MAX_RESULT_CHARS + 500);
+      bus.register(makeTool('big', async () => hugeOutput));
+      const result = await bus.dispatch(makeCall('big', { value: 'x' }), ctx);
+      expect(result.is_error).toBeFalsy();
+      expect(result.content.length).toBeLessThan(hugeOutput.length);
+      expect(result.content).toContain('[truncated');
+    });
+
+    it('does not truncate result within MAX_RESULT_CHARS', async () => {
+      const normalOutput = 'z'.repeat(MAX_RESULT_CHARS);
+      bus.register(makeTool('normal', async () => normalOutput));
+      const result = await bus.dispatch(makeCall('normal', { value: 'x' }), ctx);
+      expect(result.content).toBe(normalOutput);
+      expect(result.content).not.toContain('[truncated');
     });
   });
 

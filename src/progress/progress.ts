@@ -1,3 +1,23 @@
+/** Context info emitted just before each LLM API call. */
+export interface LlmCallInfo {
+  /** Number of messages currently in L1 active context. */
+  messageCount: number;
+  /** Token estimate for messages injected at session start (may be 0 after compaction). */
+  injectedTokens: number;
+}
+
+/** Token usage emitted immediately after each LLM API response. */
+export interface LlmResponseInfo {
+  /** Actual input tokens consumed, as reported by the API. */
+  inputTokens: number;
+  /** Actual output tokens generated, as reported by the API. */
+  outputTokens: number;
+  /** Why the model stopped: 'end_turn' | 'tool_use' | 'max_tokens' | etc. */
+  stopReason: string;
+  /** Total context window capacity for the model, in tokens. */
+  windowCapacity: number;
+}
+
 /**
  * ProgressReporter — the narrow event interface injected into AgentCore,
  * ToolBus (via ToolContext), and MemoryManager so each component can emit
@@ -7,8 +27,14 @@ export interface ProgressReporter {
   /** Agent session started or resumed. */
   onSessionStart(sessionId: string, resumed: boolean): void;
 
-  /** Model is generating a response (spinner / status line). */
+  /** Model is about to be called (spinner start). */
   onThinking(): void;
+
+  /** Emitted just before each LLM API call with current context state. */
+  onLlmCall(info: LlmCallInfo): void;
+
+  /** Emitted immediately after each LLM API response with actual token usage. */
+  onLlmResponse(info: LlmResponseInfo): void;
 
   /** A tool call is about to be dispatched. */
   onToolCall(name: string, input: unknown): void;
@@ -22,8 +48,8 @@ export interface ProgressReporter {
   /** Prior session messages were injected into context. */
   onContextInjection(source: 'task' | 'chat', count: number, taskId?: string): void;
 
-  /** Memory compaction was triggered. */
-  onMemoryCompaction(evictedCount: number): void;
+  /** Memory compaction completed — evicted messages summarised and stored. */
+  onMemoryCompaction(evictedCount: number, summary: string, tags: string[]): void;
 
   /** An API call failed and will be retried. */
   onRetry(attempt: number, maxAttempts: number, reason: string): void;
@@ -33,10 +59,12 @@ export interface ProgressReporter {
 export class NoopProgressReporter implements ProgressReporter {
   onSessionStart(_sessionId: string, _resumed: boolean): void {}
   onThinking(): void {}
+  onLlmCall(_info: LlmCallInfo): void {}
+  onLlmResponse(_info: LlmResponseInfo): void {}
   onToolCall(_name: string, _input: unknown): void {}
   onToolResult(_name: string, _success: boolean, _summary: string): void {}
   onTaskStatusChange(_taskId: string, _title: string, _status: string): void {}
   onContextInjection(_source: 'task' | 'chat', _count: number, _taskId?: string): void {}
-  onMemoryCompaction(_evictedCount: number): void {}
+  onMemoryCompaction(_evictedCount: number, _summary: string, _tags: string[]): void {}
   onRetry(_attempt: number, _maxAttempts: number, _reason: string): void {}
 }

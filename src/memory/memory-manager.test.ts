@@ -90,6 +90,8 @@ function makeCompactManager(options: CompactManagerOptions = {}): CompactManager
     onTaskStatusChange: vi.fn(),
     onContextInjection: vi.fn(),
     onMemoryCompaction: vi.fn(),
+    onLlmCall: vi.fn(),
+    onLlmResponse: vi.fn(),
     onRetry: vi.fn(),
   };
 
@@ -493,7 +495,7 @@ describe('MemoryManager.compact()', () => {
       makeMessage('user', 'e'),
     ];
     await manager.compact(messages, 'session-1', undefined, progress);
-    expect(progress.onMemoryCompaction).toHaveBeenCalledWith(2);
+    expect(progress.onMemoryCompaction).toHaveBeenCalledWith(2, expect.any(String), expect.any(Array));
   });
 
   it('handles model failure gracefully — uses fallback summary', async () => {
@@ -554,6 +556,8 @@ describe('MemoryManager.compact()', () => {
       onTaskStatusChange: vi.fn(),
       onContextInjection: vi.fn(),
       onMemoryCompaction: vi.fn(),
+      onLlmCall: vi.fn(),
+      onLlmResponse: vi.fn(),
       onRetry: vi.fn(),
     };
 

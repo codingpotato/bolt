@@ -140,7 +140,7 @@ export class MemoryManager {
       });
     }
 
-    progress.onMemoryCompaction(toEvict.length);
+    progress.onMemoryCompaction(toEvict.length, summary, tags);
 
     return [
       { role: 'user', content: `[Earlier context compacted. Summary: ${summary}]` },

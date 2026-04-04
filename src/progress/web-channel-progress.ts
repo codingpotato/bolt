@@ -1,5 +1,5 @@
-import type { ProgressReporter } from './progress';
-import { summariseInput } from './cli-progress';
+import type { LlmCallInfo, LlmResponseInfo, ProgressReporter } from './progress';
+import { fmt, summariseInput } from './cli-progress';
 
 /**
  * ProgressReporter for the WebChannel (daemon mode).
@@ -26,7 +26,22 @@ export class WebChannelProgressReporter implements ProgressReporter {
   }
 
   onThinking(): void {
-    this.emit('⟳ Thinking…');
+    // No-op: onLlmCall fires immediately after with richer context info,
+    // so emitting a bare "Thinking…" here would create duplicate messages
+    // for WebSocket/SSE clients that have no way to erase a prior line.
+  }
+
+  onLlmCall(info: LlmCallInfo): void {
+    this.emit(`⟳ Thinking… [${info.messageCount} msgs · inj: ${fmt(info.injectedTokens)} tokens]`);
+  }
+
+  onLlmResponse(info: LlmResponseInfo): void {
+    const pct =
+      info.windowCapacity > 0 ? ((info.inputTokens / info.windowCapacity) * 100).toFixed(1) : '?';
+    const capacityK = info.windowCapacity > 0 ? `${Math.round(info.windowCapacity / 1000)}k` : '?';
+    this.emit(
+      `⟳ [in: ${fmt(info.inputTokens)} / ${capacityK} · ${pct}% · out: ${fmt(info.outputTokens)} · ${info.stopReason}]`,
+    );
   }
 
   onToolCall(name: string, input: unknown): void {
@@ -52,8 +67,10 @@ export class WebChannelProgressReporter implements ProgressReporter {
     }
   }
 
-  onMemoryCompaction(evictedCount: number): void {
-    this.emit(`⟳ Compacting ${evictedCount} messages…`);
+  onMemoryCompaction(evictedCount: number, summary: string, tags: string[]): void {
+    const tagStr = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
+    const truncated = summary.length > 60 ? `${summary.slice(0, 60)}…` : summary;
+    this.emit(`⟳ Compacted ${evictedCount} msgs → "${truncated}"${tagStr}`);
   }
 
   onRetry(attempt: number, maxAttempts: number, reason: string): void {

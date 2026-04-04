@@ -20,10 +20,10 @@ describe('WebChannelProgressReporter', () => {
     expect(sent[0]).toBe('◆ Session a1b2c3d4 resumed');
   });
 
-  it('onThinking emits thinking message', () => {
+  it('onThinking emits nothing (onLlmCall provides richer output)', () => {
     const { reporter, sent } = makeReporter();
     reporter.onThinking();
-    expect(sent[0]).toBe('⟳ Thinking…');
+    expect(sent).toHaveLength(0);
   });
 
   it('onToolCall emits tool name and summarised input', () => {
@@ -62,10 +62,25 @@ describe('WebChannelProgressReporter', () => {
     expect(sent[0]).toBe('  ↳ Loaded 3 messages from previous chat session');
   });
 
-  it('onMemoryCompaction emits compacting message', () => {
+  it('onMemoryCompaction emits compaction summary with tags', () => {
     const { reporter, sent } = makeReporter();
-    reporter.onMemoryCompaction(42);
-    expect(sent[0]).toBe('⟳ Compacting 42 messages…');
+    reporter.onMemoryCompaction(42, 'Auth discussion summary', ['auth', 'jwt']);
+    expect(sent[0]).toBe('⟳ Compacted 42 msgs → "Auth discussion summary" [auth, jwt]');
+  });
+
+  it('onLlmCall emits context stats', () => {
+    const { reporter, sent } = makeReporter();
+    reporter.onLlmCall({ messageCount: 23, injectedTokens: 4200 });
+    expect(sent[0]).toContain('23 msgs');
+    expect(sent[0]).toContain('4,200');
+  });
+
+  it('onLlmResponse emits token usage', () => {
+    const { reporter, sent } = makeReporter();
+    reporter.onLlmResponse({ inputTokens: 12450, outputTokens: 234, stopReason: 'tool_use', windowCapacity: 200_000 });
+    expect(sent[0]).toContain('12,450');
+    expect(sent[0]).toContain('234');
+    expect(sent[0]).toContain('tool_use');
   });
 
   it('onRetry emits retry message', () => {

@@ -31,7 +31,9 @@ describe('NoopProgressReporter', () => {
       r.onTaskStatusChange('t1', 'My task', 'completed');
       r.onContextInjection('task', 5, 't1');
       r.onContextInjection('chat', 3);
-      r.onMemoryCompaction(42);
+      r.onLlmCall({ messageCount: 5, injectedTokens: 1000 });
+      r.onLlmResponse({ inputTokens: 5000, outputTokens: 200, stopReason: 'end_turn', windowCapacity: 200_000 });
+      r.onMemoryCompaction(42, 'Discussion summary', ['auth', 'jwt']);
       r.onRetry(1, 3, 'ECONNREFUSED');
     }).not.toThrow();
   });
@@ -65,6 +67,30 @@ describe('CliProgressReporter', () => {
     it('onThinking writes thinking line and sets pending flag', () => {
       reporter.onThinking();
       expect(output()).toBe('⟳ Thinking…\n');
+    });
+
+    it('onLlmCall erases thinking line and writes context stats', () => {
+      const fake = makeFakeStream(true);
+      reporter = new CliProgressReporter(fake.stream);
+      reporter.onThinking();
+      reporter.onLlmCall({ messageCount: 23, injectedTokens: 4200 });
+      const out = fake.output();
+      expect(out).toContain('\x1b[1A\x1b[2K');
+      expect(out).toContain('⟳ Thinking…');
+      expect(out).toContain('23 msgs');
+      expect(out).toContain('4,200');
+    });
+
+    it('onLlmResponse erases thinking line and writes token usage', () => {
+      const fake = makeFakeStream(true);
+      reporter = new CliProgressReporter(fake.stream);
+      reporter.onThinking();
+      reporter.onLlmResponse({ inputTokens: 12450, outputTokens: 234, stopReason: 'tool_use', windowCapacity: 200_000 });
+      const out = fake.output();
+      expect(out).toContain('\x1b[1A\x1b[2K');
+      expect(out).toContain('12,450');
+      expect(out).toContain('234');
+      expect(out).toContain('tool_use');
     });
 
     it('onToolCall clears thinking line and writes tool block', () => {
@@ -108,9 +134,16 @@ describe('CliProgressReporter', () => {
       expect(output()).toContain('Loaded 5 messages from previous chat session');
     });
 
-    it('onMemoryCompaction writes compaction line', () => {
-      reporter.onMemoryCompaction(42);
-      expect(output()).toBe('⟳ Compacting 42 messages…\n');
+    it('onMemoryCompaction writes compaction line with summary and tags', () => {
+      reporter.onMemoryCompaction(42, 'Auth discussion summary', ['auth', 'jwt']);
+      expect(output()).toBe('⟳ Compacted 42 msgs → "Auth discussion summary" [auth, jwt]\n');
+    });
+
+    it('onMemoryCompaction truncates long summaries at 60 chars', () => {
+      const long = 'x'.repeat(80);
+      reporter.onMemoryCompaction(10, long, []);
+      expect(output()).toContain(`${'x'.repeat(60)}…`);
+      expect(output()).not.toContain(`${'x'.repeat(61)}`);
     });
 
     it('onRetry writes retry warning', () => {
@@ -170,10 +203,12 @@ describe('CliProgressReporter', () => {
 
       reporter.onSessionStart('abc', false);
       reporter.onThinking();
+      reporter.onLlmCall({ messageCount: 5, injectedTokens: 1000 });
+      reporter.onLlmResponse({ inputTokens: 5000, outputTokens: 100, stopReason: 'end_turn', windowCapacity: 200_000 });
       reporter.onToolCall('bash', { command: 'ls' });
       reporter.onToolResult('bash', true, 'ok');
       reporter.onTaskStatusChange('t1', 'My task', 'completed');
-      reporter.onMemoryCompaction(5);
+      reporter.onMemoryCompaction(5, 'summary', []);
       reporter.onRetry(1, 3, 'err');
 
       expect(writeSpy).not.toHaveBeenCalled();

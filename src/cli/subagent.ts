@@ -17,6 +17,9 @@ import type { Channel, UserTurn } from '../channels';
 import { ToolBus } from '../tools/tool-bus';
 import { bashTool } from '../tools/bash';
 import { fileReadTool, fileWriteTool, fileEditTool } from '../tools/file';
+import { fileSearchTool } from '../tools/file-search';
+import { globTool } from '../tools/glob';
+import { fileInsertTool } from '../tools/file-insert';
 import { webFetchTool } from '../tools/web-fetch';
 import { createAuditLogger } from '../audit/audit-logger';
 import { createLogger } from '../logger';
@@ -80,6 +83,9 @@ async function main(): Promise<void> {
   toolBus.register(fileReadTool);
   toolBus.register(fileWriteTool);
   toolBus.register(fileEditTool);
+  toolBus.register(fileSearchTool);
+  toolBus.register(globTool);
+  toolBus.register(fileInsertTool);
   toolBus.register(webFetchTool);
   for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
 

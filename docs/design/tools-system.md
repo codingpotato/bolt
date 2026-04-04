@@ -68,8 +68,8 @@ The Tool Bus is the central registry and dispatcher.
 class ToolBus {
   register(tool: Tool): void;
   unregister(name: string): void;
-  list(): Tool[];                         // returns tools visible in current scope
-  getAnthropicDefinitions(): ToolDefinition[];  // schema format for the API call
+  list(): Tool[]; // returns tools visible in current scope
+  getAnthropicDefinitions(): ToolDefinition[]; // schema format for the API call
   dispatch(call: ToolCall, ctx: ToolContext): Promise<ToolResult>;
 }
 ```
@@ -96,32 +96,35 @@ Call model again with updated messages
 
 ## Built-in Tools
 
-| Tool | Description |
-|------|-------------|
-| `bash` | Run a shell command; returns `{ stdout, stderr, exitCode }` |
-| `file_read` | Read a file; returns `{ content }` |
-| `file_write` | Write/overwrite a file; returns `{ path }` |
-| `file_edit` | Replace a substring in a file; returns `{ path, changed }` |
-| `web_fetch` | GET a URL; returns `{ body, statusCode, contentType }` |
-| `web_search` | Search the web via configurable provider; returns `{ results[] }` |
-| `user_review` | Present content for user approval/feedback; returns `{ approved, feedback? }` |
-| `comfyui_text2img` | Generate an image from a prompt via ComfyUI; returns `{ outputPath, seed, durationMs }` |
-| `comfyui_img2video` | Generate a video clip from an image + motion prompt via ComfyUI; returns `{ outputPath, durationMs }` |
-| `todo_create` | Add a todo item; returns `{ id }` |
-| `todo_update` | Update status or description of a todo item |
-| `todo_list` | Return the current ordered todo list |
-| `todo_delete` | Remove a todo item by id |
-| `task_create` | Create a serialized task; returns `{ id }` |
-| `task_update` | Update task status or result |
-| `task_list` | Return all tasks with their current status |
-| `skill_run` | Run a named skill as an isolated sub-agent; returns skill output |
-| `subagent_run` | Delegate a free-form prompt to an isolated child agent |
-| `memory_search` | Query the long-term memory store (L3); returns matching summaries |
-| `memory_write` | Write a fact or note to the long-term memory store (L3) |
-| `agent_suggest` | Propose an addition to `AGENT.md`; writes to `.bolt/suggestions/` for human review |
-| `video_merge` | Concatenate video clips into a single file via FFmpeg; returns `{ outputPath, videoDurationSec }` |
-| `video_add_audio` | Add or mix an audio track into a video via FFmpeg; supports replace and mix modes |
-| `video_add_subtitles` | Embed a subtitle file (SRT/VTT/ASS) into a video via FFmpeg; supports soft and hard modes |
+| Tool                  | Description                                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `bash`                | Run a shell command; returns `{ stdout, stderr, exitCode }`                                                     |
+| `file_read`           | Read a file; returns `{ content }`; supports `offset` and `limit` for large files                               |
+| `file_write`          | Write/overwrite a file; returns `{ path }`                                                                      |
+| `file_edit`           | Replace a substring in a file; returns `{ path, changed }`; supports `replaceAll` and contextual error messages |
+| `file_insert`         | Insert content at a specific line number; returns `{ path }`                                                    |
+| `file_search`         | Search file contents by regex or literal pattern; returns `{ matches[] }` with file, line, and content          |
+| `glob`                | Find files by name pattern; returns `{ paths[] }`                                                               |
+| `web_fetch`           | GET a URL; returns `{ body, statusCode, contentType }`                                                          |
+| `web_search`          | Search the web via configurable provider; returns `{ results[] }`                                               |
+| `user_review`         | Present content for user approval/feedback; returns `{ approved, feedback? }`                                   |
+| `comfyui_text2img`    | Generate an image from a prompt via ComfyUI; returns `{ outputPath, seed, durationMs }`                         |
+| `comfyui_img2video`   | Generate a video clip from an image + motion prompt via ComfyUI; returns `{ outputPath, durationMs }`           |
+| `todo_create`         | Add a todo item; returns `{ id }`                                                                               |
+| `todo_update`         | Update status or description of a todo item                                                                     |
+| `todo_list`           | Return the current ordered todo list                                                                            |
+| `todo_delete`         | Remove a todo item by id                                                                                        |
+| `task_create`         | Create a serialized task; returns `{ id }`                                                                      |
+| `task_update`         | Update task status or result                                                                                    |
+| `task_list`           | Return all tasks with current status                                                                            |
+| `skill_run`           | Run a named skill as an isolated sub-agent; returns skill output                                                |
+| `subagent_run`        | Delegate a free-form prompt to an isolated child agent                                                          |
+| `memory_search`       | Query the long-term memory store (L3); returns matching summaries                                               |
+| `memory_write`        | Write a fact or note to the long-term memory store (L3)                                                         |
+| `agent_suggest`       | Propose an addition to `AGENT.md`; writes to `.bolt/suggestions/` for human review                              |
+| `video_merge`         | Concatenate video clips into a single file via FFmpeg; returns `{ outputPath, videoDurationSec }`               |
+| `video_add_audio`     | Add or mix an audio track into a video via FFmpeg; supports replace and mix modes                               |
+| `video_add_subtitles` | Embed a subtitle file (SRT/VTT/ASS) into a video via FFmpeg; supports soft and hard modes                       |
 
 ### web_search
 
@@ -144,19 +147,19 @@ interface WebSearchOutput {
     title: string;
     url: string;
     snippet: string;
-    date?: string;       // ISO 8601 if available
-    source?: string;     // e.g. "twitter.com", "youtube.com"
+    date?: string; // ISO 8601 if available
+    source?: string; // e.g. "twitter.com", "youtube.com"
   }>;
 }
 ```
 
 **Provider abstraction:** The search backend is selected by `search.provider` in config. All providers implement the same interface; only the HTTP call differs.
 
-| Provider | Config value | Description |
-|----------|-------------|-------------|
-| **SearXNG** (default) | `"searxng"` | Self-hosted meta-search engine. Free, no API key. Default for development. |
-| **Brave** | `"brave"` | Brave Search API. 2000 free requests/month. Requires API key. |
-| **Serper** | `"serper"` | Google results via API. 2500 free credits. Requires API key. |
+| Provider              | Config value | Description                                                                |
+| --------------------- | ------------ | -------------------------------------------------------------------------- |
+| **SearXNG** (default) | `"searxng"`  | Self-hosted meta-search engine. Free, no API key. Default for development. |
+| **Brave**             | `"brave"`    | Brave Search API. 2000 free requests/month. Requires API key.              |
+| **Serper**            | `"serper"`   | Google results via API. 2500 free credits. Requires API key.               |
 
 ### user_review
 
@@ -167,7 +170,14 @@ interface UserReviewInput {
   /** Content to present for review */
   content: string;
   /** Type hint for rendering in WebChannel */
-  contentType: 'script' | 'storyboard' | 'image_prompt' | 'video_prompt' | 'image' | 'video' | 'text';
+  contentType:
+    | 'script'
+    | 'storyboard'
+    | 'image_prompt'
+    | 'video_prompt'
+    | 'image'
+    | 'video'
+    | 'text';
   /** Question or instruction for the reviewer */
   question: string;
   /** Optional file paths for media preview (images, videos) */
@@ -183,6 +193,7 @@ interface UserReviewOutput {
 ```
 
 **Channel-specific behavior:**
+
 - **CliChannel**: Renders content as text, prompts with `[approve/reject/feedback]:`
 - **WebChannel**: Renders rich preview (markdown, images, video player), shows approve/reject buttons with a feedback text box
 - **Disconnect handling**: If the WebSocket client disconnects while `user_review` is waiting, the tool throws a retryable `ToolError("client disconnected during review")`. The agent loop surfaces this to the model, which can re-call `user_review` once the client reconnects.
@@ -195,16 +206,16 @@ No `negativePrompt` — the workflow uses `ConditioningZeroOut` for negative con
 
 ```ts
 interface Text2ImgInput {
-  prompt: string;     // scene description (→ node 57:27.text)
-  width?: number;     // default 1024 (→ node 57:13.width)
-  height?: number;    // default 1024 (→ node 57:13.height)
-  steps?: number;     // default 8   (→ node 57:3.steps)
-  seed?: number;      // random if omitted (→ node 57:3.seed)
+  prompt: string; // scene description (→ node 57:27.text)
+  width?: number; // default 1024 (→ node 57:13.width)
+  height?: number; // default 1024 (→ node 57:13.height)
+  steps?: number; // default 8   (→ node 57:3.steps)
+  seed?: number; // random if omitted (→ node 57:3.seed)
   outputPath: string; // workspace-relative path for the output image
 }
 interface Text2ImgOutput {
   outputPath: string; // absolute path to saved image
-  seed: number;       // seed used — pass back to reproduce
+  seed: number; // seed used — pass back to reproduce
   durationMs: number;
 }
 ```
@@ -217,15 +228,15 @@ The workflow routes `prompt` through a `TextGenerateLTX2Prompt` Gemma-based enha
 
 ```ts
 interface Img2VideoInput {
-  imagePath: string;        // workspace-relative source image (→ uploaded, node 269.image)
-  prompt: string;           // scene/motion description (→ node 267:266.value, Gemma-enhanced)
-  negativePrompt?: string;  // default: workflow's built-in negative (→ node 267:247.text)
-  width?: number;           // default 1280 (→ node 267:257.value)
-  height?: number;          // default 720  (→ node 267:258.value)
-  frames?: number;          // default 121  (→ node 267:225.value; ≈5s at 24fps)
-  fps?: number;             // default 24   (→ node 267:260.value)
-  seed?: number;            // patches both RandomNoise nodes 267:216 and 267:237
-  outputPath: string;       // workspace-relative path for the output clip
+  imagePath: string; // workspace-relative source image (→ uploaded, node 269.image)
+  prompt: string; // scene/motion description (→ node 267:266.value, Gemma-enhanced)
+  negativePrompt?: string; // default: workflow's built-in negative (→ node 267:247.text)
+  width?: number; // default 1280 (→ node 267:257.value)
+  height?: number; // default 720  (→ node 267:258.value)
+  frames?: number; // default 121  (→ node 267:225.value; ≈5s at 24fps)
+  fps?: number; // default 24   (→ node 267:260.value)
+  seed?: number; // patches both RandomNoise nodes 267:216 and 267:237
+  outputPath: string; // workspace-relative path for the output clip
 }
 interface Img2VideoOutput {
   outputPath: string; // absolute path to saved clip
@@ -262,12 +273,12 @@ Add or mix an audio track into a video file.
 ```ts
 interface VideoAddAudioInput {
   videoPath: string;
-  audioPath: string;   // mp3, aac, wav, ogg — within workspace root
+  audioPath: string; // mp3, aac, wav, ogg — within workspace root
   outputPath: string;
-  mode?: 'replace' | 'mix';         // default: "replace"
-  audioVolume?: number;              // 0.0–2.0, default: 1.0
-  originalVolume?: number;           // 0.0–2.0, default: 1.0 (mix mode only)
-  fitToVideo?: boolean;              // trim/loop audio to video length, default: true
+  mode?: 'replace' | 'mix'; // default: "replace"
+  audioVolume?: number; // 0.0–2.0, default: 1.0
+  originalVolume?: number; // 0.0–2.0, default: 1.0 (mix mode only)
+  fitToVideo?: boolean; // trim/loop audio to video length, default: true
 }
 interface VideoAddAudioOutput {
   outputPath: string;
@@ -282,12 +293,12 @@ Embed a subtitle file into a video as a soft track (selectable, lossless) or as 
 ```ts
 interface VideoAddSubtitlesInput {
   videoPath: string;
-  subtitlesPath: string;   // .srt, .vtt, or .ass — within workspace root
+  subtitlesPath: string; // .srt, .vtt, or .ass — within workspace root
   outputPath: string;
-  mode?: 'soft' | 'hard';  // default: "soft"
-  language?: string;        // BCP-47 code, e.g. "en", "zh" (soft mode only)
-  fontSize?: number;        // default: 24 (hard mode only)
-  fontColor?: string;       // CSS hex, default: "#ffffff" (hard mode only)
+  mode?: 'soft' | 'hard'; // default: "soft"
+  language?: string; // BCP-47 code, e.g. "en", "zh" (soft mode only)
+  fontSize?: number; // default: 24 (hard mode only)
+  fontColor?: string; // CSS hex, default: "#ffffff" (hard mode only)
 }
 interface VideoAddSubtitlesOutput {
   outputPath: string;
@@ -297,6 +308,131 @@ interface VideoAddSubtitlesOutput {
 ```
 
 All three tools enforce workspace confinement on every path argument and return a non-retryable `ToolError` if `ffmpeg` is not found. See `docs/design/video-editing.md` for the full FFmpeg command forms and error table.
+
+### file_read
+
+Read a file from disk and return its content. Enforces workspace confinement and truncates large files.
+
+```ts
+interface FileReadInput {
+  /** Path to the file (relative to cwd or absolute) */
+  path: string;
+  /** Character offset to start reading from (default: 0) */
+  offset?: number;
+  /** Maximum number of characters to read (default: 20,000) */
+  limit?: number;
+}
+interface FileReadOutput {
+  /** File content (truncated if it exceeds limit) */
+  content: string;
+  /** Total file size in characters (useful when content was truncated) */
+  totalSize: number;
+}
+```
+
+When the file exceeds `limit`, the returned `content` is truncated and `totalSize` reflects the full file length so the agent can read subsequent chunks by adjusting `offset`.
+
+### file_edit
+
+Replace occurrences of `oldString` with `newString` in a file. Uses exact string matching (not regex) by default.
+
+```ts
+interface FileEditInput {
+  /** Path to the file (relative to cwd or absolute) */
+  path: string;
+  /** The exact substring to find and replace */
+  oldString: string;
+  /** The replacement string */
+  newString: string;
+  /** Replace all occurrences instead of just the first (default: false) */
+  replaceAll?: boolean;
+}
+interface FileEditOutput {
+  /** Absolute path to the file */
+  path: string;
+  /** Whether any replacement was made */
+  changed: boolean;
+  /** Number of replacements performed */
+  replacements: number;
+}
+```
+
+**Contextual error messages:** When `oldString` is not found, the tool returns an error (not `changed: false`) that includes the closest matching substring found in the file, along with surrounding context lines. This helps the LLM self-correct its search string on the next attempt — a pattern proven in Claude Code's `str_replace_editor`.
+
+### file_insert
+
+Insert content at a specific line number in an existing file. Useful for adding imports, functions, or configuration blocks without needing to match existing text.
+
+```ts
+interface FileInsertInput {
+  /** Path to the file (relative to cwd or absolute) */
+  path: string;
+  /** Content to insert */
+  content: string;
+  /** Line number to insert before (1-indexed). Use 0 or omit to append at end */
+  line?: number;
+}
+interface FileInsertOutput {
+  /** Absolute path to the file */
+  path: string;
+}
+```
+
+The tool reads the file, splits by newline, inserts the content at the specified position, and writes back. A `line` of `0` appends after the last line. Lines beyond EOF length are treated as append.
+
+### file_search
+
+Search file contents by regex or literal pattern across one or more files. Returns structured matches with file path, line number, and content — without loading full files into context.
+
+```ts
+interface FileSearchInput {
+  /** Regex pattern or literal string to search for */
+  pattern: string;
+  /** Treat pattern as regex (default: true) */
+  regex?: boolean;
+  /** Scope search to a specific file or directory (default: cwd) */
+  path?: string;
+  /** Glob filter for file extensions, e.g. "*.ts" (default: all files) */
+  include?: string;
+  /** Case-sensitive search (default: false) */
+  caseSensitive?: boolean;
+  /** Maximum number of matches to return (default: 50) */
+  maxResults?: number;
+}
+interface FileSearchOutput {
+  matches: Array<{
+    /** Workspace-relative file path */
+    file: string;
+    /** 1-indexed line number */
+    line: number;
+    /** The matching line content (truncated to 500 chars) */
+    content: string;
+  }>;
+  /** Total matches found (may exceed returned array if truncated by maxResults) */
+  totalCount: number;
+}
+```
+
+The tool walks the directory tree (or single file), applies the pattern match, and returns results sorted by file path then line number. All paths are confined to the workspace. This is the most frequently called tool in coding agents — it avoids wasteful full-file reads and gives the LLM structured results to reason over.
+
+### glob
+
+Find files by name pattern using glob matching. Used to discover files without reading their content.
+
+```ts
+interface GlobInput {
+  /** Glob pattern, e.g. "**/*.ts", "src/**/*.test.ts" */
+  pattern: string;
+  /** Root directory for the search (default: cwd) */
+  path?: string;
+}
+interface GlobOutput {
+  /** Matching file paths (workspace-relative), sorted by modification time */
+  paths: string[];
+}
+```
+
+The tool uses fast glob matching (equivalent to `find` by name pattern) and returns paths only — no file content. The agent can then use `file_read` or `file_search` on specific files. All results are confined to the workspace.
 
 ## Tool Registration
 
@@ -309,13 +445,13 @@ agent.tools.register({
   inputSchema: {
     type: 'object',
     properties: {
-      input: { type: 'string' }
+      input: { type: 'string' },
     },
-    required: ['input']
+    required: ['input'],
   },
   execute: async ({ input }, ctx) => {
     return { output: input.toUpperCase() };
-  }
+  },
 });
 ```
 
@@ -326,7 +462,7 @@ Each agent scope (top-level, skill, sub-agent) carries an optional `allowedTools
 ```ts
 // Sub-agent that can only read files and search memory
 const result = await subagentRun(prompt, {
-  allowedTools: ['file_read', 'memory_search']
+  allowedTools: ['file_read', 'memory_search'],
 });
 ```
 
@@ -351,8 +487,10 @@ Tools signal failure by throwing a `ToolError`:
 class ToolError extends Error {
   constructor(
     message: string,
-    public readonly retryable: boolean = false
-  ) { super(message); }
+    public readonly retryable: boolean = false,
+  ) {
+    super(message);
+  }
 }
 ```
 

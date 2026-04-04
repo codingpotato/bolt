@@ -92,14 +92,20 @@ describe('SearXNGProvider', () => {
     fetchMock.mockResolvedValue(makeOkResponse({ results: [] }));
     const provider = new SearXNGProvider();
     await provider.search('test', { timeRange: 'week' });
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('time_range=week'), expect.any(Object));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('time_range=week'),
+      expect.any(Object),
+    );
   });
 
   it('passes categories when category option is set', async () => {
     fetchMock.mockResolvedValue(makeOkResponse({ results: [] }));
     const provider = new SearXNGProvider();
     await provider.search('test', { category: 'news' });
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('categories=news'), expect.any(Object));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('categories=news'),
+      expect.any(Object),
+    );
   });
 
   it('throws on HTTP error response', async () => {
@@ -205,10 +211,7 @@ describe('BraveProvider', () => {
     fetchMock.mockResolvedValue(makeOkResponse({ web: { results: [] } }));
     const provider = new BraveProvider('key');
     await provider.search('test', { maxResults: 5 });
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('count=5'),
-      expect.any(Object),
-    );
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('count=5'), expect.any(Object));
   });
 
   it('throws on HTTP error', async () => {
@@ -351,19 +354,41 @@ describe('createSearchProvider', () => {
     model: 'claude-opus-4-6',
     dataDir: '.bolt',
     logLevel: 'info',
+    workspace: { root: process.cwd() },
     auth: {},
     local: {},
     search: { provider: 'searxng', maxResults: 10 },
-    agentPrompt: { projectFile: '.bolt/AGENT.md', userFile: '~/.bolt/AGENT.md', suggestionsPath: '.bolt/suggestions' },
+    agentPrompt: {
+      projectFile: '.bolt/AGENT.md',
+      userFile: '~/.bolt/AGENT.md',
+      suggestionsPath: '.bolt/suggestions',
+    },
     memory: {
-      compactThreshold: 0.8, keepRecentMessages: 10, storePath: 'memory',
-      sessionPath: 'sessions', taskHistoryMessages: 20, taskHistoryTokenBudget: 20000,
-      injectRecentChat: true, searchBackend: 'keyword',
+      compactThreshold: 0.8,
+      keepRecentMessages: 10,
+      storePath: 'memory',
+      sessionPath: 'sessions',
+      taskHistoryMessages: 20,
+      taskHistoryTokenBudget: 20000,
+      injectRecentChat: true,
+      searchBackend: 'keyword',
     },
     tasks: { maxSubtaskDepth: 5, maxRetries: 3 },
     tools: { timeoutMs: 30000, allowedTools: [] },
-    comfyui: { servers: [], workflows: { text2img: 'image_z_image_turbo', img2video: 'video_ltx2_3_i2v' }, pollIntervalMs: 2000, timeoutMs: 300000, maxConcurrentPerServer: 2 },
-    ffmpeg: { videoCodec: 'libx264', crf: 23, preset: 'fast', audioCodec: 'aac', audioBitrate: '128k' },
+    comfyui: {
+      servers: [],
+      workflows: { text2img: 'image_z_image_turbo', img2video: 'video_ltx2_3_i2v' },
+      pollIntervalMs: 2000,
+      timeoutMs: 300000,
+      maxConcurrentPerServer: 2,
+    },
+    ffmpeg: {
+      videoCodec: 'libx264',
+      crf: 23,
+      preset: 'fast',
+      audioCodec: 'aac',
+      audioBitrate: '128k',
+    },
     codeWorkflows: { testFixRetries: 3 },
     cli: { progress: true, verbose: false },
     channels: { web: { enabled: false, port: 3000, mode: 'websocket' } },
@@ -375,12 +400,18 @@ describe('createSearchProvider', () => {
   });
 
   it('returns BraveProvider for provider=brave', () => {
-    const provider = createSearchProvider({ ...baseConfig, search: { provider: 'brave', maxResults: 10 } });
+    const provider = createSearchProvider({
+      ...baseConfig,
+      search: { provider: 'brave', maxResults: 10 },
+    });
     expect(provider).toBeInstanceOf(BraveProvider);
   });
 
   it('returns SerperProvider for provider=serper', () => {
-    const provider = createSearchProvider({ ...baseConfig, search: { provider: 'serper', maxResults: 10 } });
+    const provider = createSearchProvider({
+      ...baseConfig,
+      search: { provider: 'serper', maxResults: 10 },
+    });
     expect(provider).toBeInstanceOf(SerperProvider);
   });
 
@@ -391,7 +422,10 @@ describe('createSearchProvider', () => {
       search: { provider: 'searxng', endpoint: 'http://custom:9999', maxResults: 10 },
     });
     await provider.search('test');
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('http://custom:9999'), expect.any(Object));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('http://custom:9999'),
+      expect.any(Object),
+    );
   });
 
   it('passes custom endpoint to Brave provider', async () => {
@@ -431,7 +465,10 @@ describe('validateSearchProvider', () => {
     const provider = new SearXNGProvider();
     const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     await validateSearchProvider(provider, logger);
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unreachable'), expect.any(Object));
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('unreachable'),
+      expect.any(Object),
+    );
   });
 
   it('does not log a warning when connectivity check passes', async () => {

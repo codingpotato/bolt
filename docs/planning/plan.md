@@ -98,6 +98,40 @@ Acceptance Criteria:
 - [x] Config schema matches docs/design/configuration.md
 ```
 
+**S0-5b: Enhanced configuration — full env var coverage + workspace root**
+
+```
+As a user,
+I want to configure bolt entirely via environment variables or .bolt/config.json,
+so that I can run bolt in Docker/containers without any config files,
+and have all file operations confined to an explicit workspace root.
+
+Acceptance Criteria:
+- [x] BOLT_WORKSPACE_ROOT env var and workspace.root config key added
+- [x] Workspace root validated at startup (must exist, be absolute, readable + writable)
+- [x] All file operations confined to workspace root (ToolContext.cwd = workspace root)
+- [x] All config sections have corresponding env vars:
+      BOLT_SEARCH_PROVIDER, BOLT_SEARCH_MAX_RESULTS
+      BOLT_COMFYUI_SERVERS (comma-separated URLs)
+      BOLT_COMFYUI_TEXT2IMG_WORKFLOW, BOLT_COMFYUI_IMG2VIDEO_WORKFLOW
+      BOLT_COMFYUI_POLL_INTERVAL_MS, BOLT_COMFYUI_TIMEOUT_MS, BOLT_COMFYUI_MAX_CONCURRENT
+      BOLT_WEB_ENABLED, BOLT_WEB_HOST, BOLT_WEB_PORT, BOLT_WEB_MODE
+      BOLT_FFMPEG_PATH
+      BOLT_MEMORY_COMPACT_THRESHOLD, BOLT_MEMORY_KEEP_RECENT, BOLT_MEMORY_SEARCH_BACKEND
+      BOLT_CLI_PROGRESS, BOLT_CLI_VERBOSE
+      BOLT_AGENT_PROJECT_FILE, BOLT_AGENT_USER_FILE
+      BOLT_TASKS_MAX_SUBTASK_DEPTH, BOLT_TASKS_MAX_RETRIES
+      BOLT_TOOLS_TIMEOUT_MS, BOLT_TOOLS_ALLOWED (comma-separated)
+      BOLT_CODE_TEST_FIX_RETRIES
+- [x] .env.example template shipped with all supported variables documented
+- [x] Config interface updated with workspace.root field
+- [x] DEFAULTS updated with workspace.root defaulting to process.cwd()
+- [x] applyEnvOverrides() handles all new env var mappings
+- [x] validate() checks workspace.root is absolute and exists
+- [x] Unit tests cover workspace validation, env var parsing, comma-separated lists
+- [x] Design updated in docs/design/configuration.md
+```
+
 **S0-6: Audit logger**
 
 ```

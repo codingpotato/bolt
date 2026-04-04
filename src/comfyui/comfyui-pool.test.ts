@@ -479,7 +479,6 @@ describe('ComfyUIPool.pollResult()', () => {
     const result = await pool.pollResult(promptId, server, 5000);
     expect(result.files).toEqual([{ filename: 'out.png', subfolder: '', type: 'output' }]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(mockProgress.onRetry).toHaveBeenCalledTimes(2);
   });
 
   it('collects files from multiple output nodes', async () => {
@@ -498,6 +497,23 @@ describe('ComfyUIPool.pollResult()', () => {
     const pool = makePool();
     const result = await pool.pollResult(promptId, server, 5000);
     expect(result.files).toHaveLength(2);
+  });
+
+  it('collects video files from SaveVideo output nodes', async () => {
+    fetchMock.mockResolvedValue(
+      mockResponse({
+        [promptId]: {
+          status: { completed: true },
+          outputs: {
+            '75': { videos: [{ filename: 'video.mp4', subfolder: 'video', type: 'output' }] },
+          },
+        },
+      }),
+    );
+
+    const pool = makePool();
+    const result = await pool.pollResult(promptId, server, 5000);
+    expect(result.files).toEqual([{ filename: 'video.mp4', subfolder: 'video', type: 'output' }]);
   });
 
   it('throws a retryable ToolError when timeout is exceeded', async () => {

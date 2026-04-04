@@ -326,11 +326,7 @@ export class ComfyUIPool {
   ): Promise<ComfyUIOutput> {
     const deadline = Date.now() + timeoutMs;
 
-    let pollCount = 0;
     while (Date.now() < deadline) {
-      pollCount++;
-      this.progress.onRetry(pollCount, Math.ceil(timeoutMs / this.config.pollIntervalMs), `waiting for prompt ${promptId}`);
-
       let response: Response;
       try {
         response = await fetch(`${server.url}/history/${promptId}`);
@@ -342,11 +338,20 @@ export class ComfyUIPool {
         const history = (await response.json()) as Record<
           string,
           {
-            status: { completed: boolean };
+            status: {
+              completed: boolean;
+              status_str?: string;
+              messages?: Array<[string, Record<string, unknown>]>;
+            };
             outputs: Record<
               string,
               {
                 images?: Array<{
+                  filename: string;
+                  subfolder: string;
+                  type: 'output' | 'temp' | 'input';
+                }>;
+                videos?: Array<{
                   filename: string;
                   subfolder: string;
                   type: 'output' | 'temp' | 'input';
@@ -358,10 +363,28 @@ export class ComfyUIPool {
         const entry = history[promptId];
         if (entry?.status?.completed) {
           this.decrementJobCount(server.url);
+
+          // Check for ComfyUI execution errors
+          if (entry.status.status_str === 'error') {
+            const lastMessage = entry.status.messages?.[entry.status.messages.length - 1];
+            const errorType = lastMessage?.[0] ?? 'unknown';
+            const errorDetail = lastMessage?.[1]
+              ? JSON.stringify(lastMessage[1]).slice(0, 500)
+              : 'no details';
+            throw new ToolError(
+              `ComfyUI workflow execution error: ${errorType}. Details: ${errorDetail}`,
+              false,
+            );
+          }
+
           const files: ComfyUIOutput['files'] = [];
           for (const node of Object.values(entry.outputs)) {
             if (node.images) {
               files.push(...node.images);
+            }
+            const nodeAny = node as Record<string, unknown>;
+            if (nodeAny.videos && Array.isArray(nodeAny.videos)) {
+              files.push(...(nodeAny.videos as ComfyUIOutput['files']));
             }
           }
           return { files };

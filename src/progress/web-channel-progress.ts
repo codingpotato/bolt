@@ -1,5 +1,5 @@
 import type { LlmCallInfo, LlmResponseInfo, ProgressReporter } from './progress';
-import { summariseInput } from './cli-progress';
+import { fmt, summariseInput } from './cli-progress';
 
 /**
  * ProgressReporter for the WebChannel (daemon mode).
@@ -32,14 +32,15 @@ export class WebChannelProgressReporter implements ProgressReporter {
   }
 
   onLlmCall(info: LlmCallInfo): void {
-    this.emit(`⟳ Thinking… [${info.messageCount} msgs · inj: ${info.injectedTokens.toLocaleString('en-US')} tokens]`);
+    this.emit(`⟳ Thinking… [${info.messageCount} msgs · inj: ${fmt(info.injectedTokens)} tokens]`);
   }
 
   onLlmResponse(info: LlmResponseInfo): void {
-    const pct = ((info.inputTokens / info.windowCapacity) * 100).toFixed(1);
-    const capacityK = `${Math.round(info.windowCapacity / 1000)}k`;
+    const pct =
+      info.windowCapacity > 0 ? ((info.inputTokens / info.windowCapacity) * 100).toFixed(1) : '?';
+    const capacityK = info.windowCapacity > 0 ? `${Math.round(info.windowCapacity / 1000)}k` : '?';
     this.emit(
-      `⟳ [in: ${info.inputTokens.toLocaleString('en-US')} / ${capacityK} · ${pct}% · out: ${info.outputTokens.toLocaleString('en-US')} · ${info.stopReason}]`,
+      `⟳ [in: ${fmt(info.inputTokens)} / ${capacityK} · ${pct}% · out: ${fmt(info.outputTokens)} · ${info.stopReason}]`,
     );
   }
 

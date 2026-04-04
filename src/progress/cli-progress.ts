@@ -4,7 +4,7 @@ import type { LlmCallInfo, LlmResponseInfo, ProgressReporter } from './progress'
 const ERASE_LINE = '\x1b[1A\x1b[2K';
 
 /** Format a number with comma separators for readability. */
-function fmt(n: number): string {
+export function fmt(n: number): string {
   return n.toLocaleString('en-US');
 }
 
@@ -102,14 +102,17 @@ export class CliProgressReporter implements ProgressReporter {
     if (!this.active) return;
     // Replace the plain "Thinking…" line with context stats.
     this.eraseThinking();
-    this.out.write(`⟳ Thinking… [${info.messageCount} msgs · inj: ${fmt(info.injectedTokens)} tokens]\n`);
+    this.out.write(
+      `⟳ Thinking… [${info.messageCount} msgs · inj: ${fmt(info.injectedTokens)} tokens]\n`,
+    );
     this.pendingThinking = true;
   }
 
   onLlmResponse(info: LlmResponseInfo): void {
     if (!this.active) return;
-    const pct = ((info.inputTokens / info.windowCapacity) * 100).toFixed(1);
-    const capacityK = `${Math.round(info.windowCapacity / 1000)}k`;
+    const pct =
+      info.windowCapacity > 0 ? ((info.inputTokens / info.windowCapacity) * 100).toFixed(1) : '?';
+    const capacityK = info.windowCapacity > 0 ? `${Math.round(info.windowCapacity / 1000)}k` : '?';
     // Replace the thinking/call line with actual token usage — will be erased
     // by the next onToolCall() or clearPendingThinking() before response text.
     this.eraseThinking();

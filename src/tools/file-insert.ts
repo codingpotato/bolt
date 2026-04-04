@@ -1,32 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { resolve, dirname, sep } from 'node:path';
-import { ToolError } from './tool';
+import { dirname } from 'node:path';
 import type { Tool, ToolContext } from './tool';
-
-function resolvePath(cwd: string, filePath: string): string {
-  return resolve(cwd, filePath);
-}
-
-function assertWithinWorkspace(cwd: string, resolved: string, original: string): void {
-  const boundary = cwd.endsWith(sep) ? cwd : cwd + sep;
-  if (!resolved.startsWith(boundary)) {
-    throw new ToolError(`path "${original}" is outside the workspace (${cwd})`, false);
-  }
-}
-
-function isEnoent(err: unknown): boolean {
-  return (
-    err !== null &&
-    typeof err === 'object' &&
-    'code' in err &&
-    (err as NodeJS.ErrnoException).code === 'ENOENT'
-  );
-}
-
-function fsError(operation: string, path: string, err: unknown): ToolError {
-  const detail = err instanceof Error ? err.message : String(err);
-  return new ToolError(`${operation} "${path}": ${detail}`);
-}
+import { resolvePath, assertWithinWorkspace, isEnoent, fsError } from './fs-utils';
 
 export interface FileInsertInput {
   path: string;

@@ -1,54 +1,7 @@
 import { readdir, stat } from 'node:fs/promises';
-import { resolve, sep, relative } from 'node:path';
-import { ToolError } from './tool';
+import { relative } from 'node:path';
 import type { Tool, ToolContext } from './tool';
-
-function resolvePath(cwd: string, filePath: string): string {
-  return resolve(cwd, filePath);
-}
-
-function assertWithinWorkspace(cwd: string, resolved: string, original: string): void {
-  const boundary = cwd.endsWith(sep) ? cwd : cwd + sep;
-  if (resolved !== cwd && !resolved.startsWith(boundary)) {
-    throw new ToolError(`path "${original}" is outside the workspace (${cwd})`, false);
-  }
-}
-
-function globToRegex(globPattern: string): RegExp {
-  // Use placeholders for regex special chars that we'll insert
-  const RECURSIVE_PREFIX = '__RECURSIVE_PREFIX__';
-  const RECURSIVE_MID = '__RECURSIVE_MID__';
-  const SUFFIX_ANY = '__SUFFIX_ANY__';
-
-  let result = globPattern;
-  if (result.startsWith('**/')) {
-    result = RECURSIVE_PREFIX + result.slice(3);
-  } else if (result.endsWith('/**')) {
-    result = result.slice(0, -3) + SUFFIX_ANY;
-  } else if (result === '**') {
-    result = '.*';
-  }
-
-  result = result.replace(/\/\*\*\//g, RECURSIVE_MID);
-
-  // Escape literal dots first
-  result = result.replace(/\./g, '\\.');
-
-  // Convert remaining glob chars
-  result = result.replace(/\*/g, '[^/]*').replace(/\?/g, '.');
-
-  // Now substitute placeholders with actual regex
-  result = result.replace(new RegExp(RECURSIVE_PREFIX, 'g'), '(?:.+/)?');
-  result = result.replace(new RegExp(RECURSIVE_MID, 'g'), '(?:/|.+/)?');
-  result = result.replace(new RegExp(SUFFIX_ANY, 'g'), '(?:/.+)?');
-
-  return new RegExp(`^${result}$`);
-}
-
-function matchesGlob(filePath: string, globPattern: string): boolean {
-  const regex = globToRegex(globPattern);
-  return regex.test(filePath);
-}
+import { resolvePath, assertWithinWorkspaceAllowRoot, matchesGlob, type Dirent } from './fs-utils';
 
 export interface GlobInput {
   pattern: string;
@@ -72,15 +25,15 @@ async function collectFilesByMtime(
   const files: FileWithMtime[] = [];
 
   async function walk(dir: string): Promise<void> {
-    let entries: import('node:fs').Dirent[];
+    let entries: Dirent[];
     try {
-      entries = await readdir(dir, { withFileTypes: true });
+      entries = (await readdir(dir, { withFileTypes: true })) as Dirent[];
     } catch {
       return;
     }
 
     for (const entry of entries) {
-      const fullPath = resolve(dir, entry.name);
+      const fullPath = resolvePath(dir, entry.name);
 
       if (entry.isDirectory()) {
         if (entry.name.startsWith('.')) continue;
@@ -122,7 +75,7 @@ export const globTool: Tool<GlobInput, GlobOutput> = {
   async execute(input: GlobInput, ctx: ToolContext): Promise<GlobOutput> {
     const searchRoot = input.path ? resolvePath(ctx.cwd, input.path) : ctx.cwd;
 
-    assertWithinWorkspace(ctx.cwd, searchRoot, input.path || '.');
+    assertWithinWorkspaceAllowRoot(ctx.cwd, searchRoot, input.path || '.');
 
     const files = await collectFilesByMtime(searchRoot, input.pattern, ctx.cwd);
 

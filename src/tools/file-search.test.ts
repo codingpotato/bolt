@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fsPromises from 'node:fs/promises';
 import * as nodePath from 'node:path';
+import type { Dirent } from 'node:fs';
 import type { ToolContext } from './tool';
 import { fileSearchTool } from './file-search';
 
 vi.mock('node:fs/promises');
 
-function makeFile(name: string): import('node:fs').Dirent {
+function makeFile(name: string): Dirent {
   return {
     name,
     isDirectory: () => false,
@@ -16,10 +17,10 @@ function makeFile(name: string): import('node:fs').Dirent {
     isSymbolicLink: () => false,
     isFIFO: () => false,
     isSocket: () => false,
-  } as unknown as import('node:fs').Dirent;
+  } as unknown as Dirent;
 }
 
-function makeDir(name: string): import('node:fs').Dirent {
+function makeDir(name: string): Dirent {
   return {
     name,
     isDirectory: () => true,
@@ -29,7 +30,7 @@ function makeDir(name: string): import('node:fs').Dirent {
     isSymbolicLink: () => false,
     isFIFO: () => false,
     isSocket: () => false,
-  } as unknown as import('node:fs').Dirent;
+  } as unknown as Dirent;
 }
 
 describe('file_search tool', () => {

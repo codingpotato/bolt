@@ -1,39 +1,10 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { resolve, dirname, sep } from 'node:path';
+import { dirname } from 'node:path';
 import { ToolError } from './tool';
 import type { Tool, ToolContext } from './tool';
+import { resolvePath, assertWithinWorkspace, isEnoent, fsError } from './fs-utils';
 
 export const MAX_FILE_CHARS = 20_000;
-
-function resolvePath(cwd: string, filePath: string): string {
-  return resolve(cwd, filePath);
-}
-
-/**
- * Throws a non-retryable ToolError if `resolved` is not strictly inside `cwd`.
- * The workspace root itself is also rejected — only files *within* it are allowed.
- */
-function assertWithinWorkspace(cwd: string, resolved: string, original: string): void {
-  const boundary = cwd.endsWith(sep) ? cwd : cwd + sep;
-  if (!resolved.startsWith(boundary)) {
-    throw new ToolError(`path "${original}" is outside the workspace (${cwd})`, false);
-  }
-}
-
-function isEnoent(err: unknown): boolean {
-  return (
-    err !== null &&
-    typeof err === 'object' &&
-    'code' in err &&
-    (err as NodeJS.ErrnoException).code === 'ENOENT'
-  );
-}
-
-/** Wraps any filesystem error as a ToolError so it is returned to the model rather than crashing the agent loop. */
-function fsError(operation: string, path: string, err: unknown): ToolError {
-  const detail = err instanceof Error ? err.message : String(err);
-  return new ToolError(`${operation} "${path}": ${detail}`);
-}
 
 // ── file_read ─────────────────────────────────────────────────────────────────
 
@@ -45,7 +16,7 @@ export interface FileReadInput {
 
 export interface FileReadOutput {
   content: string;
-  totalSize?: number;
+  totalSize: number;
 }
 
 export const fileReadTool: Tool<FileReadInput, FileReadOutput> = {
@@ -82,11 +53,7 @@ export const fileReadTool: Tool<FileReadInput, FileReadOutput> = {
         content =
           content + `\n\n[truncated — file exceeded ${limit} characters, use offset to read more]`;
       }
-      const output: FileReadOutput = { content };
-      if (totalSize > limit || offset > 0) {
-        output.totalSize = totalSize;
-      }
-      return output;
+      return { content, totalSize };
     } catch (err) {
       if (isEnoent(err)) throw new ToolError(`file not found: ${input.path}`);
       throw fsError('could not read', input.path, err);
@@ -142,31 +109,25 @@ export interface FileEditInput {
 export interface FileEditOutput {
   path: string;
   changed: boolean;
-  replacements?: number;
+  replacements: number;
 }
 
-function levenshtein(a: string, b: string): number {
+export function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
-  const dp: number[] = new Array((m + 1) * (n + 1)).fill(0);
-  const idx = (i: number, j: number): number => i * (n + 1) + j;
-  for (let i = 0; i <= m; i++) {
-    dp[idx(i, 0)] = i;
-  }
-  for (let j = 0; j <= n; j++) {
-    dp[idx(0, j)] = j;
-  }
+  let prev: number[] = Array.from({ length: n + 1 }, (_, j) => j);
+  let curr: number[] = new Array(n + 1).fill(0);
   for (let i = 1; i <= m; i++) {
+    curr[0] = i;
     for (let j = 1; j <= n; j++) {
       const cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
-      dp[idx(i, j)] = Math.min(
-        (dp[idx(i - 1, j)] as number) + 1,
-        (dp[idx(i, j - 1)] as number) + 1,
-        (dp[idx(i - 1, j - 1)] as number) + cost,
-      );
+      curr[j] = Math.min(prev[j]!, curr[j - 1]!, prev[j - 1]!) + cost;
     }
+    const tmp = prev;
+    prev = curr;
+    curr = tmp;
   }
-  return dp[idx(m, n)] as number;
+  return prev[n]!;
 }
 
 function findClosestMatches(
@@ -178,7 +139,7 @@ function findClosestMatches(
   const candidates: Array<{ match: string; context: string; distance: number }> = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] as string;
+    const line = lines[i]!;
     if (line.length < 2) continue;
 
     const windowSize = Math.min(search.length, line.length);
@@ -196,6 +157,15 @@ function findClosestMatches(
 
   candidates.sort((a, b) => a.distance - b.distance);
   return candidates.slice(0, count);
+}
+
+function buildNotFoundMessage(oldString: string, content: string): string {
+  const closest = findClosestMatches(oldString, content, 3);
+  let message = 'oldString not found in file. Closest matches found:';
+  for (const c of closest) {
+    message += `\n\n--- Similar text (distance: ${c.distance}) ---\n${c.context}`;
+  }
+  return message;
 }
 
 export const fileEditTool: Tool<FileEditInput, FileEditOutput> = {
@@ -237,12 +207,7 @@ export const fileEditTool: Tool<FileEditInput, FileEditOutput> = {
       }
 
       if (occurrences.length === 0) {
-        const closest = findClosestMatches(input.oldString, content, 3);
-        let message = `oldString not found in file. Closest matches found:\n`;
-        for (const c of closest) {
-          message += `\n--- Similar text (distance: ${c.distance}) ---\n${c.context}\n`;
-        }
-        throw new ToolError(message, false);
+        throw new ToolError(buildNotFoundMessage(input.oldString, content), false);
       }
 
       const updated = content.split(input.oldString).join(input.newString);
@@ -252,12 +217,7 @@ export const fileEditTool: Tool<FileEditInput, FileEditOutput> = {
 
     const idx = content.indexOf(input.oldString);
     if (idx === -1) {
-      const closest = findClosestMatches(input.oldString, content, 3);
-      let message = `oldString not found in file. Closest matches found:\n`;
-      for (const c of closest) {
-        message += `\n--- Similar text (distance: ${c.distance}) ---\n${c.context}\n`;
-      }
-      throw new ToolError(message, false);
+      throw new ToolError(buildNotFoundMessage(input.oldString, content), false);
     }
 
     const updated =

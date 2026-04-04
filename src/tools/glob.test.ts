@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fsPromises from 'node:fs/promises';
 import * as nodePath from 'node:path';
+import type { Dirent, Stats } from 'node:fs';
 import type { ToolContext } from './tool';
 import { globTool } from './glob';
 
 vi.mock('node:fs/promises');
 
-function makeFile(name: string, _mtimeMs = 1000): import('node:fs').Dirent & { mtimeMs?: number } {
+function makeFile(name: string, _mtimeMs = 1000): Dirent {
   return {
     name,
     isDirectory: () => false,
@@ -16,10 +17,10 @@ function makeFile(name: string, _mtimeMs = 1000): import('node:fs').Dirent & { m
     isSymbolicLink: () => false,
     isFIFO: () => false,
     isSocket: () => false,
-  } as unknown as import('node:fs').Dirent;
+  } as unknown as Dirent;
 }
 
-function makeDir(name: string): import('node:fs').Dirent {
+function makeDir(name: string): Dirent {
   return {
     name,
     isDirectory: () => true,
@@ -29,7 +30,7 @@ function makeDir(name: string): import('node:fs').Dirent {
     isSymbolicLink: () => false,
     isFIFO: () => false,
     isSocket: () => false,
-  } as unknown as import('node:fs').Dirent;
+  } as unknown as Dirent;
 }
 
 describe('glob tool', () => {
@@ -141,7 +142,7 @@ describe('glob tool', () => {
         makeFile('old.ts'),
         makeFile('new.ts'),
       ] as never);
-      vi.mocked(fsPromises.stat).mockResolvedValue({ mtimeMs: 1000 } as import('node:fs').Stats);
+      vi.mocked(fsPromises.stat).mockResolvedValue({ mtimeMs: 1000 } as Stats);
 
       const result = await globTool.execute({ pattern: '**/*.ts' }, ctx);
 
@@ -168,10 +169,10 @@ describe('glob tool', () => {
       ] as never);
 
       const statMock = vi.mocked(fsPromises.stat);
-      statMock.mockImplementation(async (p: import('node:fs').PathLike) => {
+      statMock.mockImplementation(async (p) => {
         const pathStr = typeof p === 'string' ? p : String(p);
         const mtime = pathStr.includes('a.ts') ? 1000 : 2000;
-        return { mtimeMs: mtime } as import('node:fs').Stats;
+        return { mtimeMs: mtime } as Stats;
       });
 
       const result = await globTool.execute({ pattern: '*.ts' }, ctx);

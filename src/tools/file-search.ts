@@ -1,21 +1,11 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { resolve, sep, relative } from 'node:path';
+import { relative } from 'node:path';
 import { ToolError } from './tool';
 import type { Tool, ToolContext } from './tool';
+import { resolvePath, assertWithinWorkspaceAllowRoot, matchesGlob, type Dirent } from './fs-utils';
 
 const MAX_CONTENT_LINE_LENGTH = 500;
 const DEFAULT_MAX_RESULTS = 50;
-
-function resolvePath(cwd: string, filePath: string): string {
-  return resolve(cwd, filePath);
-}
-
-function assertWithinWorkspace(cwd: string, resolved: string, original: string): void {
-  const boundary = cwd.endsWith(sep) ? cwd : cwd + sep;
-  if (resolved !== cwd && !resolved.startsWith(boundary)) {
-    throw new ToolError(`path "${original}" is outside the workspace (${cwd})`, false);
-  }
-}
 
 interface FileSearchMatch {
   file: string;
@@ -37,21 +27,6 @@ export interface FileSearchOutput {
   totalCount: number;
 }
 
-function globToRegex(globPattern: string): RegExp {
-  let regex = globPattern
-    .replace(/\./g, '\\.')
-    .replace(/\*\*\//g, '(.*/)?')
-    .replace(/\*\*/g, '(.*)')
-    .replace(/\*/g, '[^/]*')
-    .replace(/\?/g, '.');
-  return new RegExp(`^${regex}$`);
-}
-
-function matchesGlob(filePath: string, globPattern: string): boolean {
-  const regex = globToRegex(globPattern);
-  return regex.test(filePath);
-}
-
 async function collectFiles(
   searchRoot: string,
   includeGlob: string | undefined,
@@ -60,15 +35,15 @@ async function collectFiles(
   const files: string[] = [];
 
   async function walk(dir: string): Promise<void> {
-    let entries: import('node:fs').Dirent[];
+    let entries: Dirent[];
     try {
-      entries = await readdir(dir, { withFileTypes: true });
+      entries = (await readdir(dir, { withFileTypes: true })) as Dirent[];
     } catch {
       return;
     }
 
     for (const entry of entries) {
-      const fullPath = resolve(dir, entry.name);
+      const fullPath = resolvePath(dir, entry.name);
 
       if (entry.isDirectory()) {
         if (entry.name.startsWith('.')) continue;
@@ -121,7 +96,7 @@ export const fileSearchTool: Tool<FileSearchInput, FileSearchOutput> = {
   async execute(input: FileSearchInput, ctx: ToolContext): Promise<FileSearchOutput> {
     const searchRoot = input.path ? resolvePath(ctx.cwd, input.path) : ctx.cwd;
 
-    assertWithinWorkspace(ctx.cwd, searchRoot, input.path || '.');
+    assertWithinWorkspaceAllowRoot(ctx.cwd, searchRoot, input.path || '.');
 
     const isRegex = input.regex !== false;
     const caseSensitive = input.caseSensitive === true;
@@ -155,7 +130,7 @@ export const fileSearchTool: Tool<FileSearchInput, FileSearchOutput> = {
 
       const lines = content.split('\n');
       for (let i = 0; i < lines.length; i++) {
-        const lineContent = lines[i] as string;
+        const lineContent = lines[i]!;
         const match = searchRegex.exec(lineContent);
         if (match) {
           searchRegex.lastIndex = 0;

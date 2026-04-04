@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
-import type { readFileSync as ReadFileSyncFn, existsSync as ExistsSyncFn } from 'node:fs';
+import type {
+  readFileSync as ReadFileSyncFn,
+  existsSync as ExistsSyncFn,
+  accessSync as AccessSyncFn,
+} from 'node:fs';
 import { join } from 'node:path';
 import { resolveConfig, ConfigError } from './config';
 
@@ -10,6 +14,7 @@ describe('resolveConfig', () => {
   // #4: Typed as a proper MockInstance so mockReturnValue is type-checked.
   let readFileSync: MockInstance<typeof ReadFileSyncFn>;
   let existsSync: MockInstance<typeof ExistsSyncFn>;
+  let accessSync: MockInstance<typeof AccessSyncFn>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -32,10 +37,12 @@ describe('resolveConfig', () => {
     const fs = await import('node:fs');
     readFileSync = vi.mocked(fs.readFileSync);
     existsSync = vi.mocked(fs.existsSync);
+    accessSync = vi.mocked(fs.accessSync);
     readFileSync.mockImplementation(() => {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
     });
     existsSync.mockReturnValue(true);
+    accessSync.mockReturnValue(undefined);
   });
 
   afterEach(() => {
@@ -492,6 +499,59 @@ describe('resolveConfig', () => {
       expect(() => resolveConfig()).toThrow('does not exist');
       delete process.env['BOLT_WORKSPACE_ROOT'];
     });
+
+    it('throws ConfigError for non-readable workspace', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/readonly-workspace';
+      existsSync.mockReturnValue(true);
+      accessSync.mockImplementation(() => {
+        throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
+      });
+      expect(() => resolveConfig()).toThrow(ConfigError);
+      expect(() => resolveConfig()).toThrow('not readable and writable');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+    });
+  });
+
+  describe('dataDir and workspace root interaction', () => {
+    it('resolves relative BOLT_DATA_DIR against workspace root', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/ws';
+      process.env['BOLT_DATA_DIR'] = '.bolt';
+      const config = resolveConfig();
+      expect(config.dataDir).toBe('/tmp/ws/.bolt');
+      expect(config.workspace.root).toBe('/tmp/ws');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+      delete process.env['BOLT_DATA_DIR'];
+    });
+
+    it('resolves relative BOLT_DATA_DIR against config file workspace root', () => {
+      mockConfigFile({ workspace: { root: '/tmp/ws-config' } });
+      process.env['BOLT_DATA_DIR'] = 'data';
+      const config = resolveConfig();
+      expect(config.dataDir).toBe('/tmp/ws-config/data');
+      expect(config.workspace.root).toBe('/tmp/ws-config');
+      delete process.env['BOLT_DATA_DIR'];
+    });
+
+    it('env var workspace root overrides config file for dataDir resolution', () => {
+      mockConfigFile({ workspace: { root: '/tmp/ws-config' } });
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/ws-env';
+      process.env['BOLT_DATA_DIR'] = 'data';
+      const config = resolveConfig();
+      expect(config.dataDir).toBe('/tmp/ws-env/data');
+      expect(config.workspace.root).toBe('/tmp/ws-env');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+      delete process.env['BOLT_DATA_DIR'];
+    });
+
+    it('uses absolute BOLT_DATA_DIR as-is regardless of workspace root', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/ws';
+      process.env['BOLT_DATA_DIR'] = '/absolute/data';
+      const config = resolveConfig();
+      expect(config.dataDir).toBe('/absolute/data');
+      expect(config.workspace.root).toBe('/tmp/ws');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+      delete process.env['BOLT_DATA_DIR'];
+    });
   });
 
   describe('ComfyUI env vars', () => {
@@ -542,6 +602,82 @@ describe('resolveConfig', () => {
       const config = resolveConfig();
       expect(config.tools.allowedTools).toEqual(['bash', 'file_read', 'file_write']);
       delete process.env['BOLT_TOOLS_ALLOWED'];
+    });
+
+    it('ignores BOLT_TOOLS_TIMEOUT_MS when not a valid number', () => {
+      process.env['BOLT_TOOLS_TIMEOUT_MS'] = 'abc';
+      const config = resolveConfig();
+      expect(config.tools.timeoutMs).toBe(30000);
+      delete process.env['BOLT_TOOLS_TIMEOUT_MS'];
+    });
+
+    it('parses BOLT_TOOLS_TIMEOUT_MS', () => {
+      process.env['BOLT_TOOLS_TIMEOUT_MS'] = '60000';
+      const config = resolveConfig();
+      expect(config.tools.timeoutMs).toBe(60000);
+      delete process.env['BOLT_TOOLS_TIMEOUT_MS'];
+    });
+  });
+
+  describe('Code workflows env vars', () => {
+    it('parses BOLT_CODE_TEST_FIX_RETRIES', () => {
+      process.env['BOLT_CODE_TEST_FIX_RETRIES'] = '5';
+      const config = resolveConfig();
+      expect(config.codeWorkflows.testFixRetries).toBe(5);
+      delete process.env['BOLT_CODE_TEST_FIX_RETRIES'];
+    });
+
+    it('ignores BOLT_CODE_TEST_FIX_RETRIES when not a valid number', () => {
+      process.env['BOLT_CODE_TEST_FIX_RETRIES'] = 'abc';
+      const config = resolveConfig();
+      expect(config.codeWorkflows.testFixRetries).toBe(3);
+      delete process.env['BOLT_CODE_TEST_FIX_RETRIES'];
+    });
+  });
+
+  describe('Agent prompt env vars', () => {
+    it('parses BOLT_AGENT_PROJECT_FILE', () => {
+      process.env['BOLT_AGENT_PROJECT_FILE'] = '/custom/AGENT.md';
+      const config = resolveConfig();
+      expect(config.agentPrompt.projectFile).toBe('/custom/AGENT.md');
+      delete process.env['BOLT_AGENT_PROJECT_FILE'];
+    });
+
+    it('parses BOLT_AGENT_USER_FILE', () => {
+      process.env['BOLT_AGENT_USER_FILE'] = '/home/user/AGENT.md';
+      const config = resolveConfig();
+      expect(config.agentPrompt.userFile).toBe('/home/user/AGENT.md');
+      delete process.env['BOLT_AGENT_USER_FILE'];
+    });
+  });
+
+  describe('Tasks env vars', () => {
+    it('parses BOLT_TASKS_MAX_SUBTASK_DEPTH', () => {
+      process.env['BOLT_TASKS_MAX_SUBTASK_DEPTH'] = '10';
+      const config = resolveConfig();
+      expect(config.tasks.maxSubtaskDepth).toBe(10);
+      delete process.env['BOLT_TASKS_MAX_SUBTASK_DEPTH'];
+    });
+
+    it('ignores BOLT_TASKS_MAX_SUBTASK_DEPTH when not a valid number', () => {
+      process.env['BOLT_TASKS_MAX_SUBTASK_DEPTH'] = 'abc';
+      const config = resolveConfig();
+      expect(config.tasks.maxSubtaskDepth).toBe(5);
+      delete process.env['BOLT_TASKS_MAX_SUBTASK_DEPTH'];
+    });
+
+    it('parses BOLT_TASKS_MAX_RETRIES', () => {
+      process.env['BOLT_TASKS_MAX_RETRIES'] = '7';
+      const config = resolveConfig();
+      expect(config.tasks.maxRetries).toBe(7);
+      delete process.env['BOLT_TASKS_MAX_RETRIES'];
+    });
+
+    it('ignores BOLT_TASKS_MAX_RETRIES when not a valid number', () => {
+      process.env['BOLT_TASKS_MAX_RETRIES'] = 'abc';
+      const config = resolveConfig();
+      expect(config.tasks.maxRetries).toBe(3);
+      delete process.env['BOLT_TASKS_MAX_RETRIES'];
     });
   });
 

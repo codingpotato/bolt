@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
 
 export class ConfigError extends Error {
@@ -171,8 +171,6 @@ const CREDENTIAL_FIELDS = [
 
 // #3: Typed against Config so the compiler catches removed or misspelled keys.
 // ReadonlySet<string> lets .has() accept any string at the call site.
-// Intentionally excludes `logLevel` (env-var only: BOLT_LOG_LEVEL) and
-// `dataDir` (computed from BOLT_DATA_DIR, used to locate the file itself).
 const KNOWN_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
   'model',
   'dataDir',
@@ -328,7 +326,7 @@ function applyEnvOverrides(config: Config): Config {
   }
   if (process.env['BOLT_SEARCH_MAX_RESULTS']) {
     const parsed = parseInt(process.env['BOLT_SEARCH_MAX_RESULTS'], 10);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.search.maxResults = parsed;
     }
   }
@@ -349,19 +347,19 @@ function applyEnvOverrides(config: Config): Config {
   }
   if (process.env['BOLT_COMFYUI_POLL_INTERVAL_MS']) {
     const parsed = parseInt(process.env['BOLT_COMFYUI_POLL_INTERVAL_MS'], 10);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.comfyui.pollIntervalMs = parsed;
     }
   }
   if (process.env['BOLT_COMFYUI_TIMEOUT_MS']) {
     const parsed = parseInt(process.env['BOLT_COMFYUI_TIMEOUT_MS'], 10);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.comfyui.timeoutMs = parsed;
     }
   }
   if (process.env['BOLT_COMFYUI_MAX_CONCURRENT']) {
     const parsed = parseInt(process.env['BOLT_COMFYUI_MAX_CONCURRENT'], 10);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.comfyui.maxConcurrentPerServer = parsed;
     }
   }
@@ -378,7 +376,7 @@ function applyEnvOverrides(config: Config): Config {
   }
   if (process.env['BOLT_WEB_PORT']) {
     const parsed = parseInt(process.env['BOLT_WEB_PORT'], 10);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.channels.web.port = parsed;
     }
   }
@@ -394,13 +392,13 @@ function applyEnvOverrides(config: Config): Config {
   // Memory
   if (process.env['BOLT_MEMORY_COMPACT_THRESHOLD']) {
     const parsed = parseFloat(process.env['BOLT_MEMORY_COMPACT_THRESHOLD']);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.memory.compactThreshold = parsed;
     }
   }
   if (process.env['BOLT_MEMORY_KEEP_RECENT']) {
     const parsed = parseInt(process.env['BOLT_MEMORY_KEEP_RECENT'], 10);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.memory.keepRecentMessages = parsed;
     }
   }
@@ -421,19 +419,19 @@ function applyEnvOverrides(config: Config): Config {
   // Tasks & Tools
   if (process.env['BOLT_TASKS_MAX_SUBTASK_DEPTH']) {
     const parsed = parseInt(process.env['BOLT_TASKS_MAX_SUBTASK_DEPTH'], 10);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.tasks.maxSubtaskDepth = parsed;
     }
   }
   if (process.env['BOLT_TASKS_MAX_RETRIES']) {
     const parsed = parseInt(process.env['BOLT_TASKS_MAX_RETRIES'], 10);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.tasks.maxRetries = parsed;
     }
   }
   if (process.env['BOLT_TOOLS_TIMEOUT_MS']) {
     const parsed = parseInt(process.env['BOLT_TOOLS_TIMEOUT_MS'], 10);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.tools.timeoutMs = parsed;
     }
   }
@@ -447,7 +445,7 @@ function applyEnvOverrides(config: Config): Config {
   // Code workflows
   if (process.env['BOLT_CODE_TEST_FIX_RETRIES']) {
     const parsed = parseInt(process.env['BOLT_CODE_TEST_FIX_RETRIES'], 10);
-    if (!isNaN(parsed)) {
+    if (!Number.isNaN(parsed)) {
       result.codeWorkflows.testFixRetries = parsed;
     }
   }
@@ -477,6 +475,11 @@ function validate(config: Config): void {
   }
   if (!existsSync(workspaceRoot)) {
     throw new ConfigError(`config.workspace.root does not exist: ${workspaceRoot}`);
+  }
+  try {
+    accessSync(workspaceRoot, constants.R_OK | constants.W_OK);
+  } catch {
+    throw new ConfigError(`config.workspace.root is not readable and writable: ${workspaceRoot}`);
   }
 
   const { compactThreshold } = config.memory;
@@ -583,35 +586,38 @@ function validate(config: Config): void {
 }
 
 export function resolveConfig(): Config {
-  // #5: dataDir resolved first to locate the config file.
+  // #5: Resolve workspace root first (needed to resolve relative dataDir).
+  // Order: BOLT_WORKSPACE_ROOT env var > process.cwd()
+  // (config file workspace.root applied after loading)
+  const envWorkspaceRoot = process.env['BOLT_WORKSPACE_ROOT'];
+  let workspaceRoot = envWorkspaceRoot ?? process.cwd();
+
+  // Resolve dataDir relative to workspace root (absolute paths used as-is).
   const rawDataDir = process.env['BOLT_DATA_DIR'] ?? '.bolt';
-  const dataDir = isAbsolute(rawDataDir) ? rawDataDir : join(process.cwd(), rawDataDir);
+  let dataDir = isAbsolute(rawDataDir) ? rawDataDir : join(workspaceRoot, rawDataDir);
 
   const fileConfig = loadConfigFile(dataDir);
+
+  // If config file specifies workspace.root, apply it and re-resolve dataDir
+  // if it was relative (so dataDir stays relative to the final workspace root).
+  if (
+    typeof fileConfig.workspace === 'object' &&
+    fileConfig.workspace !== null &&
+    'root' in fileConfig.workspace &&
+    typeof (fileConfig.workspace as Record<string, unknown>).root === 'string'
+  ) {
+    workspaceRoot = (fileConfig.workspace as Record<string, unknown>).root as string;
+    if (!isAbsolute(rawDataDir) && !envWorkspaceRoot) {
+      dataDir = join(workspaceRoot, rawDataDir);
+    }
+  }
+
   const merged = deepMerge(
     DEFAULTS as unknown as Record<string, unknown>,
     fileConfig,
   ) as unknown as Config;
   merged.dataDir = dataDir;
-
-  // Resolve workspace root: env var > config file > process.cwd()
-  const envWorkspaceRoot = process.env['BOLT_WORKSPACE_ROOT'];
-  if (envWorkspaceRoot) {
-    merged.workspace.root = envWorkspaceRoot;
-  } else if (
-    typeof fileConfig.workspace === 'object' &&
-    fileConfig.workspace !== null &&
-    'root' in fileConfig.workspace
-  ) {
-    // Config file provided a workspace root — keep it (deepMerge already applied it)
-  } else if (
-    typeof fileConfig.workspace !== 'object' ||
-    fileConfig.workspace === null ||
-    !('root' in fileConfig.workspace)
-  ) {
-    // No env var, no config file entry — default to cwd
-    merged.workspace.root = process.cwd();
-  }
+  merged.workspace.root = workspaceRoot;
 
   const withEnv = applyEnvOverrides(merged);
   validate(withEnv);

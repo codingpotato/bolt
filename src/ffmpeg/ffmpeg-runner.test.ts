@@ -74,11 +74,7 @@ describe('FfmpegRunner.detect', () => {
   it('returns null and caches null when which fails', async () => {
     const { execFile } = await import('node:child_process');
     vi.mocked(execFile).mockImplementation((_cmd, _args, cb) => {
-      (cb as (err: Error, stdout: string, stderr: string) => void)(
-        new Error('not found'),
-        '',
-        '',
-      );
+      (cb as (err: Error, stdout: string, stderr: string) => void)(new Error('not found'), '', '');
       return {} as ChildProcess;
     });
 
@@ -122,9 +118,7 @@ describe('FfmpegRunner.assertWithinWorkspace', () => {
   });
 
   it('throws for path traversal attempts', () => {
-    expect(() =>
-      runner.assertWithinWorkspace('/workspace/../../../etc/shadow'),
-    ).toThrow(ToolError);
+    expect(() => runner.assertWithinWorkspace('/workspace/../../../etc/shadow')).toThrow(ToolError);
   });
 
   it('ToolError from workspace violation is non-retryable', () => {
@@ -287,6 +281,62 @@ describe('FfmpegRunner.run', () => {
     } catch (err) {
       expect(err).toBeInstanceOf(ToolError);
       expect((err as ToolError).retryable).toBe(false);
+    }
+  });
+
+  it('does not set timeout when timeoutMs is 0', async () => {
+    const child = makeFakeChild(0, null);
+    spawnMock.mockReturnValue(child);
+
+    const result = await runner.run(['/workspace/output.mp4'], { timeoutMs: 0 });
+    expect(result.outputPath).toBe('/workspace/output.mp4');
+  });
+
+  it('rejects with error (not timeout) when spawn fails with timeout configured', async () => {
+    const child = new EventEmitter() as FakeChild;
+    child.stderr = new PassThrough();
+    child.kill = vi.fn();
+    spawnMock.mockReturnValue(child);
+
+    const promise = runner.run(['/workspace/output.mp4'], { timeoutMs: 999999 });
+    child.emit('error', new Error('ENOENT'));
+
+    await expect(promise).rejects.toBeInstanceOf(ToolError);
+    expect((await promise.catch((e) => e)).message).toContain('ENOENT');
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+
+  it('resolves (not timeout) when process exits with timeout configured', async () => {
+    const child = new EventEmitter() as FakeChild;
+    child.stderr = new PassThrough();
+    child.kill = vi.fn();
+    spawnMock.mockReturnValue(child);
+
+    const promise = runner.run(['/workspace/output.mp4'], { timeoutMs: 999999 });
+    child.emit('close', 0, null);
+
+    const result = await promise;
+    expect(result.outputPath).toBe('/workspace/output.mp4');
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+
+  it('resolves with cwd as outputPath when args array is empty', async () => {
+    const child = makeFakeChild(0, null);
+    spawnMock.mockReturnValue(child);
+
+    const result = await runner.run([]);
+    expect(result.outputPath).toBe('/workspace');
+  });
+
+  it('rejects with FfmpegError exit code -1 when code and signal are both null', async () => {
+    const child = makeFakeChild(null, null);
+    spawnMock.mockReturnValue(child);
+
+    try {
+      await runner.run(['/workspace/output.mp4']);
+    } catch (err) {
+      expect(err).toBeInstanceOf(FfmpegError);
+      expect((err as FfmpegError).exitCode).toBe(-1);
     }
   });
 });

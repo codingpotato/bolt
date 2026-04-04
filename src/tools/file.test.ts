@@ -13,7 +13,23 @@ describe('file tools', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogger = { log: vi.fn().mockResolvedValue(undefined) };
-    ctx = { cwd: '/workspace', log: mockLogger, logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }, progress: { onSessionStart: vi.fn(), onThinking: vi.fn(), onToolCall: vi.fn(), onToolResult: vi.fn(), onTaskStatusChange: vi.fn(), onContextInjection: vi.fn(), onMemoryCompaction: vi.fn(), onLlmCall: vi.fn(), onLlmResponse: vi.fn(), onRetry: vi.fn() } };
+    ctx = {
+      cwd: '/workspace',
+      log: mockLogger,
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      progress: {
+        onSessionStart: vi.fn(),
+        onThinking: vi.fn(),
+        onToolCall: vi.fn(),
+        onToolResult: vi.fn(),
+        onTaskStatusChange: vi.fn(),
+        onContextInjection: vi.fn(),
+        onMemoryCompaction: vi.fn(),
+        onLlmCall: vi.fn(),
+        onLlmResponse: vi.fn(),
+        onRetry: vi.fn(),
+      },
+    };
   });
 
   // ── file_read ──────────────────────────────────────────────────────────────
@@ -50,7 +66,10 @@ describe('file tools', () => {
 
       await fileReadTool.execute({ path: '/workspace/sub/file.txt' }, ctx);
 
-      expect(vi.mocked(fsPromises.readFile)).toHaveBeenCalledWith('/workspace/sub/file.txt', 'utf-8');
+      expect(vi.mocked(fsPromises.readFile)).toHaveBeenCalledWith(
+        '/workspace/sub/file.txt',
+        'utf-8',
+      );
     });
 
     it('throws ToolError when file is not found', async () => {
@@ -110,6 +129,40 @@ describe('file tools', () => {
       const result = await fileReadTool.execute({ path: 'small.txt' }, ctx);
       expect(result.content).toBe(smallContent);
       expect(result.content).not.toContain('[truncated');
+    });
+
+    it('supports offset and limit for chunked reads', async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValue('0123456789ABCDEFGHIJ' as never);
+
+      const result = await fileReadTool.execute({ path: 'file.txt', offset: 5, limit: 5 }, ctx);
+      expect(result.content).toBe(
+        '56789\n\n[truncated — file exceeded 5 characters, use offset to read more]',
+      );
+      expect(result.totalSize).toBe(20);
+    });
+
+    it('does not append truncation message when content fits in limit', async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValue('0123456789ABCDEFGHIJ' as never);
+
+      const result = await fileReadTool.execute({ path: 'file.txt', offset: 5, limit: 15 }, ctx);
+      expect(result.content).toBe('56789ABCDEFGHIJ');
+      expect(result.totalSize).toBe(20);
+    });
+
+    it('returns totalSize when offset is used', async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValue('hello world' as never);
+
+      const result = await fileReadTool.execute({ path: 'file.txt', offset: 6 }, ctx);
+      expect(result.content).toBe('world');
+      expect(result.totalSize).toBe(11);
+    });
+
+    it('handles offset beyond EOF', async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValue('hi' as never);
+
+      const result = await fileReadTool.execute({ path: 'file.txt', offset: 100 }, ctx);
+      expect(result.content).toBe('');
+      expect(result.totalSize).toBe(2);
     });
   });
 
@@ -228,17 +281,45 @@ describe('file tools', () => {
       );
     });
 
-    it('returns changed: false (not an error) when oldString is not found', async () => {
+    it('throws ToolError when oldString is not found', async () => {
       vi.mocked(fsPromises.readFile).mockResolvedValue('hello world' as never);
       vi.mocked(fsPromises.writeFile).mockResolvedValue(undefined);
 
+      const { ToolError } = await import('./tool');
+      await expect(
+        fileEditTool.execute({ path: 'file.txt', oldString: 'missing', newString: 'x' }, ctx),
+      ).rejects.toBeInstanceOf(ToolError);
+    });
+
+    it('replaces all occurrences when replaceAll is true', async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValue('foo bar foo' as never);
+      vi.mocked(fsPromises.writeFile).mockResolvedValue(undefined);
+
       const result = await fileEditTool.execute(
-        { path: 'file.txt', oldString: 'missing', newString: 'x' },
+        { path: 'file.txt', oldString: 'foo', newString: 'baz', replaceAll: true },
         ctx,
       );
 
-      expect(result.changed).toBe(false);
-      expect(vi.mocked(fsPromises.writeFile)).not.toHaveBeenCalled();
+      expect(result.changed).toBe(true);
+      expect(result.replacements).toBe(2);
+      expect(vi.mocked(fsPromises.writeFile)).toHaveBeenCalledWith(
+        expect.any(String),
+        'baz bar baz',
+        'utf-8',
+      );
+    });
+
+    it('throws ToolError when replaceAll finds no matches', async () => {
+      vi.mocked(fsPromises.readFile).mockResolvedValue('hello world' as never);
+      vi.mocked(fsPromises.writeFile).mockResolvedValue(undefined);
+
+      const { ToolError } = await import('./tool');
+      await expect(
+        fileEditTool.execute(
+          { path: 'file.txt', oldString: 'missing', newString: 'x', replaceAll: true },
+          ctx,
+        ),
+      ).rejects.toBeInstanceOf(ToolError);
     });
 
     it('resolves path relative to cwd', async () => {

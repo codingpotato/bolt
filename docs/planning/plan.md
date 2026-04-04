@@ -2,7 +2,7 @@
 
 ## Overview
 
-11 sprints, each with a shippable increment. Every sprint follows the TDD cycle and agile process defined in `docs/workflow/`. Dependencies flow strictly — later sprints build on earlier ones.
+12 sprints, each with a shippable increment. Every sprint follows the TDD cycle and agile process defined in `docs/workflow/`. Dependencies flow strictly — later sprints build on earlier ones.
 
 ```
 Sprint 0  — Foundation
@@ -17,6 +17,7 @@ Sprint 8  — WebChannel
 Sprint 9  — Content Generation + Trend Analysis
 Sprint 10 — ComfyUI Client + Video Production + Post-Production
 Sprint 11 — Polish + Integration
+Sprint 12 — Enhanced File Tools (search, insert, glob, file_edit improvements)
 ```
 
 ---
@@ -1273,10 +1274,119 @@ Acceptance Criteria:
 
 ---
 
+## Sprint 12 — Enhanced File Tools
+
+**Goal:** The agent can efficiently search file contents, insert text at specific lines, discover files by pattern, and edit files with better error feedback. These tools close the gap between bolt's file capabilities and Claude Code best practices.
+
+### Stories
+
+**S12-1: file_search tool**
+
+```
+As an agent,
+I want to search file contents by pattern and receive structured matches,
+so that I can find relevant code without reading entire files into context.
+
+Acceptance Criteria:
+- [x] file_search({ pattern, regex?, path?, include?, caseSensitive?, maxResults? })
+      returns { matches: [{ file, line, content }], totalCount }
+- [x] pattern defaults to regex mode; regex: false treats it as a literal string
+- [x] path scopes the search to a specific file or directory (default: cwd)
+- [x] include applies a glob filter (e.g. "*.ts") to limit which files are scanned
+- [x] Results are sorted by file path then line number, truncated to maxResults (default: 50)
+- [x] totalCount reflects the full match count even when results are truncated
+- [x] Matching line content is truncated to 500 chars per match
+- [x] All paths are confined to the workspace root
+- [x] No matches found returns empty results (not an error)
+- [x] file_search is registered as a built-in tool
+- [x] Unit tests use in-memory filesystem mock; cover: regex match, literal match,
+      glob filter, case sensitivity, maxResults truncation, scoped path, empty results
+- [x] Design documented in docs/design/tools-system.md
+```
+
+**S12-2: glob tool**
+
+```
+As an agent,
+I want to find files by name pattern,
+so that I can discover files without reading their content.
+
+Acceptance Criteria:
+- [x] glob({ pattern, path? }) returns { paths: string[] }
+- [x] pattern supports standard glob syntax: "**/*.ts", "src/**/*.test.ts", etc.
+- [x] path scopes the search root (default: cwd)
+- [x] Results are workspace-relative paths, sorted by modification time
+- [x] All results are confined to the workspace root
+- [x] No matches found returns empty array (not an error)
+- [x] glob is registered as a built-in tool
+- [x] Unit tests use in-memory filesystem mock; cover: recursive glob,
+      extension filter, scoped path, empty results
+```
+
+**S12-3: file_insert tool**
+
+```
+As an agent,
+I want to insert content at a specific line number in a file,
+so that I can add imports, functions, or config blocks without matching existing text.
+
+Acceptance Criteria:
+- [x] file_insert({ path, content, line? }) returns { path }
+- [x] line is 1-indexed; line: 1 inserts at the top of the file
+- [x] line: 0 or omitted appends after the last line
+- [x] line beyond EOF length is treated as append
+- [x] File is created if it does not exist (same behavior as file_write)
+- [x] Parent directories are created automatically (same as file_write)
+- [x] All paths are confined to the workspace root
+- [x] file_insert is registered as a built-in tool
+- [x] Unit tests use in-memory filesystem mock; cover: insert at top,
+      insert in middle, append, beyond EOF, new file creation
+```
+
+**S12-4: file_edit improvements — replaceAll and contextual errors**
+
+```
+As an agent,
+I want file_edit to replace all occurrences and give helpful feedback when a match fails,
+so that I can make bulk changes and self-correct failed edits without wasting turns.
+
+Acceptance Criteria:
+- [x] file_edit gains an optional replaceAll parameter (default: false)
+- [x] When replaceAll is true, all occurrences of oldString are replaced
+- [x] Output gains a replacements field: number of replacements performed
+- [x] When oldString is not found, a ToolError is returned (not changed: false)
+      with a message that includes:
+      - The 3 closest matching substrings found in the file (by similarity)
+      - Surrounding context (±2 lines) for each close match
+      - This helps the LLM self-correct its search string on the next attempt
+- [x] Backward compatibility: existing callers without replaceAll get first-occurrence behavior
+- [x] Unit tests cover: replaceAll with multiple matches, replaceAll with no matches,
+      contextual error message format, single replacement (existing behavior)
+```
+
+**S12-5: file_read improvements — offset and limit**
+
+```
+As an agent,
+I want to read a large file in chunks,
+so that I can work with files that exceed the 20,000 character limit.
+
+Acceptance Criteria:
+- [x] file_read gains optional offset (character offset, default: 0) and limit (max chars, default: 20,000)
+- [x] Output gains totalSize field: full file length in characters
+- [x] When content is truncated, totalSize > content.length so the agent knows more is available
+- [x] Agent can read subsequent chunks by calling file_read with offset = previous offset + limit
+- [x] Backward compatibility: callers without offset/limit get existing behavior
+- [x] Unit tests cover: full file read, chunked read with offset/limit,
+      offset beyond EOF returns empty content, totalSize accuracy
+```
+
+---
+
 ## Dependency Graph
 
 ```
-S0 (Foundation)
+Sprint 0 (Foundation)
 │
 ├─► S1 (Auth + Channel + CLI)
 │         │
@@ -1303,6 +1413,45 @@ S0 (Foundation)
 │              S10-6..8: FFmpeg Runner + video editing tools
 │                        │
 └───────────────────────►S11 (Polish)
+                                │
+                                └──► S12 (Enhanced File Tools)
+                                       S12-1: file_search
+                                       S12-2: glob
+                                       S12-3: file_insert
+                                       S12-4: file_edit improvements
+                                       S12-5: file_read improvements
+```
+
+Sprint 12 depends on S2 (Tool Bus + Core Tools) since it extends the existing file tools.
+It is placed after S11 so it does not block the v1 release — these are enhancements, not blockers.
+S0 (Foundation)
+│
+├─► S1 (Auth + Channel + CLI)
+│ │
+│ └─► S3 (Agent Core) ◄─── S2 (Tool Bus + Tools)
+│ │
+│ ┌─────────┼──────────┐
+│ ▼ ▼ ▼
+│ S4 S5 S6
+│ (Tasks) (Memory) (Sub-agent
+│ │ │ + Skills)
+│ └────────┴─────┐ │
+│ ▼ ▼
+│ S7 (Web Search + User Review)
+│ │
+│ ┌───────┼────────┐
+│ ▼ ▼
+│ S8 (WebChannel) S9 (Content + Trends)
+│ │ │
+│ └───────┬────────┘
+│ ▼
+│ S10 (ComfyUI Client + Video Production + Post-Production)
+│ S10-1..3: ComfyUI Pool + tools + production workflow
+│ S10-4: channel task completion notification
+│ S10-6..8: FFmpeg Runner + video editing tools
+│ │
+└───────────────────────►S11 (Polish)
+
 ```
 
 ---
@@ -1311,7 +1460,7 @@ S0 (Foundation)
 
 All of the following must be true before tagging v1:
 
-- [ ] All Sprint 0–10 stories are complete and meet their acceptance criteria
+- [ ] All Sprint 0–12 stories are complete and meet their acceptance criteria
 - [ ] CI pipeline is green on `main`
 - [ ] Coverage thresholds met across all modules
 - [ ] No `any` types (`tsc --noEmit` passes)
@@ -1321,3 +1470,16 @@ All of the following must be true before tagging v1:
 - [ ] WebChannel is functional and tested on mobile
 - [ ] At least one full video production pipeline tested end-to-end (with mocked ComfyUIPool)
 - [ ] Post-production pipeline tested end-to-end: merge + audio + subtitles (with mocked FfmpegRunner)
+- [ ] file_search is the most-called tool in E2E tests (validates utility)
+- [ ] file_edit contextual error messages help the LLM self-correct in ≥ 80% of failed edit attempts (measured in E2E)
+
+---
+
+Sprint 12 is included in the v1 release. Before tagging v1:
+
+- [ ] All Sprint 12 stories are complete and meet their acceptance criteria
+- [ ] CI pipeline is green on `main`
+- [ ] Coverage thresholds met across all modules
+- [ ] file_search is the most-called tool in E2E tests (validates utility)
+- [ ] file_edit contextual error messages help the LLM self-correct in ≥ 80% of failed edit attempts (measured in E2E)
+```

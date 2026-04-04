@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
-import type { readFileSync as ReadFileSyncFn } from 'node:fs';
+import type { readFileSync as ReadFileSyncFn, existsSync as ExistsSyncFn } from 'node:fs';
+import { join } from 'node:path';
 import { resolveConfig, ConfigError } from './config';
 
 vi.mock('node:fs');
@@ -8,6 +9,7 @@ describe('resolveConfig', () => {
   const originalEnv = process.env;
   // #4: Typed as a proper MockInstance so mockReturnValue is type-checked.
   let readFileSync: MockInstance<typeof ReadFileSyncFn>;
+  let existsSync: MockInstance<typeof ExistsSyncFn>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -24,13 +26,16 @@ describe('resolveConfig', () => {
     delete process.env['BOLT_WEB_PORT'];
     delete process.env['DISCORD_BOT_TOKEN'];
     delete process.env['DISCORD_CHANNEL_ID'];
+    delete process.env['BOLT_WORKSPACE_ROOT'];
 
     // Default: no config file present
     const fs = await import('node:fs');
     readFileSync = vi.mocked(fs.readFileSync);
+    existsSync = vi.mocked(fs.existsSync);
     readFileSync.mockImplementation(() => {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
     });
+    existsSync.mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -46,7 +51,7 @@ describe('resolveConfig', () => {
       const config = resolveConfig();
 
       expect(config.model).toBe('claude-opus-4-6');
-      expect(config.dataDir).toBe('.bolt');
+      expect(config.dataDir).toBe(join(process.cwd(), '.bolt'));
       expect(config.logLevel).toBe('info');
       expect(config.memory.compactThreshold).toBe(0.8);
       expect(config.memory.keepRecentMessages).toBe(10);
@@ -160,10 +165,7 @@ describe('resolveConfig', () => {
 
       resolveConfig();
 
-      expect(readFileSync).toHaveBeenCalledWith(
-        expect.stringContaining('/custom/dir'),
-        'utf8'
-      );
+      expect(readFileSync).toHaveBeenCalledWith(expect.stringContaining('/custom/dir'), 'utf8');
     });
 
     it('BOLT_DATA_DIR is reflected in returned dataDir', () => {
@@ -231,7 +233,7 @@ describe('resolveConfig', () => {
       mockConfigFile({ memory: { compactThreshold: 1.5 } });
 
       expect(() => resolveConfig()).toThrow(
-        'config.memory.compactThreshold must be between 0.0 and 1.0, got: 1.5'
+        'config.memory.compactThreshold must be between 0.0 and 1.0, got: 1.5',
       );
     });
 
@@ -328,14 +330,14 @@ describe('resolveConfig', () => {
     it('throws ConfigError for invalid search.provider', () => {
       mockConfigFile({ search: { provider: 'google' } });
       expect(() => resolveConfig()).toThrow(
-        'config.search.provider must be one of searxng, brave, serper, got: google'
+        'config.search.provider must be one of searxng, brave, serper, got: google',
       );
     });
 
     it('throws ConfigError for non-positive search.maxResults', () => {
       mockConfigFile({ search: { maxResults: 0 } });
       expect(() => resolveConfig()).toThrow(
-        'config.search.maxResults must be a positive integer, got: 0'
+        'config.search.maxResults must be a positive integer, got: 0',
       );
     });
 
@@ -393,7 +395,9 @@ describe('resolveConfig', () => {
     });
 
     it('throws ConfigError when pollIntervalMs is zero', () => {
-      mockConfigFile({ comfyui: { servers: [{ url: 'http://gpu1:8188', weight: 1 }], pollIntervalMs: 0 } });
+      mockConfigFile({
+        comfyui: { servers: [{ url: 'http://gpu1:8188', weight: 1 }], pollIntervalMs: 0 },
+      });
       expect(() => resolveConfig()).toThrow(ConfigError);
       expect(() => resolveConfig()).toThrow('pollIntervalMs');
     });
@@ -443,6 +447,117 @@ describe('resolveConfig', () => {
       mockConfigFile({ ffmpeg: { preset: 'turbo' } });
       expect(() => resolveConfig()).toThrow(ConfigError);
       expect(() => resolveConfig()).toThrow('config.ffmpeg.preset');
+    });
+  });
+
+  describe('workspace', () => {
+    it('defaults to process.cwd()', () => {
+      const config = resolveConfig();
+      expect(config.workspace.root).toBe(process.cwd());
+    });
+
+    it('accepts BOLT_WORKSPACE_ROOT env var', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/test-workspace';
+      const config = resolveConfig();
+      expect(config.workspace.root).toBe('/tmp/test-workspace');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+    });
+
+    it('accepts workspace.root from config file', () => {
+      mockConfigFile({ workspace: { root: '/tmp/config-workspace' } });
+      const config = resolveConfig();
+      expect(config.workspace.root).toBe('/tmp/config-workspace');
+    });
+
+    it('env var overrides config file', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/env-workspace';
+      mockConfigFile({ workspace: { root: '/tmp/config-workspace' } });
+      const config = resolveConfig();
+      expect(config.workspace.root).toBe('/tmp/env-workspace');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+    });
+
+    it('throws ConfigError for relative path', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = 'relative/path';
+      existsSync.mockReturnValue(true);
+      expect(() => resolveConfig()).toThrow(ConfigError);
+      expect(() => resolveConfig()).toThrow('absolute path');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+    });
+
+    it('throws ConfigError for non-existent path', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/nonexistent-workspace';
+      existsSync.mockReturnValue(false);
+      expect(() => resolveConfig()).toThrow(ConfigError);
+      expect(() => resolveConfig()).toThrow('does not exist');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+    });
+  });
+
+  describe('ComfyUI env vars', () => {
+    it('parses BOLT_COMFYUI_SERVERS as comma-separated URLs', () => {
+      process.env['BOLT_COMFYUI_SERVERS'] = 'http://gpu1:8188,http://gpu2:8188';
+      const config = resolveConfig();
+      expect(config.comfyui.servers).toEqual([
+        { url: 'http://gpu1:8188', weight: 1 },
+        { url: 'http://gpu2:8188', weight: 1 },
+      ]);
+      delete process.env['BOLT_COMFYUI_SERVERS'];
+    });
+
+    it('parses BOLT_COMFYUI_TEXT2IMG_WORKFLOW', () => {
+      process.env['BOLT_COMFYUI_TEXT2IMG_WORKFLOW'] = 'custom_workflow';
+      const config = resolveConfig();
+      expect(config.comfyui.workflows.text2img).toBe('custom_workflow');
+      delete process.env['BOLT_COMFYUI_TEXT2IMG_WORKFLOW'];
+    });
+
+    it('parses BOLT_COMFYUI_POLL_INTERVAL_MS', () => {
+      process.env['BOLT_COMFYUI_POLL_INTERVAL_MS'] = '5000';
+      const config = resolveConfig();
+      expect(config.comfyui.pollIntervalMs).toBe(5000);
+      delete process.env['BOLT_COMFYUI_POLL_INTERVAL_MS'];
+    });
+  });
+
+  describe('WebChannel env vars', () => {
+    it('parses BOLT_WEB_ENABLED', () => {
+      process.env['BOLT_WEB_ENABLED'] = 'true';
+      const config = resolveConfig();
+      expect(config.channels.web.enabled).toBe(true);
+      delete process.env['BOLT_WEB_ENABLED'];
+    });
+
+    it('parses BOLT_WEB_MODE', () => {
+      process.env['BOLT_WEB_MODE'] = 'http';
+      const config = resolveConfig();
+      expect(config.channels.web.mode).toBe('http');
+      delete process.env['BOLT_WEB_MODE'];
+    });
+  });
+
+  describe('Tools env vars', () => {
+    it('parses BOLT_TOOLS_ALLOWED as comma-separated list', () => {
+      process.env['BOLT_TOOLS_ALLOWED'] = 'bash,file_read,file_write';
+      const config = resolveConfig();
+      expect(config.tools.allowedTools).toEqual(['bash', 'file_read', 'file_write']);
+      delete process.env['BOLT_TOOLS_ALLOWED'];
+    });
+  });
+
+  describe('CLI env vars', () => {
+    it('parses BOLT_CLI_PROGRESS', () => {
+      process.env['BOLT_CLI_PROGRESS'] = 'false';
+      const config = resolveConfig();
+      expect(config.cli.progress).toBe(false);
+      delete process.env['BOLT_CLI_PROGRESS'];
+    });
+
+    it('parses BOLT_CLI_VERBOSE', () => {
+      process.env['BOLT_CLI_VERBOSE'] = 'true';
+      const config = resolveConfig();
+      expect(config.cli.verbose).toBe(true);
+      delete process.env['BOLT_CLI_VERBOSE'];
     });
   });
 });

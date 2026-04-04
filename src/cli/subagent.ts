@@ -55,7 +55,9 @@ async function main(): Promise<void> {
   const raw = await new Promise<string>((resolve, reject) => {
     let buf = '';
     process.stdin.setEncoding('utf-8');
-    process.stdin.on('data', (chunk: string) => { buf += chunk; });
+    process.stdin.on('data', (chunk: string) => {
+      buf += chunk;
+    });
     process.stdin.on('end', () => resolve(buf));
     process.stdin.on('error', reject);
   });
@@ -95,6 +97,7 @@ async function main(): Promise<void> {
     model: payload.model,
     dataDir,
     logLevel: 'warn' as const,
+    workspace: { root: cwd },
     memory: {
       compactThreshold: 0.8,
       keepRecentMessages: 10,
@@ -119,12 +122,31 @@ async function main(): Promise<void> {
     auth: { mode: 'api-key' as const },
     local: {},
     tools: { timeoutMs: 30000, allowedTools: [] },
-    comfyui: { servers: [], workflows: { text2img: 'image_z_image_turbo', img2video: 'video_ltx2_3_i2v' }, pollIntervalMs: 2000, timeoutMs: 300000, maxConcurrentPerServer: 2 },
-    ffmpeg: { videoCodec: 'libx264', crf: 23, preset: 'fast', audioCodec: 'aac', audioBitrate: '128k' },
+    comfyui: {
+      servers: [],
+      workflows: { text2img: 'image_z_image_turbo', img2video: 'video_ltx2_3_i2v' },
+      pollIntervalMs: 2000,
+      timeoutMs: 300000,
+      maxConcurrentPerServer: 2,
+    },
+    ffmpeg: {
+      videoCodec: 'libx264',
+      crf: 23,
+      preset: 'fast',
+      audioCodec: 'aac',
+      audioBitrate: '128k',
+    },
     codeWorkflows: { testFixRetries: 3 },
   };
 
-  const agent = new AgentCore(client, channel, toolBus, ctx, config, payload.systemPrompt ?? await loadAgentPrompt(config));
+  const agent = new AgentCore(
+    client,
+    channel,
+    toolBus,
+    ctx,
+    config,
+    payload.systemPrompt ?? (await loadAgentPrompt(config)),
+  );
   await agent.run();
 
   const result: SubagentResult = { output: channel.getOutput() };

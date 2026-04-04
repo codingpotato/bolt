@@ -643,11 +643,18 @@ describe('resolveConfig', () => {
       delete process.env['BOLT_AGENT_PROJECT_FILE'];
     });
 
-    it('parses BOLT_AGENT_USER_FILE', () => {
-      process.env['BOLT_AGENT_USER_FILE'] = '/home/user/AGENT.md';
+    it('parses BOLT_AGENT_MAX_TOKENS', () => {
+      process.env['BOLT_AGENT_MAX_TOKENS'] = '10000';
       const config = resolveConfig();
-      expect(config.agentPrompt.userFile).toBe('/home/user/AGENT.md');
-      delete process.env['BOLT_AGENT_USER_FILE'];
+      expect(config.agentPrompt.maxTokens).toBe(10000);
+      delete process.env['BOLT_AGENT_MAX_TOKENS'];
+    });
+
+    it('parses BOLT_AGENT_WATCH_CHANGES', () => {
+      process.env['BOLT_AGENT_WATCH_CHANGES'] = 'false';
+      const config = resolveConfig();
+      expect(config.agentPrompt.watchForChanges).toBe(false);
+      delete process.env['BOLT_AGENT_WATCH_CHANGES'];
     });
   });
 

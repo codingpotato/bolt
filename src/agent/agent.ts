@@ -29,7 +29,6 @@ const INITIAL_BACKOFF_MS = 1000;
  */
 const MODEL_CONTEXT_WINDOW = 200_000;
 
-
 /** Returns true if the error is transient and the call should be retried. */
 function isRetryableError(err: unknown): boolean {
   if (err instanceof APIConnectionError) return true;
@@ -41,7 +40,9 @@ function isRetryableError(err: unknown): boolean {
 function isExceedContextSizeError(err: unknown): boolean {
   if (!(err instanceof APIError) || err.status !== 400) return false;
   const msg = getErrorMessage(err);
-  return msg.includes('exceed_context_size_error') || msg.includes('exceeds the available context size');
+  return (
+    msg.includes('exceed_context_size_error') || msg.includes('exceeds the available context size')
+  );
 }
 
 /** Extracts a human-readable message from an unknown error value. */
@@ -98,7 +99,7 @@ export class AgentCore {
     private readonly ctx: ToolContext,
     private readonly config: Config,
     /** Assembled system prompt — must be non-empty; load via loadAgentPrompt() before constructing. */
-    private readonly systemPrompt: string = '',
+    private systemPrompt: string = '',
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise<void>((resolve) => setTimeout(resolve, ms)),
     private readonly logger: Logger = createNoopLogger(),
@@ -107,6 +108,11 @@ export class AgentCore {
     private readonly memoryManager: MemoryManager | null = null,
     private readonly slashRegistry: SlashCommandRegistry = createSlashCommandRegistry(),
   ) {}
+
+  /** Update the system prompt at runtime (e.g. after AGENT.md hot-reload). */
+  updateSystemPrompt(prompt: string): void {
+    this.systemPrompt = prompt;
+  }
 
   /** Run the agent loop until the channel closes or /exit is received. */
   async run(): Promise<void> {
@@ -159,7 +165,11 @@ export class AgentCore {
    * Context overflow that cannot be resolved by compaction is also surfaced
    * this way.
    */
-  async handleTurn(userMessage: string, sessionId: string = randomUUID(), author?: string): Promise<void> {
+  async handleTurn(
+    userMessage: string,
+    sessionId: string = randomUUID(),
+    author?: string,
+  ): Promise<void> {
     // Tool definitions are stable for the lifetime of a turn — hoist the call
     // outside the loop to avoid redundant work on every round-trip.
     const tools = this.toolBus.getAnthropicDefinitions() as Anthropic.Tool[];
@@ -206,12 +216,15 @@ export class AgentCore {
           // could fire (e.g. injected history masked the true token count).
           // Compact now and retry once before giving up.
           const compacted = this.memoryManager
-            ? await this.memoryManager.compact(this.l1, sessionId, this.ctx.activeTaskId, this.ctx.progress)
+            ? await this.memoryManager.compact(
+                this.l1,
+                sessionId,
+                this.ctx.activeTaskId,
+                this.ctx.progress,
+              )
             : this.compactMessages(this.l1);
           if (compacted === null) {
-            throw new Error(
-              `Context window exceeded and cannot be compacted further.`,
-            );
+            throw new Error(`Context window exceeded and cannot be compacted further.`);
           }
           this.l1.splice(0, this.l1.length, ...compacted);
           this.injectedTokenEstimate = 0;
@@ -282,14 +295,22 @@ export class AgentCore {
           const l1Tokens = Math.max(0, response.usage.input_tokens - this.injectedTokenEstimate);
           const l1Fraction = l1Tokens / MODEL_CONTEXT_WINDOW;
           const totalFraction = response.usage.input_tokens / MODEL_CONTEXT_WINDOW;
-          if (l1Fraction > this.config.memory.compactThreshold || totalFraction > this.config.memory.compactThreshold) {
+          if (
+            l1Fraction > this.config.memory.compactThreshold ||
+            totalFraction > this.config.memory.compactThreshold
+          ) {
             const compacted = this.memoryManager
-              ? await this.memoryManager.compact(this.l1, sessionId, this.ctx.activeTaskId, this.ctx.progress)
+              ? await this.memoryManager.compact(
+                  this.l1,
+                  sessionId,
+                  this.ctx.activeTaskId,
+                  this.ctx.progress,
+                )
               : this.compactMessages(this.l1);
             if (compacted === null) {
               throw new Error(
                 `Context window exceeded and cannot be compacted further ` +
-                `(${response.usage.input_tokens.toLocaleString()}/${MODEL_CONTEXT_WINDOW.toLocaleString()} tokens used).`,
+                  `(${response.usage.input_tokens.toLocaleString()}/${MODEL_CONTEXT_WINDOW.toLocaleString()} tokens used).`,
               );
             }
             this.l1.splice(0, this.l1.length, ...compacted);
@@ -365,9 +386,7 @@ export class AgentCore {
    * Returns `null` when there are not enough messages to evict anything —
    * the caller should treat this as an unresolvable context overflow.
    */
-  private compactMessages(
-    messages: Anthropic.MessageParam[],
-  ): Anthropic.MessageParam[] | null {
+  private compactMessages(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] | null {
     const keep = this.config.memory.keepRecentMessages;
     if (messages.length <= keep) {
       return null; // nothing left to evict

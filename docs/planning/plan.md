@@ -5,19 +5,19 @@
 12 sprints, each with a shippable increment. Every sprint follows the TDD cycle and agile process defined in `docs/workflow/`. Dependencies flow strictly — later sprints build on earlier ones.
 
 ```
-Sprint 0  — Foundation
-Sprint 1  — Auth + Channel + CLI
-Sprint 2  — Tool Bus + Core Tools
-Sprint 3  — Agent Core Loop
-Sprint 4  — Todo & Task System
-Sprint 5  — Memory System (L2 + L3 + Context Assembly)
-Sprint 6  — Sub-agent + Skills
-Sprint 7  — Web Search + User Review Tools
-Sprint 8  — WebChannel
-Sprint 9  — Content Generation + Trend Analysis
-Sprint 10 — ComfyUI Client + Video Production + Post-Production
-Sprint 11 — Polish + Integration
-Sprint 12 — Enhanced File Tools (search, insert, glob, file_edit improvements)
+ Sprint 0  — Foundation
+ Sprint 1  — Auth + Channel + CLI
+ Sprint 2  — Tool Bus + Core Tools
+ Sprint 3  — Agent Core Loop
+ Sprint 4  — Todo & Task System
+ Sprint 5  — Memory System (L2 + L3 + Context Assembly)
+ Sprint 6  — Sub-agent + Skills
+ Sprint 7  — Web Search + User Review Tools
+ Sprint 8  — WebChannel
+ Sprint 9  — Content Generation + Trend Analysis
+ Sprint 10 — ComfyUI Client + Video Production + Post-Production
+ Sprint 11 — Simplified AGENT.md + Dynamic Skills Injection
+ Sprint 12 — Enhanced File Tools (search, insert, glob, file_edit improvements)
 ```
 
 ---
@@ -557,14 +557,13 @@ I want to define bolt's identity, rules, and domain knowledge in a Markdown file
 so that I can tailor bolt's behaviour for my project without modifying code.
 
 Acceptance Criteria:
-- [x] AgentCore loads ~/.bolt/AGENT.md (user-level) and .bolt/AGENT.md (project-level) at startup
-- [x] If both exist, user-level content is prepended and project-level content is appended
-- [x] If neither exists, AgentCore reads BUILTIN_AGENT_MD (src/assets.ts) — src/AGENT.md in dev, dist/AGENT.md in prod
-- [x] The assembled prompt is used as the system field in every Anthropic API call for the session
+- [x] On first startup, bolt copies the built-in AGENT.md to .bolt/AGENT.md if it does not exist
+- [x] On subsequent startups, .bolt/AGENT.md is loaded as-is
+- [x] The loaded prompt is used as the system field in every Anthropic API call for the session
 - [x] The prompt is never modified mid-session
-- [x] Missing files are not an error — they are silently skipped
-- [x] agentPrompt.projectFile and agentPrompt.userFile config keys override the default paths
-- [x] Unit tests cover: no files (default), user-level only, project-level only, both files
+- [x] The built-in AGENT.md is shipped with bolt (src/AGENT.md in dev, dist/AGENT.md in prod)
+- [x] agentPrompt.projectFile config key overrides the default path
+- [x] Unit tests cover: first run (copies built-in), subsequent run (loads existing), custom path
 ```
 
 **S5-2: ProgressReporter interface and CliProgressReporter**
@@ -701,13 +700,13 @@ I want to propose improvements to my own rules without being able to apply them 
 so that bolt can improve over time while humans stay in control of its core behaviour.
 
 Acceptance Criteria:
-- [x] agent_suggest({ target: 'AGENT.md', scope: 'project'|'user', content, reason }) writes a Suggestion to .bolt/suggestions/<id>.json
-- [x] Suggestion schema matches docs/design/agent-prompt.md (id, createdAt, sessionId, taskId?, target, scope, content, reason, status)
+- [x] agent_suggest({ target: 'AGENT.md', content, reason }) writes a Suggestion to .bolt/suggestions/<id>.json
+- [x] Suggestion schema matches docs/design/agent-prompt.md (id, createdAt, sessionId, taskId?, target, content, reason, status)
 - [x] agent_suggest is registered as a built-in tool; it is NOT in the default sub-agent or skill allowlist
 - [x] Returns { suggestionId, path }
 - [x] bolt suggestions CLI command lists all pending suggestions with id, createdAt, scope, and first line of reason
 - [x] bolt suggestions show <id> prints the full content and reason
-- [x] bolt suggestions apply <id> appends content to the target AGENT.md (creates the file if absent); sets status to 'applied'
+- [x] bolt suggestions apply <id> appends content to .bolt/AGENT.md (creates the file if absent); sets status to 'applied'
 - [x] bolt suggestions reject <id> sets status to 'rejected'
 - [x] Applied/rejected suggestions are retained in .bolt/suggestions/ for audit purposes
 - [x] Unit tests cover: suggest writes file, apply creates AGENT.md, apply appends to existing AGENT.md, reject updates status
@@ -1208,13 +1207,97 @@ Acceptance Criteria:
 
 ---
 
-## Sprint 11 — Polish + Integration
+## Sprint 11 — Simplified AGENT.md + Dynamic Skills Injection
 
-**Goal:** Error recovery paths are hardened, end-to-end flows work, and the system is ready for v1 release.
+**Goal:** AGENT.md simplified to a single workspace file initialized from built-in default. Skills and tools catalogs dynamically injected into system prompt. Hardcoded tables removed. Token size tracking, hot-reload, and sub-agent rule inheritance added.
 
 ### Stories
 
-**S11-1: End-to-end CLI session test**
+**S11-1: Simplified AGENT.md — single workspace file + dynamic skills and tools injection**
+
+```
+As a user,
+I want a single AGENT.md file in my workspace that is initialized from the built-in
+default and automatically includes catalogs of available skills and tools,
+so that I have one clear place to customize bolt and the agent always knows
+what skills and tools are available — including custom skills I add.
+
+Acceptance Criteria:
+- [x] Remove user-level AGENT.md (~/.bolt/AGENT.md) — only workspace .bolt/AGENT.md exists
+- [x] loadAgentPrompt() simplified: reads .bolt/AGENT.md, copies built-in if missing
+- [x] Built-in AGENT.md content is always the base — user edits .bolt/AGENT.md directly
+- [x] Dynamic skills catalog appended to system prompt at startup from loaded Skill[] array
+- [x] Dynamic tools reference appended to system prompt at startup from ToolBus registry
+- [x] Hardcoded skills table removed from src/AGENT.md
+- [x] Hardcoded tools reference table removed from src/AGENT.md
+- [x] Skills section lists all discovered skills (built-in + user + project) with name + description
+- [x] Tools section lists all registered tools with name + one-line use-case summary
+- [x] Config removed: agentPrompt.userFile, BOLT_AGENT_USER_FILE env var
+- [x] agent_suggest simplified: no longer has 'scope' field (only applies to .bolt/AGENT.md)
+- [x] Works identically in dev (npm run dev) and prod (npm start / npm run build)
+- [x] Unit tests cover: first run copies built-in, subsequent run loads existing,
+      skills catalog appended, tools reference appended, custom path via config
+- [x] Design updated in docs/design/agent-prompt.md
+- [x] Configuration docs updated in docs/design/configuration.md
+```
+
+**S11-1b: Token size tracking for system prompt**
+
+```
+As a user,
+I want bolt to warn me when my AGENT.md is too large,
+so that I don't accidentally consume most of the context window with instructions.
+
+Acceptance Criteria:
+- [x] After system prompt assembly, bolt estimates token count (~1.3 tokens per word)
+- [x] If estimate exceeds agentPrompt.maxTokens (default 8000), a warning is logged at startup
+- [x] Warning message includes estimated token count and threshold
+- [x] BOLT_AGENT_MAX_TOKENS env var overrides the default threshold
+- [x] agentPrompt.maxTokens config key in .bolt/config.json overrides the default
+- [x] Unit tests cover: under threshold (no warning), over threshold (warning logged),
+      custom threshold via config, custom threshold via env var
+```
+
+**S11-1c: Hot-reload for AGENT.md**
+
+```
+As a user,
+I want bolt to pick up changes to my AGENT.md without restarting,
+so that I can iterate on my prompt during a session.
+
+Acceptance Criteria:
+- [x] bolt watches .bolt/AGENT.md for changes using fs.watch
+- [x] On file change, system prompt is reassembled (load + skills + tools)
+- [x] New prompt is used for the next API call
+- [x] A progress event notifies the user that the prompt has been reloaded
+- [x] Hot-reload is enabled by default in TTY mode
+- [x] --no-watch-prompt CLI flag disables hot-reload
+- [x] agentPrompt.watchForChanges config key disables hot-reload
+- [x] BOLT_AGENT_WATCH_CHANGES env var overrides the config key
+- [x] File watcher is cleaned up on shutdown
+- [x] Unit tests cover: file change triggers reload, watcher cleanup,
+      disabled via flag, disabled via config, disabled via env var
+```
+
+**S11-1d: Sub-agent system prompt rule inheritance**
+
+```
+As a developer,
+I want sub-agents to inherit safety and communication rules from the parent,
+so that delegated work follows the same constraints without leaking task context.
+
+Acceptance Criteria:
+- [ ] Sub-agent system prompt includes inherited sections from parent's assembled prompt:
+      ## Safety Rules, ## Communication Style, ## Operating Modes
+- [ ] Sections are extracted by parsing section headers (## Safety Rules, etc.)
+- [ ] Missing sections are silently skipped
+- [ ] Inherited rules are prepended to the sub-agent's own system prompt
+- [ ] Works for both subagent_run (free-form delegation) and skill_run (skill-specific prompts)
+- [ ] Unit tests cover: all three sections inherited, partial inheritance (some missing),
+      no sections found (sub-agent prompt unchanged)
+```
+
+**S11-2: End-to-end CLI session test**
 
 ```
 As a developer,
@@ -1228,7 +1311,7 @@ Acceptance Criteria:
 - [ ] Test completes deterministically with no real network calls
 ```
 
-**S11-2: State recovery from corrupt files**
+**S11-3: State recovery from corrupt files**
 
 ```
 As a developer,
@@ -1243,7 +1326,7 @@ Acceptance Criteria:
 - [ ] All recovery paths are unit tested with injected corrupt fixtures
 ```
 
-**S11-3: Embedding memory search backend (optional)**
+**S11-4: Embedding memory search backend (optional)**
 
 ```
 As a power user,
@@ -1257,7 +1340,7 @@ Acceptance Criteria:
 - [ ] Backend is interchangeable with no changes to memory_search tool interface
 ```
 
-**S11-4: README and getting-started documentation**
+**S11-5: README and getting-started documentation**
 
 ```
 As a new user,
@@ -1412,9 +1495,17 @@ Sprint 0 (Foundation)
 │              S10-4: channel task completion notification
 │              S10-6..8: FFmpeg Runner + video editing tools
 │                        │
-└───────────────────────►S11 (Polish)
-                                │
-                                └──► S12 (Enhanced File Tools)
+└───────────────────────►S11 (Simplified AGENT.md + Skills/Tools Injection)
+                           │    S11-1:  AGENT.md simplification + dynamic catalogs
+                           │    S11-1b: Token size tracking
+                           │    S11-1c: Hot-reload for AGENT.md
+                           │    S11-1d: Sub-agent rule inheritance
+                           │    S11-2:  E2E CLI session test
+                           │    S11-3:  State recovery
+                           │    S11-4:  Embedding memory (optional)
+                           │    S11-5:  README docs
+                           │
+                           └──► S12 (Enhanced File Tools)
                                        S12-1: file_search
                                        S12-2: glob
                                        S12-3: file_insert

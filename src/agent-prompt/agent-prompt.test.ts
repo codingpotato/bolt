@@ -1,29 +1,38 @@
-import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
-import type { readFile as ReadFileFn } from 'node:fs/promises';
-import { loadAgentPrompt } from './agent-prompt';
-import { BUILTIN_AGENT_MD } from '../assets';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  loadAgentPrompt,
+  ensureAgentFile,
+  appendSkillsCatalog,
+  appendToolsReference,
+  estimateTokenCount,
+  assembleSystemPrompt,
+  extractPromptSections,
+} from './agent-prompt';
 import type { Config } from '../config/config';
+import type { Skill } from '../skills/skill-loader';
+import type { Tool } from '../tools/tool';
 
 vi.mock('node:fs/promises');
-vi.mock('node:os');
+vi.mock('node:fs');
 vi.mock('../assets', () => ({
   BUILTIN_AGENT_MD: '/builtin/AGENT.md',
   BUILTIN_SKILLS_DIR: '/builtin/skills',
   BUILTIN_WORKFLOWS_DIR: '/builtin/workflows',
 }));
 
-function makeConfig(overrides?: Partial<Config['agentPrompt']>): Config {
+function makeConfig(overrides: Partial<Config['agentPrompt']> = {}): Config {
   return {
     model: 'claude-test',
     dataDir: '.bolt',
     logLevel: 'info',
-    workspace: { root: process.cwd() },
+    workspace: { root: '/workspace' },
     auth: {},
     local: {},
     agentPrompt: {
-      projectFile: '.bolt/AGENT.md',
-      userFile: '~/.bolt/AGENT.md',
+      projectFile: '/workspace/.bolt/AGENT.md',
       suggestionsPath: '.bolt/suggestions',
+      maxTokens: 8000,
+      watchForChanges: true,
       ...overrides,
     },
     memory: {
@@ -41,7 +50,7 @@ function makeConfig(overrides?: Partial<Config['agentPrompt']>): Config {
     tools: { timeoutMs: 30000, allowedTools: [] },
     comfyui: {
       servers: [],
-      workflows: { text2img: 'image_z_image_turbo', img2video: 'video_ltx2_3_i2v' },
+      workflows: { text2img: 'img1', img2video: 'vid1' },
       pollIntervalMs: 2000,
       timeoutMs: 300000,
       maxConcurrentPerServer: 2,
@@ -55,93 +64,225 @@ function makeConfig(overrides?: Partial<Config['agentPrompt']>): Config {
     },
     codeWorkflows: { testFixRetries: 3 },
     cli: { progress: true, verbose: false },
-    channels: { web: { enabled: false, port: 3000, mode: 'websocket' } },
+    channels: { web: { enabled: false, port: 3000, mode: 'http' as const } },
   };
 }
 
-const ENOENT = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-
 describe('loadAgentPrompt', () => {
-  let readFile: MockInstance<typeof ReadFileFn>;
+  beforeEach(() => vi.clearAllMocks());
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
-
-    const os = await import('node:os');
-    vi.mocked(os.homedir).mockReturnValue('/home/testuser');
-
-    const fs = await import('node:fs/promises');
-    readFile = vi.mocked(fs.readFile) as MockInstance<typeof ReadFileFn>;
-    readFile.mockImplementation(async (path) => {
-      if (path === BUILTIN_AGENT_MD) return 'built-in prompt';
-      throw ENOENT;
-    });
-  });
-
-  it('returns built-in default when no AGENT.md files exist', async () => {
-    const result = await loadAgentPrompt(makeConfig());
-    expect(result).toBe('built-in prompt');
-  });
-
-  it('returns user-level content when only the user file exists', async () => {
-    readFile.mockImplementation(async (path) => {
-      if (path === '/home/testuser/.bolt/AGENT.md') return 'user rules';
-      throw ENOENT;
-    });
+  it('reads .bolt/AGENT.md when it exists', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const fs = await import('node:fs');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(readFile).mockResolvedValue('# My Agent\n\nYou are helpful.' as never);
 
     const result = await loadAgentPrompt(makeConfig());
-    expect(result).toBe('user rules');
+    expect(result).toBe('# My Agent\n\nYou are helpful.');
+  });
+});
+
+describe('ensureAgentFile', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('copies built-in when file does not exist', async () => {
+    const { copyFile, mkdir } = await import('node:fs/promises');
+    const fs = await import('node:fs');
+    vi.mocked(fs.existsSync).mockReturnValueOnce(false).mockReturnValueOnce(true);
+    vi.mocked(copyFile).mockResolvedValue(undefined);
+    vi.mocked(mkdir).mockResolvedValue(undefined);
+
+    await ensureAgentFile(makeConfig());
+    expect(copyFile).toHaveBeenCalled();
   });
 
-  it('returns project-level content when only the project file exists', async () => {
-    readFile.mockImplementation(async (path) => {
-      if (path === '.bolt/AGENT.md') return 'project rules';
-      throw ENOENT;
-    });
+  it('does nothing when file exists', async () => {
+    const { copyFile } = await import('node:fs/promises');
+    const fs = await import('node:fs');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
 
-    const result = await loadAgentPrompt(makeConfig());
-    expect(result).toBe('project rules');
+    await ensureAgentFile(makeConfig());
+    expect(copyFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('appendSkillsCatalog', () => {
+  it('appends a skills table when skills are provided', () => {
+    const skills: Skill[] = [
+      {
+        name: 'write-blog',
+        description: 'Write a blog post',
+        systemPrompt: '',
+        inputSchema: {},
+        outputSchema: {},
+      },
+      {
+        name: 'review-code',
+        description: 'Review code',
+        systemPrompt: '',
+        inputSchema: {},
+        outputSchema: {},
+      },
+    ];
+    const result = appendSkillsCatalog('# Base', skills);
+    expect(result).toContain('## Available Skills');
+    expect(result).toContain('`write-blog`');
+    expect(result).toContain('`review-code`');
   });
 
-  it('concatenates user-level then project-level when both files exist', async () => {
-    readFile.mockImplementation(async (path) => {
-      if (path === '/home/testuser/.bolt/AGENT.md') return 'user rules';
-      if (path === '.bolt/AGENT.md') return 'project rules';
-      throw ENOENT;
-    });
+  it('returns prompt unchanged when no skills', () => {
+    expect(appendSkillsCatalog('# Base', [])).toBe('# Base');
+  });
+});
 
-    const result = await loadAgentPrompt(makeConfig());
-    expect(result).toBe('user rules\n\nproject rules');
+describe('appendToolsReference', () => {
+  it('appends a tools table when tools are provided', () => {
+    const tools: Tool[] = [
+      {
+        name: 'file_read',
+        description: 'Read a file',
+        inputSchema: {},
+        async execute() {
+          return {} as never;
+        },
+      },
+      {
+        name: 'bash',
+        description: 'Run shell commands',
+        inputSchema: {},
+        async execute() {
+          return {} as never;
+        },
+      },
+    ];
+    const result = appendToolsReference('# Base', tools);
+    expect(result).toContain('## Available Tools');
+    expect(result).toContain('`file_read`');
+    expect(result).toContain('`bash`');
   });
 
-  it('expands tilde in user file path before reading', async () => {
-    await loadAgentPrompt(makeConfig());
-    expect(readFile).toHaveBeenCalledWith('/home/testuser/.bolt/AGENT.md', 'utf8');
+  it('returns prompt unchanged when no tools', () => {
+    expect(appendToolsReference('# Base', [])).toBe('# Base');
+  });
+});
+
+describe('estimateTokenCount', () => {
+  it('estimates tokens using 1.3x word count', () => {
+    expect(estimateTokenCount('hello world')).toBe(3);
+    expect(estimateTokenCount('one two three four five')).toBe(7);
   });
 
-  it('respects config override for userFile', async () => {
-    readFile.mockImplementation(async (path) => {
-      if (path === '/custom/user.md') return 'custom user';
-      throw ENOENT;
-    });
-
-    const result = await loadAgentPrompt(makeConfig({ userFile: '/custom/user.md' }));
-    expect(result).toBe('custom user');
+  it('handles empty string', () => {
+    expect(estimateTokenCount('')).toBe(0);
+    expect(estimateTokenCount('   ')).toBe(0);
   });
+});
+
+describe('assembleSystemPrompt', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('combines AGENT.md + skills + tools', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const fs = await import('node:fs');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(readFile).mockResolvedValue('# Agent Rules' as never);
+
+    const skills: Skill[] = [
+      {
+        name: 'write-blog',
+        description: 'Write a blog post',
+        systemPrompt: '',
+        inputSchema: {},
+        outputSchema: {},
+      },
+    ];
+    const tools: Tool[] = [
+      {
+        name: 'file_read',
+        description: 'Read a file',
+        inputSchema: {},
+        async execute() {
+          return {} as never;
+        },
+      },
+    ];
+
+    const result = await assembleSystemPrompt(makeConfig(), skills, tools);
+    expect(result).toContain('# Agent Rules');
+    expect(result).toContain('## Available Skills');
+    expect(result).toContain('## Available Tools');
+  });
+});
+
+describe('extractPromptSections', () => {
+  const samplePrompt = `# Agent
+
+## Operating Modes
+
+Chat mode for quick questions.
+Task-driven for multi-step goals.
+
+## Tools
+
+Some tools section.
+
+## Safety Rules
+
+Always validate paths.
+Never run dangerous commands.
+
+## Communication Style
+
+Be concise.
+
+## Other Section
+
+Some other content.
+`;
+
+  it('extracts named sections', () => {
+    const result = extractPromptSections(samplePrompt, [
+      'Safety Rules',
+      'Communication Style',
+      'Operating Modes',
+    ]);
+    expect(result['Safety Rules']).toContain('Always validate paths');
+    expect(result['Communication Style']).toContain('Be concise');
+    expect(result['Operating Modes']).toContain('Chat mode');
+  });
+
+  it('skips missing sections', () => {
+    const result = extractPromptSections(samplePrompt, ['Missing Section']);
+    expect(result['Missing Section']).toBeUndefined();
+  });
+
+  it('stops at next top-level section header', () => {
+    const result = extractPromptSections(samplePrompt, ['Operating Modes']);
+    expect(result['Operating Modes']).toContain('Chat mode');
+    expect(result['Operating Modes']).not.toContain('## Tools');
+  });
+
+  it('returns empty object when no sections match', () => {
+    const result = extractPromptSections('# Empty', ['Safety Rules']);
+    expect(result).toEqual({});
+  });
+});
+
+describe('assembleSystemPrompt with custom path', () => {
+  beforeEach(() => vi.clearAllMocks());
 
   it('respects config override for projectFile', async () => {
-    readFile.mockImplementation(async (path) => {
-      if (path === '/custom/project.md') return 'custom project';
-      throw ENOENT;
-    });
+    const { readFile } = await import('node:fs/promises');
+    const fs = await import('node:fs');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(readFile).mockResolvedValue('custom content' as never);
 
-    const result = await loadAgentPrompt(makeConfig({ projectFile: '/custom/project.md' }));
-    expect(result).toBe('custom project');
-  });
-
-  it('propagates non-ENOENT errors', async () => {
-    readFile.mockRejectedValue(new Error('Permission denied'));
-
-    await expect(loadAgentPrompt(makeConfig())).rejects.toThrow('Permission denied');
+    const result = await assembleSystemPrompt(
+      makeConfig({ projectFile: '/custom/project.md' }),
+      [],
+      [],
+    );
+    expect(result).toBe('custom content');
+    expect(readFile).toHaveBeenCalledWith('/custom/project.md', 'utf8');
   });
 });

@@ -358,9 +358,9 @@ describe('createSearchProvider', () => {
     auth: {},
     local: {},
     search: { provider: 'searxng', maxResults: 10 },
-    agentPrompt: {
+    agentPrompt: { maxTokens: 8000, watchForChanges: false,
       projectFile: '.bolt/AGENT.md',
-      userFile: '~/.bolt/AGENT.md',
+
       suggestionsPath: '.bolt/suggestions',
     },
     memory: {

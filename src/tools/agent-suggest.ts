@@ -4,7 +4,6 @@ import type { SuggestionStore } from '../suggestions/suggestion-store';
 
 export interface AgentSuggestInput {
   target: 'AGENT.md';
-  scope: 'project' | 'user';
   content: string;
   reason: string;
 }
@@ -32,27 +31,21 @@ export function createAgentSuggestTool(
           enum: ['AGENT.md'],
           description: 'The file to propose editing (only AGENT.md is supported).',
         },
-        scope: {
-          type: 'string',
-          enum: ['project', 'user'],
-          description: '"project" targets .bolt/AGENT.md; "user" targets ~/.bolt/AGENT.md.',
-        },
         content: {
           type: 'string',
-          description: 'The content to append to the target file if the suggestion is applied.',
+          description: 'The content to append to .bolt/AGENT.md if the suggestion is applied.',
         },
         reason: {
           type: 'string',
           description: 'Why this change is warranted — shown to the human reviewer.',
         },
       },
-      required: ['target', 'scope', 'content', 'reason'],
+      required: ['target', 'content', 'reason'],
     },
 
     async execute(input: AgentSuggestInput, ctx: ToolContext): Promise<AgentSuggestResult> {
       const entry: Parameters<SuggestionStore['write']>[0] = {
         target: input.target,
-        scope: input.scope,
         content: input.content,
         reason: input.reason,
         sessionId: ctx.sessionId ?? '',

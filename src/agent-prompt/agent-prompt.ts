@@ -1,51 +1,171 @@
-import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { readFile, copyFile } from 'node:fs/promises';
+import { existsSync, watch, FSWatcher } from 'node:fs';
+import { dirname } from 'node:path';
 import type { Config } from '../config/config';
+import type { Skill } from '../skills/skill-loader';
+import type { Tool } from '../tools/tool';
 import { BUILTIN_AGENT_MD } from '../assets';
 
-export function expandTilde(filePath: string): string {
-  if (filePath.startsWith('~/')) {
-    return homedir() + filePath.slice(1);
-  }
-  return filePath;
-}
+/**
+ * Assembles the system prompt from a single .bolt/AGENT.md file,
+ * with dynamic skills and tools catalogs appended at startup.
+ *
+ * On first run, the built-in AGENT.md is copied to .bolt/AGENT.md.
+ * Subsequent runs load .bolt/AGENT.md as-is.
+ */
 
-async function tryReadFile(filePath: string): Promise<string | null> {
-  try {
-    return await readFile(filePath, 'utf8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return null;
+/**
+ * Ensures .bolt/AGENT.md exists. If missing, copies the built-in default.
+ * Returns the path to the file.
+ */
+export async function ensureAgentFile(config: Config): Promise<string> {
+  const projectPath = config.agentPrompt.projectFile;
+  if (!existsSync(projectPath)) {
+    const dir = dirname(projectPath);
+    if (!existsSync(dir)) {
+      await import('node:fs/promises').then((fs) => fs.mkdir(dir, { recursive: true }));
     }
-    throw err;
+    await copyFile(BUILTIN_AGENT_MD, projectPath);
   }
+  return projectPath;
 }
 
 /**
- * Assembles the system prompt from AGENT.md files at startup.
- *
- * Loading order:
- *   1. ~/.bolt/AGENT.md (user-level)   — prepended
- *   2. .bolt/AGENT.md  (project-level) — appended
- *
- * If neither file exists, the built-in default prompt is returned.
- * Missing files are silently skipped. The paths can be overridden via config.
+ * Loads the system prompt from .bolt/AGENT.md.
+ * Copies the built-in AGENT.md if the file does not exist.
  */
 export async function loadAgentPrompt(config: Config): Promise<string> {
-  const userPath = expandTilde(config.agentPrompt.userFile);
-  const projectPath = config.agentPrompt.projectFile;
+  await ensureAgentFile(config);
+  const content = await readFile(config.agentPrompt.projectFile, 'utf8');
+  return content;
+}
 
-  const [userContent, projectContent] = await Promise.all([
-    tryReadFile(userPath),
-    tryReadFile(projectPath),
-  ]);
+/**
+ * Appends a dynamic skills catalog section to the system prompt.
+ */
+export function appendSkillsCatalog(prompt: string, skills: Skill[]): string {
+  if (skills.length === 0) return prompt;
 
-  if (userContent === null && projectContent === null) {
-    return readFile(BUILTIN_AGENT_MD, 'utf8');
+  const skillsSection = [
+    '',
+    '---',
+    '',
+    '## Available Skills',
+    '',
+    'The following skills are available via the `skill_run` tool:',
+    '',
+    '| Skill | Description |',
+    '|-------|-------------|',
+    ...skills.map((s) => `| \`${s.name}\` | ${s.description} |`),
+  ].join('\n');
+
+  return prompt + skillsSection;
+}
+
+/**
+ * Appends a dynamic tools reference section to the system prompt.
+ */
+export function appendToolsReference(prompt: string, tools: Tool[]): string {
+  if (tools.length === 0) return prompt;
+
+  const toolsSection = [
+    '',
+    '---',
+    '',
+    '## Available Tools',
+    '',
+    'The following tools are available. Detailed input schemas are provided via the API tools parameter.',
+    '',
+    '| Tool | Use for |',
+    '|------|---------|',
+    ...tools.map((t) => `| \`${t.name}\` | ${t.description} |`),
+  ].join('\n');
+
+  return prompt + toolsSection;
+}
+
+/**
+ * Estimates token count from a string using a simple word-to-token heuristic.
+ * ~1.3 tokens per word for English text.
+ */
+export function estimateTokenCount(text: string): number {
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  return Math.ceil(wordCount * 1.3);
+}
+
+/**
+ * Assembles the complete system prompt: AGENT.md + skills catalog + tools reference.
+ */
+export async function assembleSystemPrompt(
+  config: Config,
+  skills: Skill[],
+  tools: Tool[],
+): Promise<string> {
+  const base = await loadAgentPrompt(config);
+  const withSkills = appendSkillsCatalog(base, skills);
+  const withTools = appendToolsReference(withSkills, tools);
+  return withTools;
+}
+
+/**
+ * Watches the AGENT.md file for changes and calls the callback when it changes.
+ * Returns a cleanup function.
+ */
+export function watchAgentPrompt(config: Config, onChange: () => void): () => void {
+  const filePath = config.agentPrompt.projectFile;
+  if (!existsSync(filePath)) {
+    return () => {};
   }
 
-  const parts: string[] = [];
-  if (userContent !== null) parts.push(userContent);
-  if (projectContent !== null) parts.push(projectContent);
-  return parts.join('\n\n');
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const watcher: FSWatcher = watch(filePath, () => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      onChange();
+      timeout = null;
+    }, 500);
+  });
+
+  return () => {
+    if (timeout) clearTimeout(timeout);
+    watcher.close();
+  };
+}
+
+/**
+ * Extracts named sections from a system prompt by header.
+ * Used for sub-agent rule inheritance.
+ */
+export function extractPromptSections(
+  prompt: string,
+  sectionNames: string[],
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  const lines = prompt.split('\n');
+
+  for (const sectionName of sectionNames) {
+    const header = `## ${sectionName}`;
+    const headerIndex = lines.findIndex(
+      (line) => line.trim() === header || line.trim().startsWith(header + ' '),
+    );
+    if (headerIndex === -1) continue;
+
+    const sectionLines: string[] = [];
+    for (let i = headerIndex + 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (line === undefined) break;
+      const trimmed = line.trim();
+      if (trimmed.startsWith('## ') && !trimmed.startsWith('### ')) {
+        break;
+      }
+      sectionLines.push(line);
+    }
+
+    const content = sectionLines.join('\n').trim();
+    if (content.length > 0) {
+      result[sectionName] = content;
+    }
+  }
+
+  return result;
 }

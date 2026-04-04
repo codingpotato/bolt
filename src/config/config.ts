@@ -28,8 +28,9 @@ export interface Config {
   };
   agentPrompt: {
     projectFile: string;
-    userFile: string;
     suggestionsPath: string;
+    maxTokens: number;
+    watchForChanges: boolean;
   };
   memory: {
     compactThreshold: number;
@@ -108,8 +109,9 @@ const DEFAULTS: Config = {
   },
   agentPrompt: {
     projectFile: '.bolt/AGENT.md',
-    userFile: '~/.bolt/AGENT.md',
     suggestionsPath: '.bolt/suggestions',
+    maxTokens: 8000,
+    watchForChanges: true,
   },
   memory: {
     compactThreshold: 0.8,
@@ -412,8 +414,14 @@ function applyEnvOverrides(config: Config): Config {
   if (process.env['BOLT_AGENT_PROJECT_FILE']) {
     result.agentPrompt.projectFile = process.env['BOLT_AGENT_PROJECT_FILE'];
   }
-  if (process.env['BOLT_AGENT_USER_FILE']) {
-    result.agentPrompt.userFile = process.env['BOLT_AGENT_USER_FILE'];
+  if (process.env['BOLT_AGENT_MAX_TOKENS']) {
+    const parsed = parseInt(process.env['BOLT_AGENT_MAX_TOKENS'], 10);
+    if (!Number.isNaN(parsed)) {
+      result.agentPrompt.maxTokens = parsed;
+    }
+  }
+  if (process.env['BOLT_AGENT_WATCH_CHANGES'] !== undefined) {
+    result.agentPrompt.watchForChanges = process.env['BOLT_AGENT_WATCH_CHANGES'] === 'true';
   }
 
   // Tasks & Tools

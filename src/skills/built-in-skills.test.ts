@@ -97,7 +97,7 @@ describe('write-blog-post skill', () => {
 
   it('invokes sub-agent with correct payload via skill_run', async () => {
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify({ post: '# Hello\n\nContent.' }) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
 
     await tool.execute({ name: 'write-blog-post', args: { topic: 'TypeScript' } }, makeCtx());
 
@@ -111,7 +111,7 @@ describe('write-blog-post skill', () => {
 
   it('returns the parsed post from sub-agent output', async () => {
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify({ post: '# My Post' }) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
     const result = await tool.execute({ name: 'write-blog-post', args: { topic: 'AI' } }, makeCtx());
     expect((result.result as { post: string }).post).toBe('# My Post');
   });
@@ -154,7 +154,7 @@ describe('draft-social-post skill', () => {
 
   it('invokes sub-agent and returns post', async () => {
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify({ post: 'Check this out! 🚀' }) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
     const result = await tool.execute(
       { name: 'draft-social-post', args: { topic: 'AI trends', platform: 'twitter' } },
       makeCtx(),
@@ -210,7 +210,7 @@ describe('generate-video-script skill', () => {
       ],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(storyboard) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
     const result = await tool.execute(
       { name: 'generate-video-script', args: { topic: 'AI trends' } },
       makeCtx(),
@@ -258,7 +258,7 @@ describe('generate-image-prompt skill', () => {
     const runner = vi.fn().mockResolvedValue({
       output: JSON.stringify({ prompt: 'A dramatic sunset over mountains, cinematic lighting' }),
     });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
     const result = await tool.execute(
       { name: 'generate-image-prompt', args: { sceneDescription: 'sunset over mountains' } },
       makeCtx(),
@@ -305,7 +305,7 @@ describe('generate-video-prompt skill', () => {
     const runner = vi.fn().mockResolvedValue({
       output: JSON.stringify({ prompt: 'Slow dolly forward, camera moves toward the subject' }),
     });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
     const result = await tool.execute(
       { name: 'generate-video-prompt', args: { sceneDescription: 'person walking in forest' } },
       makeCtx(),
@@ -348,7 +348,7 @@ describe('summarize-url skill', () => {
       contentType: 'article',
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(summary) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
     const result = await tool.execute(
       { name: 'summarize-url', args: { url: 'https://example.com/typescript' } },
       makeCtx(),
@@ -394,7 +394,7 @@ describe('review-code skill', () => {
       approved: true,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
     const result = await tool.execute(
       { name: 'review-code', args: { diff: '--- a/foo.ts\n+++ b/foo.ts\n@@ -1 +1 @@\n+const x = 1;' } },
       makeCtx(),
@@ -412,7 +412,7 @@ describe('review-code skill', () => {
       approved: false,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
     const result = await tool.execute(
       { name: 'review-code', args: { path: 'src/db.ts' } },
       makeCtx(),
@@ -472,7 +472,7 @@ describe('analyze-trends skill', () => {
       topPosts: [{ title: 'Thread: I replaced my intern with GPT-4', url: 'https://example.com/1' }],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(report) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
 
     await tool.execute({ name: 'analyze-trends', args: { topic: 'AI coding tools' } }, makeCtx());
 
@@ -500,7 +500,7 @@ describe('analyze-trends skill', () => {
       ],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(report) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
     const result = await tool.execute(
       { name: 'analyze-trends', args: { platforms: ['tiktok', 'instagram'], timeRange: 'week' } },
       makeCtx(),
@@ -520,7 +520,7 @@ describe('analyze-trends skill', () => {
       topPosts: [],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(report) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner);
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
     const result = await tool.execute({ name: 'analyze-trends', args: {} }, makeCtx());
     expect(result.result).toBeDefined();
   });

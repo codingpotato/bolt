@@ -21,6 +21,7 @@ const SKILLS_DIR = join(__dirname);
 const AUTH: AuthConfig = { mode: 'api-key', credential: 'test-key' };
 const MODEL = 'claude-opus-4-6';
 const SCRIPT = '/path/to/subagent.js';
+const EXEC = process.execPath;
 
 function loadSkill(filename: string): Skill {
   const raw = readFileSync(join(SKILLS_DIR, filename), 'utf-8');
@@ -71,7 +72,7 @@ describe('generate-video-script scene fields', () => {
     };
 
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(storyboard) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'generate-video-script', args: { topic: 'AI coding tools' } },
       makeCtx(),
@@ -121,7 +122,7 @@ describe('generate-video-script scene fields', () => {
     };
 
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(storyboard) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'generate-video-script', args: { topic: 'AI developer tools', durationSeconds: 30 } },
       makeCtx(),
@@ -170,6 +171,7 @@ describe('skill chaining: summarize-url output feeds into write-blog-post', () =
       AUTH,
       MODEL,
       SCRIPT,
+      EXEC,
       summarizeRunner,
       '',
     );
@@ -186,7 +188,7 @@ describe('skill chaining: summarize-url output feeds into write-blog-post', () =
     };
 
     const blogRunner = vi.fn().mockResolvedValue({ output: JSON.stringify(blogOutput) });
-    const blogTool = createSkillRunTool([blogSkill], AUTH, MODEL, SCRIPT, blogRunner, '');
+    const blogTool = createSkillRunTool([blogSkill], AUTH, MODEL, SCRIPT, EXEC, blogRunner, '');
 
     const blogResult = await blogTool.execute(
       {
@@ -221,6 +223,7 @@ describe('skill chaining: summarize-url output feeds into write-blog-post', () =
       AUTH,
       MODEL,
       SCRIPT,
+      EXEC,
       summarizeRunner,
       '',
     );
@@ -234,7 +237,7 @@ describe('skill chaining: summarize-url output feeds into write-blog-post', () =
 
     const blogOutput = { post: '# TypeScript Best Practices\n\nStrict mode is essential.' };
     const blogRunner = vi.fn().mockResolvedValue({ output: JSON.stringify(blogOutput) });
-    const blogTool = createSkillRunTool([blogSkill], AUTH, MODEL, SCRIPT, blogRunner, '');
+    const blogTool = createSkillRunTool([blogSkill], AUTH, MODEL, SCRIPT, EXEC, blogRunner, '');
 
     const step2 = await blogTool.execute(
       { name: 'write-blog-post', args: { topic: combinedTopic } },

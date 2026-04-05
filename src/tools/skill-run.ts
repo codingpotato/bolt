@@ -2,7 +2,7 @@ import { ToolError } from './tool';
 import type { Tool, ToolContext, JSONSchema } from './tool';
 import type { Skill } from '../skills/skill-loader';
 import type { AuthConfig } from '../auth/auth';
-import type { SubagentPayload, SubagentResult } from '../subagent/subagent-runner';
+import type { SubagentPayload, SubagentRunner } from '../subagent/subagent-runner';
 
 export interface SkillRunInput {
   name: string;
@@ -12,8 +12,6 @@ export interface SkillRunInput {
 export interface SkillRunOutput {
   result: unknown;
 }
-
-type Runner = (payload: SubagentPayload, scriptPath: string) => Promise<SubagentResult>;
 
 /**
  * Validates that all required fields declared in the schema are present and
@@ -81,7 +79,8 @@ export function createSkillRunTool(
   authConfig: AuthConfig,
   model: string,
   scriptPath: string,
-  runner: Runner,
+  execPath: string,
+  runner: SubagentRunner,
   inheritedRules: string,
 ): Tool<SkillRunInput, SkillRunOutput> {
   const skillMap = new Map<string, Skill>(skills.map((s) => [s.name, s]));
@@ -132,7 +131,7 @@ export function createSkillRunTool(
 
       let subagentOutput: string;
       try {
-        const result = await runner(payload, scriptPath);
+        const result = await runner(payload, scriptPath, execPath);
         subagentOutput = result.output;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

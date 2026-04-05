@@ -7,6 +7,7 @@ import type { AuthConfig } from '../auth/auth';
 const AUTH: AuthConfig = { mode: 'api-key', credential: 'key' };
 const MODEL = 'claude-opus-4-6';
 const SCRIPT = '/path/to/subagent.js';
+const EXEC = process.execPath;
 
 const BLOG_SKILL: Skill = {
   name: 'write-blog-post',
@@ -69,6 +70,7 @@ describe('createRunSkillSlashCommand', () => {
     AUTH,
     MODEL,
     SCRIPT,
+    EXEC,
     runnerSpy,
   );
 

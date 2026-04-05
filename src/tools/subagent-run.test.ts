@@ -7,6 +7,7 @@ import { NoopProgressReporter } from '../progress';
 
 const AUTH: AuthConfig = { mode: 'api-key', credential: 'key' };
 const SCRIPT = '/path/to/subagent.js';
+const EXEC = process.execPath;
 const MODEL = 'claude-opus-4-6';
 
 function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
@@ -25,7 +26,7 @@ describe('subagent_run tool', () => {
   const runnerSpy = vi.fn((_payload: Payload, _scriptPath: string) =>
     Promise.resolve({ output: 'sub-agent result' }),
   );
-  const tool = createSubagentRunTool(AUTH, MODEL, SCRIPT, runnerSpy, () => '');
+  const tool = createSubagentRunTool(AUTH, MODEL, SCRIPT, EXEC, runnerSpy, () => '');
 
   beforeEach(() => {
     vi.clearAllMocks();

@@ -20,6 +20,7 @@ const SKILLS_DIR = join(__dirname);
 const AUTH: AuthConfig = { mode: 'api-key', credential: 'test-key' };
 const MODEL = 'claude-opus-4-6';
 const SCRIPT = '/path/to/subagent.js';
+const EXEC = process.execPath;
 
 function loadSkill(filename: string): Skill {
   const raw = readFileSync(join(SKILLS_DIR, filename), 'utf-8');
@@ -58,7 +59,7 @@ describe('review-code issue severity values', () => {
       approved: true,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { diff: '+const x = a + b + c + d;' } },
       makeCtx(),
@@ -83,7 +84,7 @@ describe('review-code issue severity values', () => {
       approved: true,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { diff: 'some diff' } },
       makeCtx(),
@@ -108,7 +109,7 @@ describe('review-code issue severity values', () => {
       approved: false,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { path: 'src/db.ts' } },
       makeCtx(),
@@ -140,7 +141,7 @@ describe('review-code issue field completeness', () => {
       approved: true,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { diff: '+export const HUGE_CONFIG = {...}' } },
       makeCtx(),
@@ -162,7 +163,7 @@ describe('review-code issue field completeness', () => {
     };
     const review = { summary: 'Critical security issue.', issues: [issue], approved: false };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { path: 'src/auth.ts' } },
       makeCtx(),
@@ -177,7 +178,7 @@ describe('review-code issue field completeness', () => {
   it('returns zero issues and approved true for clean code', async () => {
     const review = { summary: 'Code looks good. No issues found.', issues: [], approved: true };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { diff: '+const x: number = 1;' } },
       makeCtx(),
@@ -204,7 +205,7 @@ describe('review-code with no code provided', () => {
       approved: false,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute({ name: 'review-code', args: {} }, makeCtx());
     const r = result.result as typeof review;
     expect(r.summary).toBe('No code provided for review');
@@ -226,7 +227,7 @@ describe('review-code uses file_read for path input', () => {
   it('sub-agent receives path in prompt when path arg is supplied', async () => {
     const review = { summary: 'Looks fine.', issues: [], approved: true };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     await tool.execute({ name: 'review-code', args: { path: 'src/agent/core.ts' } }, makeCtx());
     const [payload] = runner.mock.calls[0] as [
       import('../subagent/subagent-runner').SubagentPayload,
@@ -244,7 +245,7 @@ describe('review-code uses file_read for path input', () => {
       approved: true,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       {
         name: 'review-code',

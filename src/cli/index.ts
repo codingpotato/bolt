@@ -53,6 +53,7 @@ import { createVideoMergeTool } from '../tools/video-merge';
 import { createVideoAddAudioTool } from '../tools/video-add-audio';
 import { createVideoAddSubtitlesTool } from '../tools/video-add-subtitles';
 import { FfmpegRunner } from '../ffmpeg/ffmpeg-runner';
+import { createContentProjectTools } from '../tools/content-project-tools';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
@@ -290,6 +291,8 @@ async function serve(serveArgs: string[]): Promise<void> {
   toolBus.register(createVideoAddAudioTool(ffmpegRunner));
   toolBus.register(createVideoAddSubtitlesTool(ffmpegRunner));
 
+  for (const tool of createContentProjectTools()) toolBus.register(tool);
+
   logger.info('Tools registered', {
     count: toolBus.list().length,
     tools: toolBus.list().map((t) => t.name),
@@ -525,6 +528,8 @@ async function main(): Promise<void> {
   toolBus.register(createVideoMergeTool(ffmpegRunner));
   toolBus.register(createVideoAddAudioTool(ffmpegRunner));
   toolBus.register(createVideoAddSubtitlesTool(ffmpegRunner));
+
+  for (const tool of createContentProjectTools()) toolBus.register(tool);
 
   logger.info('Tools registered', {
     count: toolBus.list().length,

@@ -124,6 +124,9 @@ Call model again with updated messages
 | `video_merge`         | Concatenate video clips into a single file via FFmpeg; returns `{ outputPath, videoDurationSec }`               |
 | `video_add_audio`     | Add or mix an audio track into a video via FFmpeg; supports replace and mix modes                               |
 | `video_add_subtitles` | Embed a subtitle file (SRT/VTT/ASS) into a video via FFmpeg; supports soft and hard modes                       |
+| `content_project_create` | Create a content project directory and initial `project.json` manifest; returns `{ projectId, manifestPath, projectDir }` |
+| `content_project_read` | Read and return the current `ContentProject` manifest for a given project ID                                   |
+| `content_project_update_artifact` | Update an artifact's status (`pending`/`draft`/`approved`/`failed`) in `project.json`        |
 
 ### web_search
 
@@ -432,6 +435,50 @@ interface GlobOutput {
 ```
 
 The tool uses fast glob matching (equivalent to `find` by name pattern) and returns paths only — no file content. The agent can then use `file_read` or `file_search` on specific files. All results are confined to the workspace.
+
+### content_project_create / content_project_read / content_project_update_artifact
+
+These three tools wrap `ContentProjectManager` and expose content project lifecycle operations to the agent. All file I/O is confined to `<workspaceRoot>/projects/` via the manager's internal path validation.
+
+```ts
+// content_project_create
+interface ContentProjectCreateInput {
+  /** Original user brief / topic */
+  topic: string;
+  /** Human-readable title (defaults to topic) */
+  title?: string;
+}
+interface ContentProjectCreateOutput {
+  /** Slug ID, e.g. "ai-coding-trends-2026-03-24" */
+  projectId: string;
+  /** Workspace-relative path to project.json */
+  manifestPath: string;
+  /** Absolute path to the project directory */
+  projectDir: string;
+}
+
+// content_project_read
+interface ContentProjectReadInput {
+  projectId: string;
+}
+// Output: full ContentProject manifest (see docs/design/content-generation.md)
+
+// content_project_update_artifact
+interface ContentProjectUpdateArtifactInput {
+  projectId: string;
+  /** Path relative to project directory, e.g. "01-trend-report.md" */
+  artifactPath: string;
+  status: 'pending' | 'draft' | 'approved' | 'failed';
+}
+interface ContentProjectUpdateArtifactOutput {
+  /** false when no artifact with the given path exists in the manifest */
+  updated: boolean;
+}
+```
+
+All three tools are marked `sequential: true` — they mutate shared manifest state and must not run concurrently with each other.
+
+See `docs/design/content-generation.md` for the full `ContentProject` and `Artifact` schemas.
 
 ## Tool Registration
 

@@ -171,6 +171,7 @@ Return result to caller
 
 | Skill | Description | Allowed Tools |
 |-------|-------------|---------------|
+| `produce-video` | **Orchestrator** — creates a content project, builds the full task DAG, and drives the 9-step video production pipeline with approval gates. Accepts `projectId` to resume a partially-completed run. | `content_project_create`, `content_project_read`, `content_project_update_artifact`, `task_create`, `task_update`, `task_list`, `skill_run`, `user_review`, `file_read`, `file_write` |
 | `generate-video-script` | Write a short-form video script with structured storyboard (scene-by-scene breakdown including camera, dialogue, transitions) | `web_fetch`, `web_search` |
 | `generate-image-prompt` | Create a detailed image generation prompt optimised for the target model (e.g. SDXL, Flux) from a scene description | — |
 | `generate-video-prompt` | Create a motion/animation prompt for image-to-video generation from a scene description and source image | — |

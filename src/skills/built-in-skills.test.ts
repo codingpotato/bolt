@@ -45,9 +45,10 @@ describe('built-in skills discoverability', () => {
     'summarize-url',
     'review-code',
     'fix-tests',
+    'produce-video',
   ];
 
-  it('loadSkills finds all 9 built-in skills when passed SKILLS_DIR as builtinSkillsDir', async () => {
+  it('loadSkills finds all 10 built-in skills when passed SKILLS_DIR as builtinSkillsDir', async () => {
     const skills = await loadSkills('', '', () => {}, SKILLS_DIR);
     const names = skills.map((s) => s.name);
     for (const expected of EXPECTED_NAMES) {
@@ -544,5 +545,84 @@ describe('analyze-trends skill', () => {
     const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute({ name: 'analyze-trends', args: {} }, makeCtx());
     expect(result.result).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// produce-video (orchestrator)
+// ---------------------------------------------------------------------------
+
+describe('produce-video skill', () => {
+  const skill = loadSkill('produce-video.skill.md');
+
+  it('has correct name', () => {
+    expect(skill.name).toBe('produce-video');
+  });
+
+  it('requires topic input', () => {
+    expect(skill.inputSchema.required).toContain('topic');
+  });
+
+  it('title, targetPlatform, audioFile, and projectId are optional', () => {
+    const required = skill.inputSchema.required ?? [];
+    expect(required).not.toContain('title');
+    expect(required).not.toContain('targetPlatform');
+    expect(required).not.toContain('audioFile');
+    expect(required).not.toContain('projectId');
+  });
+
+  it('targetPlatform enum includes expected platforms', () => {
+    const prop = skill.inputSchema.properties?.['targetPlatform'];
+    expect(prop?.enum).toEqual(
+      expect.arrayContaining(['tiktok', 'youtube-shorts', 'reels', 'linkedin']),
+    );
+  });
+
+  it('requires projectId, manifestPath, and finalVideoPath in output', () => {
+    expect(skill.outputSchema.required).toContain('projectId');
+    expect(skill.outputSchema.required).toContain('manifestPath');
+    expect(skill.outputSchema.required).toContain('finalVideoPath');
+  });
+
+  it('allowedTools includes content project tools, task tools, skill_run, user_review, and media tools', () => {
+    expect(skill.allowedTools).toContain('content_project_create');
+    expect(skill.allowedTools).toContain('content_project_read');
+    expect(skill.allowedTools).toContain('content_project_update_artifact');
+    expect(skill.allowedTools).toContain('task_create');
+    expect(skill.allowedTools).toContain('task_update');
+    expect(skill.allowedTools).toContain('task_list');
+    expect(skill.allowedTools).toContain('skill_run');
+    expect(skill.allowedTools).toContain('user_review');
+    expect(skill.allowedTools).toContain('file_read');
+    expect(skill.allowedTools).toContain('file_write');
+    expect(skill.allowedTools).toContain('comfyui_text2img');
+    expect(skill.allowedTools).toContain('comfyui_img2video');
+    expect(skill.allowedTools).toContain('video_merge');
+    expect(skill.allowedTools).toContain('video_add_audio');
+    expect(skill.allowedTools).toContain('video_add_subtitles');
+  });
+
+  it('has a non-empty system prompt describing the pipeline', () => {
+    expect(skill.systemPrompt.length).toBeGreaterThan(0);
+    expect(skill.systemPrompt).toContain('content_project_create');
+    expect(skill.systemPrompt).toContain('task_create');
+  });
+
+  it('invokes sub-agent and returns project reference', async () => {
+    const output = {
+      projectId: 'ai-trends-2026-04-05',
+      manifestPath: 'projects/ai-trends-2026-04-05/project.json',
+      finalVideoPath: 'projects/ai-trends-2026-04-05/final/video.mp4',
+    };
+    const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(output) });
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const result = await tool.execute(
+      { name: 'produce-video', args: { topic: 'AI coding trends' } },
+      makeCtx(),
+    );
+    const r = result.result as typeof output;
+    expect(r.projectId).toBe('ai-trends-2026-04-05');
+    expect(r.manifestPath).toContain('project.json');
+    expect(r.finalVideoPath).toContain('video.mp4');
   });
 });

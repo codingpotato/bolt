@@ -2,6 +2,7 @@ import { ToolError } from './tool';
 import type { Tool, ToolContext } from './tool';
 import type { ComfyUIPool } from '../comfyui/comfyui-pool';
 import { patchWorkflow } from '../comfyui/comfyui-pool';
+import { resolvePath, assertWithinWorkspace } from './fs-utils';
 
 export interface ComfyUIImg2VideoInput {
   imagePath: string;
@@ -74,12 +75,17 @@ export function createComfyUIImg2VideoTool(
         );
       }
 
-      const resolvedOutputPath = input.outputPath ?? `${Date.now()}-img2video.mp4`;
+      const rawOutputPath = input.outputPath ?? `${Date.now()}-img2video.mp4`;
+      const absOutputPath = resolvePath(ctx.cwd, rawOutputPath);
+      assertWithinWorkspace(ctx.cwd, absOutputPath, rawOutputPath);
+
+      const absImagePath = resolvePath(ctx.cwd, input.imagePath);
+      assertWithinWorkspace(ctx.cwd, absImagePath, input.imagePath);
 
       const { workflow, patchmap } = pool.loadWorkflow('video_ltx2_3_i2v');
 
       const server = await pool.selectServer();
-      const uploadedFilename = await pool.uploadImage(input.imagePath, server);
+      const uploadedFilename = await pool.uploadImage(absImagePath, server);
 
       const seed = input.seed ?? Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
       const patch: Record<string, Record<string, unknown>> = {};
@@ -139,10 +145,10 @@ export function createComfyUIImg2VideoTool(
         throw new ToolError('Workflow completed but produced no output files', false);
       }
 
-      await pool.downloadOutput(outputs.files[0]!, server, resolvedOutputPath);
+      await pool.downloadOutput(outputs.files[0]!, server, absOutputPath);
 
       return {
-        outputPath: resolvedOutputPath,
+        outputPath: absOutputPath,
         durationMs: Date.now() - startTime,
       };
     },

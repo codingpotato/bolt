@@ -24,6 +24,7 @@
 
 | Skill | Description | Key tools used |
 |-------|-------------|---------------|
+| `produce-video` | **Orchestrator** — creates a content project, builds the full task DAG, and drives the 9-step video production pipeline with user approval gates | `content_project_create`, `task_create`, `skill_run`, `user_review`, `content_project_update_artifact` |
 | `analyze-trends` | Search trending topics and produce a structured trend report with content angles | `web_search`, `web_fetch` |
 | `write-blog-post` | Draft a long-form Markdown blog post on a given topic | `web_fetch` (optional research) |
 | `draft-social-post` | Write a short-form social media post for a given platform and topic | — |
@@ -32,6 +33,38 @@
 | `generate-video-prompt` | Create a motion/animation prompt for image-to-video from a scene and image | — |
 | `summarize-url` | Fetch a URL and return a structured summary | `web_fetch` |
 | `review-code` | Perform a code review on a diff or file | `file_read` |
+
+### `produce-video` Orchestrator Skill
+
+`produce-video` is the entry point for the full video production pipeline. It is the only skill that bridges the **task system** (execution) and the **content project** (artifact storage). All other content skills are step-level — they do one thing. `produce-video` coordinates them.
+
+```
+Input:
+  topic:          string   — original user request / content brief
+  title?:         string   — human-readable project title (defaults to topic)
+  targetPlatform?: string  — "tiktok" | "youtube-shorts" | "reels" | "linkedin" (default: "tiktok")
+  audioFile?:     string   — workspace-relative path to a background audio file (optional)
+
+Output:
+  projectId:      string   — slug ID of the created content project
+  manifestPath:   string   — relative path to project.json (e.g. "projects/<id>/project.json")
+  finalVideoPath: string   — relative path to the finished video file
+```
+
+**What the skill does, step by step:**
+
+1. Calls `content_project_create({ topic, title })` → gets `{ projectId, manifestPath, projectDir }`
+2. Creates the full task DAG via `task_create` (all pipeline steps, with `dependsOn` and `requiresApproval: true`):
+   - `analyzeTrends` → `generateScript` → `generateImagePrompts` → `generateImages` → `generateVideoPrompts` → `generateVideos` → `mergeClips` → (optional `addAudio`) → (optional `addSubtitles`)
+3. Stores `{ projectId, manifestPath }` in the `analyzeTrends` task result so every subsequent task can locate the project
+4. Executes each task in order by invoking the matching sub-skill via `skill_run`, presenting results for `user_review`, and calling `content_project_update_artifact` to track status in `project.json`
+5. Returns `{ projectId, manifestPath, finalVideoPath }` on completion
+
+**Why a skill, not a raw agent instruction?**
+
+- The skill's system prompt encodes the exact step sequence, preventing the agent from inventing a different order on each invocation
+- It scopes the tool allowlist to exactly what orchestration needs — no `bash`, no `memory_write`
+- It can be restarted mid-pipeline: on invocation, the skill reads `project.json` first; if `projectId` is provided as input, it resumes from the last incomplete step rather than starting over
 
 ## Workflow Patterns
 
@@ -164,6 +197,70 @@ interface Scene {
   transitionTo?: string;         // transition to next scene (cut, fade, etc.)
 }
 ```
+
+## Content Project Tools
+
+`ContentProjectManager` is an internal TypeScript class that handles project directory creation and manifest I/O. To make it agent-callable, three built-in tools wrap it:
+
+### `content_project_create`
+
+Create a new content project directory and write the initial `project.json` manifest.
+
+```ts
+// Input
+{ topic: string; title?: string }
+
+// Output
+{
+  projectId: string;     // slug, e.g. "ai-coding-trends-2026-03-24"
+  manifestPath: string;  // relative path to project.json
+  projectDir: string;    // absolute path to project directory
+}
+```
+
+Creates `<workspace>/projects/<project-id>/` with `scenes/` and `final/` subdirectories, writes the initial manifest, and returns the project reference. If a project with the same ID already exists, appends `-2`, `-3`, etc. to avoid overwriting.
+
+### `content_project_read`
+
+Read the current state of a content project manifest.
+
+```ts
+// Input
+{ projectId: string }
+
+// Output
+ContentProject  // full manifest as defined by the ContentProject interface
+```
+
+Returns `ToolError` if the project does not exist.
+
+### `content_project_update_artifact`
+
+Update an artifact's status in `project.json` (e.g. after generation or user approval).
+
+```ts
+// Input
+{
+  projectId: string;
+  artifactPath: string;  // relative to project dir, e.g. "01-trend-report.md"
+  status: 'pending' | 'draft' | 'approved' | 'failed';
+}
+
+// Output
+{ updated: boolean }
+```
+
+Returns `updated: false` (not an error) if no artifact with the given path exists in the manifest.
+
+**Why tools instead of direct `file_write`?**
+
+The agent could theoretically create and update `project.json` via `file_write`, but:
+- `ContentProjectManager` enforces directory structure and schema consistency
+- Path traversal protection is applied at the manager layer (`getProjectFilePath`)
+- The tools are atomic (read → mutate → write in one call) — no partial-update bugs
+- The audit log records every manifest mutation with typed tool names
+
+---
 
 ## Content Project
 
@@ -331,15 +428,18 @@ The tool uploads the source image to the selected ComfyUI server (`POST /upload/
 
 | Tool | Usage in content generation |
 |------|----------------------------|
+| `content_project_create` | **Orchestrator only** — initialize the project directory and manifest at pipeline start |
+| `content_project_read` | Any task — read `project.json` to locate artifacts and check step status |
+| `content_project_update_artifact` | Any task — update artifact status after generation (`draft`) or user approval (`approved`) |
 | `web_search` | Trend research, topic exploration, competitor analysis |
 | `web_fetch` | Deep-read specific articles/pages for research |
-| `file_read` | Read `project.json` manifest to locate artifacts; read prompts/storyboard for downstream steps |
-| `file_write` | Save all artifacts (trend report, storyboard, prompts, images, videos, updated manifest) |
-| `user_review` | Present drafts/storyboards/prompts/media for user approval; update manifest status on result |
+| `file_read` | Read storyboard JSON, prompts, and other artifact content within the project directory |
+| `file_write` | Save artifact content (trend report, storyboard, prompts) to the project directory |
+| `user_review` | Present drafts/storyboards/prompts/media for user approval |
 | `comfyui_text2img` | Generate an image from a prompt via ComfyUI; writes output to the scene directory |
 | `comfyui_img2video` | Generate a video clip from an image + motion prompt via ComfyUI; writes output to the scene directory |
 | `skill_run` | Invoke content generation skills (analyze-trends, generate-video-script, etc.) |
-| `task_create` | Set up the task DAG; first task result stores manifest path for all downstream tasks |
+| `task_create` | Set up the task DAG; first task result stores `{ projectId, manifestPath }` |
 | `task_update` | Track progress; task result JSON references project ID and manifest path |
 | `video_merge` | Concatenate approved scene clips into `final/raw.mp4` |
 | `video_add_audio` | Mix background music or voiceover into the merged video |

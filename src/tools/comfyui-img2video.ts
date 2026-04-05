@@ -61,7 +61,7 @@ export function createComfyUIImg2VideoTool(
         outputPath: {
           type: 'string',
           description:
-            'Output file path within the workspace. Defaults to generated timestamped filename.',
+            'Output file path within the workspace. In content project workflows, always pass the project-relative path (e.g. "projects/<id>/scenes/<filename>.mp4"). Defaults to scenes/<timestamp>-img2video.mp4 at workspace root.',
         },
       },
       required: ['imagePath', 'prompt'],

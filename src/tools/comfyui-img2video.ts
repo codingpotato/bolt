@@ -75,7 +75,7 @@ export function createComfyUIImg2VideoTool(
         );
       }
 
-      const rawOutputPath = input.outputPath ?? `${Date.now()}-img2video.mp4`;
+      const rawOutputPath = input.outputPath ?? `scenes/${Date.now()}-img2video.mp4`;
       const absOutputPath = resolvePath(ctx.cwd, rawOutputPath);
       assertWithinWorkspace(ctx.cwd, absOutputPath, rawOutputPath);
 

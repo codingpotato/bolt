@@ -60,7 +60,7 @@ export function createComfyUIText2ImgTool(
         );
       }
 
-      const rawOutputPath = input.outputPath ?? `${Date.now()}-text2img.png`;
+      const rawOutputPath = input.outputPath ?? `scenes/${Date.now()}-text2img.png`;
       const absOutputPath = resolvePath(ctx.cwd, rawOutputPath);
       assertWithinWorkspace(ctx.cwd, absOutputPath, rawOutputPath);
 

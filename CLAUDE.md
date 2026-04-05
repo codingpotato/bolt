@@ -35,28 +35,6 @@ Read these docs before making decisions in the relevant area:
 | Project Plan       | `docs/planning/plan.md`             | Sprint breakdown, stories, tasks, dependency graph, v1 release criteria                                 |
 | Deploy: serve      | `docs/deploy/serve.md`              | Running bolt serve as a daemon, systemd/launchd, reverse proxy, token auth                              |
 
-## Core Capabilities
-
-- **Tools execution** — model drives tool calls via the Anthropic tool-use API; Tool Bus dispatches and returns results
-- **CLI interface** — primary development and debug interface
-- **WebChannel** — web chat interface (HTTP/WebSocket) accessible from phone or desktop browser
-- **Web search** — configurable search provider (SearXNG/Brave/Serper) for trend research
-- **User review** — interactive approval/feedback loop for creative content
-- **MCP client** — connects to external MCP servers (ComfyUI) for image/video generation
-- **Bash execution** — runs shell commands on the host system
-- **File editing** — reads and modifies files on disk
-- **Web fetching** — retrieves content from URLs
-- **Todo / task management** — creates and updates todo lists, executes them step by step
-- **Multi-level memory** — compacts context on overflow, persists history for future retrieval
-- **Task serialization** — creates, serializes, and executes tasks; supports pause/resume with dependencies and approval gates
-- **Sub-agent delegation** — spawns child agents for subtasks; contexts are fully isolated
-- **Skills** — loadable, composable capability modules invokable by name from CLI or by the agent
-- **Code workflows** — writes code, writes tests, runs tests, performs code review
-- **Content generation** — trend analysis, social posts, articles, video scripts/storyboards, image/video prompts
-- **Media generation** — text-to-image and image-to-video via ComfyUI MCP server
-- **Video post-production** — merge scene clips, add audio tracks, and embed subtitles via local FFmpeg
-- **Notifications** — system desktop notifications for long-running tasks
-
 ## Tech Stack
 
 - **Language:** TypeScript (strict mode)
@@ -83,12 +61,3 @@ Read these docs before making decisions in the relevant area:
 - No `any` types — `"strict": true` is enforced in `tsconfig.json`
 - Default model: `claude-opus-4-6`
 
-## Logging Guidelines
-
-Read `docs/design/logging.md` for the full reference. Key rules:
-
-- **Levels**: `debug` (operational detail), `info` (lifecycle events), `warn` (recoverable issues), `error` (unrecoverable failures)
-- **Structured logger**: short message, detail in `meta`; never log credentials; use `Preview` suffix for truncated strings; `createNoopLogger()` as default
-- **Trace logger**: full payloads to `.bolt/trace.jsonl` (opt-in via `BOLT_LOG_TRACE=true`); `createNoopTraceLogger()` as default
-- **Constructor pattern**: `private readonly logger: Logger = createNoopLogger(), private readonly traceLogger: TraceLogger = createNoopTraceLogger()`
-- Always update callers in `src/cli/index.ts` to pass real loggers

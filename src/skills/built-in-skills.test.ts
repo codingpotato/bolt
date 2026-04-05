@@ -584,7 +584,7 @@ describe('produce-video skill', () => {
     expect(skill.outputSchema.required).toContain('finalVideoPath');
   });
 
-  it('allowedTools includes content project tools, task tools, skill_run, and user_review', () => {
+  it('allowedTools includes content project tools, task tools, skill_run, user_review, and media tools', () => {
     expect(skill.allowedTools).toContain('content_project_create');
     expect(skill.allowedTools).toContain('content_project_read');
     expect(skill.allowedTools).toContain('content_project_update_artifact');
@@ -595,6 +595,11 @@ describe('produce-video skill', () => {
     expect(skill.allowedTools).toContain('user_review');
     expect(skill.allowedTools).toContain('file_read');
     expect(skill.allowedTools).toContain('file_write');
+    expect(skill.allowedTools).toContain('comfyui_text2img');
+    expect(skill.allowedTools).toContain('comfyui_img2video');
+    expect(skill.allowedTools).toContain('video_merge');
+    expect(skill.allowedTools).toContain('video_add_audio');
+    expect(skill.allowedTools).toContain('video_add_subtitles');
   });
 
   it('has a non-empty system prompt describing the pipeline', () => {

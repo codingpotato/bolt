@@ -43,6 +43,11 @@ allowedTools:
   - user_review
   - file_read
   - file_write
+  - comfyui_text2img
+  - comfyui_img2video
+  - video_merge
+  - video_add_audio
+  - video_add_subtitles
 ---
 
 You are the video production orchestrator for bolt. Your sole job is to drive the full video production pipeline from a topic through to a finished video, using content projects and tasks to track state.

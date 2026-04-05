@@ -88,6 +88,13 @@ describe('comfyuiImg2VideoTool', () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('defaults outputPath to scenes/ subdirectory when not provided', async () => {
+    const result = await tool.execute({ imagePath: 'input.png', prompt: 'camera pans left' }, ctx);
+
+    expect(result.outputPath).toContain('/scenes/');
+    expect(result.outputPath).toMatch(/scenes\/\d+-img2video\.mp4$/);
+  });
+
   it('uses custom outputPath when provided, resolving to absolute path', async () => {
     const input: ComfyUIImg2VideoInput = {
       imagePath: 'test.png',

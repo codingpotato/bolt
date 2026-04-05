@@ -61,7 +61,7 @@ export function createComfyUIImg2VideoTool(
         outputPath: {
           type: 'string',
           description:
-            'Output file path within the workspace. Defaults to generated timestamped filename.',
+            'Output file path within the workspace. In content project workflows, always pass the project-relative path (e.g. "projects/<id>/scenes/<filename>.mp4"). Defaults to scenes/<timestamp>-img2video.mp4 at workspace root.',
         },
       },
       required: ['imagePath', 'prompt'],
@@ -75,7 +75,7 @@ export function createComfyUIImg2VideoTool(
         );
       }
 
-      const rawOutputPath = input.outputPath ?? `${Date.now()}-img2video.mp4`;
+      const rawOutputPath = input.outputPath ?? `scenes/${Date.now()}-img2video.mp4`;
       const absOutputPath = resolvePath(ctx.cwd, rawOutputPath);
       assertWithinWorkspace(ctx.cwd, absOutputPath, rawOutputPath);
 

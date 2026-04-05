@@ -46,7 +46,7 @@ export function createComfyUIText2ImgTool(
         outputPath: {
           type: 'string',
           description:
-            'Output file path within the workspace. Defaults to generated timestamped filename.',
+            'Output file path within the workspace. In content project workflows, always pass the project-relative path (e.g. "projects/<id>/scenes/<filename>.png"). Defaults to scenes/<timestamp>-text2img.png at workspace root.',
         },
       },
       required: ['prompt'],
@@ -60,7 +60,7 @@ export function createComfyUIText2ImgTool(
         );
       }
 
-      const rawOutputPath = input.outputPath ?? `${Date.now()}-text2img.png`;
+      const rawOutputPath = input.outputPath ?? `scenes/${Date.now()}-text2img.png`;
       const absOutputPath = resolvePath(ctx.cwd, rawOutputPath);
       assertWithinWorkspace(ctx.cwd, absOutputPath, rawOutputPath);
 

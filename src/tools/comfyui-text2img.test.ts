@@ -79,6 +79,13 @@ describe('comfyuiText2ImgTool', () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('defaults outputPath to scenes/ subdirectory when not provided', async () => {
+    const result = await tool.execute({ prompt: 'a sunset' }, ctx);
+
+    expect(result.outputPath).toContain('/scenes/');
+    expect(result.outputPath).toMatch(/scenes\/\d+-text2img\.png$/);
+  });
+
   it('uses custom outputPath when provided, resolving to absolute path', async () => {
     const input: ComfyUIText2ImgInput = { prompt: 'test', outputPath: 'custom-output.png' };
     await tool.execute(input, ctx);

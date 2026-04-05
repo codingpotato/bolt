@@ -42,7 +42,7 @@ describe('agent_suggest tool', () => {
 
   it('returns suggestionId and path', async () => {
     const result = await tool.execute(
-      { target: 'AGENT.md', scope: 'project', content: 'new rule', reason: 'observed pattern' },
+      { target: 'AGENT.md', content: 'prefer tabs', reason: 'consistent style' },
       makeCtx(),
     );
     expect(result.suggestionId).toBe('suggestion-id-1');
@@ -51,13 +51,12 @@ describe('agent_suggest tool', () => {
 
   it('writes suggestion with correct fields', async () => {
     await tool.execute(
-      { target: 'AGENT.md', scope: 'user', content: 'prefer tabs', reason: 'consistent style' },
+      { target: 'AGENT.md', content: 'prefer tabs', reason: 'consistent style' },
       makeCtx({ sessionId: 'session-abc', activeTaskId: 'task-42' }),
     );
     const written = lastWritten;
     expect(written).toMatchObject({
       target: 'AGENT.md',
-      scope: 'user',
       content: 'prefer tabs',
       reason: 'consistent style',
       sessionId: 'session-abc',
@@ -68,7 +67,7 @@ describe('agent_suggest tool', () => {
 
   it('omits taskId when no active task', async () => {
     await tool.execute(
-      { target: 'AGENT.md', scope: 'project', content: 'rule', reason: 'reason' },
+      { target: 'AGENT.md', content: 'prefer tabs', reason: 'consistent style' },
       makeCtx({ sessionId: 'session-1' }),
     );
     const written = lastWritten;
@@ -77,7 +76,7 @@ describe('agent_suggest tool', () => {
 
   it('uses empty string for sessionId when context has none', async () => {
     await tool.execute(
-      { target: 'AGENT.md', scope: 'project', content: 'rule', reason: 'reason' },
+      { target: 'AGENT.md', content: 'prefer tabs', reason: 'consistent style' },
       makeCtx(),
     );
     const written = lastWritten;

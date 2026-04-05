@@ -1,6 +1,7 @@
 import type { Tool, ToolContext } from './tool';
 import type { AuthConfig } from '../auth/auth';
 import type { SubagentPayload, SubagentResult } from '../subagent/subagent-runner';
+import { extractPromptSections } from '../agent-prompt/agent-prompt';
 
 export interface SubagentRunInput {
   prompt: string;
@@ -35,12 +36,13 @@ export function createSubagentRunTool(
   model: string,
   scriptPath: string,
   runner: Runner,
+  getSystemPrompt: () => string,
 ): Tool<SubagentRunInput, SubagentRunOutput> {
   return {
     name: 'subagent_run',
     description:
       'Delegate a task to an isolated child agent. The child has no access to the current ' +
-      'message history, memory, or tasks. Returns the child agent\'s final text response.',
+      "message history, memory, or tasks. Returns the child agent's final text response.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -53,7 +55,7 @@ export function createSubagentRunTool(
           items: { type: 'string' },
           description:
             'Optional list of tool names the child may use. ' +
-            'Intersected with the parent\'s own allowedTools.',
+            "Intersected with the parent's own allowedTools.",
         },
       },
       required: ['prompt'],
@@ -62,11 +64,22 @@ export function createSubagentRunTool(
     async execute(input: SubagentRunInput, ctx: ToolContext): Promise<SubagentRunOutput> {
       const allowedTools = resolveAllowedTools(ctx.allowedTools, input.allowedTools);
 
+      const parentSystemPrompt = getSystemPrompt();
+      const inheritedSections = extractPromptSections(parentSystemPrompt, [
+        'Safety Rules',
+        'Communication Style',
+        'Operating Modes',
+      ]);
+      const inheritedRules = Object.entries(inheritedSections)
+        .map(([name, content]) => `## ${name}\n\n${content}`)
+        .join('\n\n');
+
       const payload: SubagentPayload = {
         prompt: input.prompt,
         authConfig,
         model,
         ...(allowedTools !== undefined ? { allowedTools } : {}),
+        ...(inheritedRules.length > 0 ? { inheritedRules } : {}),
       };
 
       try {

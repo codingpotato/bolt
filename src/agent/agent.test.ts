@@ -22,9 +22,9 @@ function makeConfig(model = 'claude-test'): Config {
     workspace: { root: process.cwd() },
     auth: {},
     local: {},
-    agentPrompt: {
+    agentPrompt: { maxTokens: 8000, watchForChanges: false,
       projectFile: '.bolt/AGENT.md',
-      userFile: '~/.bolt/AGENT.md',
+
       suggestionsPath: '.bolt/suggestions',
     },
     memory: {

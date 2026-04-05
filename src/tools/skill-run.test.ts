@@ -84,7 +84,7 @@ describe('skill_run tool', () => {
     });
   });
 
-  const tool = createSkillRunTool([BLOG_SKILL, REVIEW_SKILL], AUTH, MODEL, SCRIPT, runnerSpy);
+  const tool = createSkillRunTool([BLOG_SKILL, REVIEW_SKILL], AUTH, MODEL, SCRIPT, runnerSpy, "");
 
   it('has name skill_run', () => {
     expect(tool.name).toBe('skill_run');

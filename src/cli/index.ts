@@ -22,7 +22,12 @@ import { TodoStore } from '../todo/todo-store';
 import { createTodoTools } from '../todo/todo-tools';
 import { TaskStore } from '../tasks/task-store';
 import { createTaskTools } from '../tasks/task-tools';
-import { loadAgentPrompt, expandTilde } from '../agent-prompt/agent-prompt';
+import {
+  assembleSystemPrompt,
+  watchAgentPrompt,
+  extractPromptSections,
+  estimateTokenCount,
+} from '../agent-prompt/agent-prompt';
 import { CliProgressReporter, WebChannelProgressReporter } from '../progress';
 import { SessionStore } from '../memory/session-store';
 import { MemoryStore } from '../memory/memory-store';
@@ -52,6 +57,15 @@ import { createVideoAddSubtitlesTool } from '../tools/video-add-subtitles';
 import { FfmpegRunner } from '../ffmpeg/ffmpeg-runner';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
+
+const INHERITED_SECTIONS = ['Safety Rules', 'Communication Style', 'Operating Modes'] as const;
+
+function buildInheritedRules(systemPrompt: string): string {
+  const sections = extractPromptSections(systemPrompt, INHERITED_SECTIONS);
+  return Object.entries(sections)
+    .map(([name, content]) => `## ${name}\n\n${content}`)
+    .join('\n\n');
+}
 
 async function serve(serveArgs: string[]): Promise<void> {
   const config = resolveConfig();
@@ -119,7 +133,6 @@ async function serve(serveArgs: string[]): Promise<void> {
   const suggestionStore = new SuggestionStore(suggestionsDir, logger);
   toolBus.register(createAgentSuggestTool(suggestionStore, suggestionsDir));
   const subagentScript = join(__dirname, 'subagent.js');
-  toolBus.register(createSubagentRunTool(auth, config.model, subagentScript, runSubagent));
 
   const projectSkillsDir = join(dataDir, 'skills');
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
@@ -130,7 +143,32 @@ async function serve(serveArgs: string[]): Promise<void> {
     (msg) => logger.warn(msg),
     builtinSkillsDir,
   );
-  toolBus.register(createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent));
+
+  // Assemble system prompt with skills + tools catalogs
+  const allTools = toolBus.list();
+  const systemPrompt = await assembleSystemPrompt(config, skills, allTools);
+
+  // Token size warning
+  const estimatedTokens = estimateTokenCount(systemPrompt);
+  if (estimatedTokens > config.agentPrompt.maxTokens) {
+    logger.warn('System prompt exceeds token threshold', {
+      estimatedTokens,
+      threshold: config.agentPrompt.maxTokens,
+    });
+    process.stderr.write(
+      `Warning: system prompt estimated ${estimatedTokens} tokens (threshold: ${config.agentPrompt.maxTokens}). Consider reducing AGENT.md size.\n`,
+    );
+  }
+
+  // Register subagent-run and skill-run with inherited rules
+  const inheritedRules = buildInheritedRules(systemPrompt);
+
+  toolBus.register(
+    createSubagentRunTool(auth, config.model, subagentScript, runSubagent, () => systemPrompt),
+  );
+  toolBus.register(
+    createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent, inheritedRules),
+  );
   const slashRegistry = createSlashCommandRegistry();
   slashRegistry.register(createSkillsSlashCommand(skills));
   slashRegistry.register(
@@ -165,7 +203,6 @@ async function serve(serveArgs: string[]): Promise<void> {
     channel,
   };
 
-  const systemPrompt = await loadAgentPrompt(config);
   const agent = new AgentCore(
     client,
     channel,
@@ -250,13 +287,12 @@ async function main(): Promise<void> {
     const cwd = process.cwd();
     const dataDir = resolve(cwd, config.dataDir);
     const suggestionsDir = resolve(cwd, config.agentPrompt.suggestionsPath);
+    const projectFile = resolve(cwd, config.agentPrompt.projectFile);
     const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
     const store = new SuggestionStore(suggestionsDir, logger);
-    const paths = {
-      project: resolve(cwd, config.agentPrompt.projectFile),
-      user: expandTilde(config.agentPrompt.userFile),
-    };
-    await handleSuggestionsCli(args.slice(1), store, paths, (s) => process.stdout.write(s + '\n'));
+    await handleSuggestionsCli(args.slice(1), store, projectFile, (s) =>
+      process.stdout.write(s + '\n'),
+    );
     return;
   }
 
@@ -316,7 +352,6 @@ async function main(): Promise<void> {
   const suggestionStore = new SuggestionStore(suggestionsDir, logger);
   toolBus.register(createAgentSuggestTool(suggestionStore, suggestionsDir));
   const subagentScript = join(__dirname, 'subagent.js');
-  toolBus.register(createSubagentRunTool(auth, config.model, subagentScript, runSubagent));
 
   const projectSkillsDir = join(dataDir, 'skills');
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
@@ -328,7 +363,32 @@ async function main(): Promise<void> {
     (msg) => logger.warn(msg),
     builtinSkillsDir,
   );
-  toolBus.register(createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent));
+
+  // Assemble system prompt with skills + tools catalogs
+  const allTools = toolBus.list();
+  const systemPrompt = await assembleSystemPrompt(config, skills, allTools);
+
+  // Token size warning
+  const estimatedTokens = estimateTokenCount(systemPrompt);
+  if (estimatedTokens > config.agentPrompt.maxTokens) {
+    logger.warn('System prompt exceeds token threshold', {
+      estimatedTokens,
+      threshold: config.agentPrompt.maxTokens,
+    });
+    process.stderr.write(
+      `Warning: system prompt estimated ${estimatedTokens} tokens (threshold: ${config.agentPrompt.maxTokens}). Consider reducing AGENT.md size.\n`,
+    );
+  }
+
+  // Register subagent-run and skill-run with inherited rules
+  const inheritedRules = buildInheritedRules(systemPrompt);
+
+  toolBus.register(
+    createSubagentRunTool(auth, config.model, subagentScript, runSubagent, () => systemPrompt),
+  );
+  toolBus.register(
+    createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent, inheritedRules),
+  );
   const slashRegistry = createSlashCommandRegistry();
   slashRegistry.register(createSkillsSlashCommand(skills));
   slashRegistry.register(
@@ -350,7 +410,6 @@ async function main(): Promise<void> {
         return answer === 'y' || answer === 'yes';
       }),
   };
-  const systemPrompt = await loadAgentPrompt(config);
   const agent = new AgentCore(
     client,
     channel,
@@ -365,6 +424,16 @@ async function main(): Promise<void> {
     memoryManager,
     slashRegistry,
   );
+
+  // Set up hot-reload if enabled
+  let _cleanupWatcher: (() => void) | null = null;
+  if (config.agentPrompt.watchForChanges && process.stdout.isTTY) {
+    _cleanupWatcher = watchAgentPrompt(config, async () => {
+      const newPrompt = await assembleSystemPrompt(config, skills, toolBus.list());
+      logger.info('System prompt reloaded after AGENT.md change');
+      agent.updateSystemPrompt(newPrompt);
+    });
+  }
 
   const searchProvider = createSearchProvider(config);
   await validateSearchProvider(searchProvider, logger);
@@ -392,6 +461,7 @@ async function main(): Promise<void> {
   process.stderr.write('Type a message and press Enter. Ctrl+D to exit.\n\n');
 
   await agent.run();
+  _cleanupWatcher?.();
 }
 
 main().catch((err: unknown) => {

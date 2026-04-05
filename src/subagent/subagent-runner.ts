@@ -8,6 +8,8 @@ export interface SubagentPayload {
   allowedTools?: string[];
   /** Optional system prompt override — used by skill_run to inject the skill's system prompt. */
   systemPrompt?: string;
+  /** Inherited rules from parent (safety, communication, operating modes). */
+  inheritedRules?: string;
 }
 
 export interface SubagentResult {

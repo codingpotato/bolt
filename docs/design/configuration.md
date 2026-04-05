@@ -101,10 +101,11 @@ All configuration can be set via environment variables. This enables Docker and 
 
 ### Agent Prompt
 
-| Variable                  | Required | Default            | Description                        |
-| ------------------------- | -------- | ------------------ | ---------------------------------- |
-| `BOLT_AGENT_PROJECT_FILE` | No       | `.bolt/AGENT.md`   | Path to project-level agent prompt |
-| `BOLT_AGENT_USER_FILE`    | No       | `~/.bolt/AGENT.md` | Path to user-level agent prompt    |
+| Variable                   | Required | Default          | Description                                        |
+| -------------------------- | -------- | ---------------- | -------------------------------------------------- |
+| `BOLT_AGENT_PROJECT_FILE`  | No       | `.bolt/AGENT.md` | Path to the workspace agent prompt                 |
+| `BOLT_AGENT_MAX_TOKENS`    | No       | `8000`           | Warning threshold for assembled system prompt size |
+| `BOLT_AGENT_WATCH_CHANGES` | No       | `true`           | Enable hot-reload when AGENT.md files change       |
 
 ### Tasks & Tools
 
@@ -238,12 +239,15 @@ Use `.bolt/config.json` for complex structures that are awkward in environment v
 
   // Agent prompt system
   "agentPrompt": {
-    // Path to the project-level agent prompt file
+    // Path to the workspace agent prompt file
+    // On first run, the built-in AGENT.md is copied here if it does not exist
     "projectFile": ".bolt/AGENT.md",
-    // Path to the user-level agent prompt file
-    "userFile": "~/.bolt/AGENT.md",
     // Directory for pending suggestion files
     "suggestionsPath": ".bolt/suggestions",
+    // Warning threshold for assembled system prompt size in tokens (default: 8000)
+    "maxTokens": 8000,
+    // Enable hot-reload when AGENT.md files change (default: true in TTY mode)
+    "watchForChanges": true,
   },
 
   // Task system

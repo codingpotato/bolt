@@ -9,7 +9,6 @@ export interface Suggestion {
   sessionId: string;
   taskId?: string;
   target: 'AGENT.md';
-  scope: 'project' | 'user';
   content: string;
   reason: string;
   status: 'pending' | 'applied' | 'rejected';
@@ -29,7 +28,11 @@ export class SuggestionStore {
       createdAt: new Date().toISOString(),
     };
     await mkdir(this.storeDir, { recursive: true });
-    await writeFile(join(this.storeDir, `${id}.json`), JSON.stringify(suggestion, null, 2), 'utf-8');
+    await writeFile(
+      join(this.storeDir, `${id}.json`),
+      JSON.stringify(suggestion, null, 2),
+      'utf-8',
+    );
     return id;
   }
 

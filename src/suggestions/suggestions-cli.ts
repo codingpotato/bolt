@@ -2,15 +2,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { SuggestionStore } from './suggestion-store';
 
-export interface AgentMdPaths {
-  project: string;
-  user: string;
-}
-
 export async function handleSuggestionsCli(
   args: string[],
   store: SuggestionStore,
-  paths: AgentMdPaths,
+  projectFile: string,
   write: (line: string) => void,
 ): Promise<void> {
   const [subcommand, id] = args;
@@ -18,7 +13,7 @@ export async function handleSuggestionsCli(
   if (subcommand === 'show') {
     await cmdShow(id ?? '', store, write);
   } else if (subcommand === 'apply') {
-    await cmdApply(id ?? '', store, paths, write);
+    await cmdApply(id ?? '', store, projectFile, write);
   } else if (subcommand === 'reject') {
     await cmdReject(id ?? '', store, write);
   } else if (subcommand === undefined || subcommand === 'list') {
@@ -37,7 +32,7 @@ async function cmdList(store: SuggestionStore, write: (line: string) => void): P
   }
   for (const s of pending) {
     const firstLine = s.reason.split('\n')[0] ?? '';
-    write(`${s.id}  ${s.createdAt}  [${s.scope}]  ${firstLine}`);
+    write(`${s.id}  ${s.createdAt}  ${firstLine}`);
   }
 }
 
@@ -55,7 +50,6 @@ async function cmdShow(
   }
   write(`ID:        ${suggestion.id}`);
   write(`Created:   ${suggestion.createdAt}`);
-  write(`Scope:     ${suggestion.scope}`);
   write(`Status:    ${suggestion.status}`);
   write(`Target:    ${suggestion.target}`);
   write('');
@@ -69,7 +63,7 @@ async function cmdShow(
 async function cmdApply(
   id: string,
   store: SuggestionStore,
-  paths: AgentMdPaths,
+  projectFile: string,
   write: (line: string) => void,
 ): Promise<void> {
   let suggestion;
@@ -80,22 +74,21 @@ async function cmdApply(
     return;
   }
 
-  const targetPath = suggestion.scope === 'user' ? paths.user : paths.project;
-
   let existing = '';
   try {
-    existing = await readFile(targetPath, 'utf-8');
+    existing = await readFile(projectFile, 'utf-8');
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
   }
 
-  const separator = existing.length > 0 && !existing.endsWith('\n') ? '\n\n' : existing.length > 0 ? '\n' : '';
+  const separator =
+    existing.length > 0 && !existing.endsWith('\n') ? '\n\n' : existing.length > 0 ? '\n' : '';
   const updated = existing + separator + suggestion.content;
 
   await store.updateStatus(id, 'applied');
-  await mkdir(dirname(targetPath), { recursive: true });
-  await writeFile(targetPath, updated, 'utf-8');
-  write(`Applied suggestion ${id} to ${targetPath}`);
+  await mkdir(dirname(projectFile), { recursive: true });
+  await writeFile(projectFile, updated, 'utf-8');
+  write(`Applied suggestion ${id} to ${projectFile}`);
 }
 
 async function cmdReject(

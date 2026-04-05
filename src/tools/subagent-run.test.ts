@@ -25,7 +25,7 @@ describe('subagent_run tool', () => {
   const runnerSpy = vi.fn((_payload: Payload, _scriptPath: string) =>
     Promise.resolve({ output: 'sub-agent result' }),
   );
-  const tool = createSubagentRunTool(AUTH, MODEL, SCRIPT, runnerSpy);
+  const tool = createSubagentRunTool(AUTH, MODEL, SCRIPT, runnerSpy, () => '');
 
   beforeEach(() => {
     vi.clearAllMocks();

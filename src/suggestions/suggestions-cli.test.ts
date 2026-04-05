@@ -10,7 +10,6 @@ function makeSuggestion(overrides: Partial<Suggestion> = {}): Suggestion {
     createdAt: '2025-01-15T10:00:00.000Z',
     sessionId: 'session-1',
     target: 'AGENT.md',
-    scope: 'project',
     content: 'Always write tests first.\nSome extra detail.',
     reason: 'TDD is the project standard.\nSeen across many interactions.',
     status: 'pending',
@@ -36,31 +35,25 @@ function captureOutput(): { lines: string[]; write: (s: string) => void } {
   return { lines, write: (s: string) => lines.push(s) };
 }
 
-const AGENT_MD_PATHS = {
-  project: '/workspace/.bolt/AGENT.md',
-  user: '/home/.bolt/AGENT.md',
-};
+const PROJECT_FILE = '/workspace/.bolt/AGENT.md';
 
 describe('suggestions list (no subcommand)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('lists pending suggestions with id, createdAt, scope, and first line of reason', async () => {
+  it('lists pending suggestions with id, createdAt, and first line of reason', async () => {
     const store = makeStore([makeSuggestion()]);
     const out = captureOutput();
-    await handleSuggestionsCli([], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli([], store, PROJECT_FILE, out.write);
     const output = out.lines.join('\n');
     expect(output).toContain('abc-123');
-    expect(output).toContain('project');
     expect(output).toContain('TDD is the project standard.');
     expect(output).not.toContain('Seen across many interactions.');
   });
 
   it('shows only the first line of reason', async () => {
-    const store = makeStore([
-      makeSuggestion({ reason: 'Line one\nLine two\nLine three' }),
-    ]);
+    const store = makeStore([makeSuggestion({ reason: 'Line one\nLine two\nLine three' })]);
     const out = captureOutput();
-    await handleSuggestionsCli([], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli([], store, PROJECT_FILE, out.write);
     const output = out.lines.join('\n');
     expect(output).toContain('Line one');
     expect(output).not.toContain('Line two');
@@ -73,7 +66,7 @@ describe('suggestions list (no subcommand)', () => {
       makeSuggestion({ id: 'r1', status: 'rejected' }),
     ]);
     const out = captureOutput();
-    await handleSuggestionsCli([], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli([], store, PROJECT_FILE, out.write);
     const output = out.lines.join('\n');
     expect(output).toContain('p1');
     expect(output).not.toContain('a1');
@@ -83,7 +76,7 @@ describe('suggestions list (no subcommand)', () => {
   it('prints a message when there are no pending suggestions', async () => {
     const store = makeStore([]);
     const out = captureOutput();
-    await handleSuggestionsCli([], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli([], store, PROJECT_FILE, out.write);
     expect(out.lines.join('\n')).toMatch(/no pending/i);
   });
 });
@@ -94,7 +87,7 @@ describe('suggestions show <id>', () => {
   it('prints the full content and reason', async () => {
     const store = makeStore([makeSuggestion()]);
     const out = captureOutput();
-    await handleSuggestionsCli(['show', 'abc-123'], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli(['show', 'abc-123'], store, PROJECT_FILE, out.write);
     const output = out.lines.join('\n');
     expect(output).toContain('Always write tests first.');
     expect(output).toContain('Some extra detail.');
@@ -105,7 +98,7 @@ describe('suggestions show <id>', () => {
   it('prints an error when id is not found', async () => {
     const store = makeStore([]);
     const out = captureOutput();
-    await handleSuggestionsCli(['show', 'nonexistent'], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli(['show', 'nonexistent'], store, PROJECT_FILE, out.write);
     expect(out.lines.join('\n')).toMatch(/not found/i);
   });
 });
@@ -121,15 +114,15 @@ describe('suggestions apply <id>', () => {
 
     const store = makeStore([makeSuggestion()]);
     const out = captureOutput();
-    await handleSuggestionsCli(['apply', 'abc-123'], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli(['apply', 'abc-123'], store, PROJECT_FILE, out.write);
 
     expect(writeFile).toHaveBeenCalledWith(
-      AGENT_MD_PATHS.project,
+      PROJECT_FILE,
       expect.stringContaining('existing content'),
       'utf-8',
     );
     expect(writeFile).toHaveBeenCalledWith(
-      AGENT_MD_PATHS.project,
+      PROJECT_FILE,
       expect.stringContaining('Always write tests first.'),
       'utf-8',
     );
@@ -144,30 +137,26 @@ describe('suggestions apply <id>', () => {
     vi.mocked(mkdir).mockResolvedValue(undefined);
 
     const store = makeStore([makeSuggestion()]);
-    await handleSuggestionsCli(['apply', 'abc-123'], store, AGENT_MD_PATHS, captureOutput().write);
+    await handleSuggestionsCli(['apply', 'abc-123'], store, PROJECT_FILE, captureOutput().write);
 
     expect(writeFile).toHaveBeenCalledWith(
-      AGENT_MD_PATHS.project,
+      PROJECT_FILE,
       expect.stringContaining('Always write tests first.'),
       'utf-8',
     );
     expect(vi.mocked(store.updateStatus)).toHaveBeenCalledWith('abc-123', 'applied');
   });
 
-  it('uses the user-scoped AGENT.md path for user scope', async () => {
+  it('uses the correct AGENT.md path', async () => {
     const { readFile, writeFile, mkdir } = await import('node:fs/promises');
     vi.mocked(readFile).mockResolvedValue('' as never);
     vi.mocked(writeFile).mockResolvedValue(undefined);
     vi.mocked(mkdir).mockResolvedValue(undefined);
 
-    const store = makeStore([makeSuggestion({ scope: 'user' })]);
-    await handleSuggestionsCli(['apply', 'abc-123'], store, AGENT_MD_PATHS, captureOutput().write);
+    const store = makeStore([makeSuggestion()]);
+    await handleSuggestionsCli(['apply', 'abc-123'], store, PROJECT_FILE, captureOutput().write);
 
-    expect(writeFile).toHaveBeenCalledWith(
-      AGENT_MD_PATHS.user,
-      expect.any(String),
-      'utf-8',
-    );
+    expect(writeFile).toHaveBeenCalledWith(PROJECT_FILE, expect.any(String), 'utf-8');
   });
 
   it('updates status before writing file so double-apply is prevented on partial failure', async () => {
@@ -177,10 +166,14 @@ describe('suggestions apply <id>', () => {
 
     const callOrder: string[] = [];
     const store = makeStore([makeSuggestion()]);
-    vi.mocked(store.updateStatus).mockImplementation(async () => { callOrder.push('updateStatus'); });
-    vi.mocked(writeFile).mockImplementation(async () => { callOrder.push('writeFile'); });
+    vi.mocked(store.updateStatus).mockImplementation(async () => {
+      callOrder.push('updateStatus');
+    });
+    vi.mocked(writeFile).mockImplementation(async () => {
+      callOrder.push('writeFile');
+    });
 
-    await handleSuggestionsCli(['apply', 'abc-123'], store, AGENT_MD_PATHS, captureOutput().write);
+    await handleSuggestionsCli(['apply', 'abc-123'], store, PROJECT_FILE, captureOutput().write);
 
     expect(callOrder.indexOf('updateStatus')).toBeLessThan(callOrder.indexOf('writeFile'));
   });
@@ -188,7 +181,7 @@ describe('suggestions apply <id>', () => {
   it('prints an error when id is not found', async () => {
     const store = makeStore([]);
     const out = captureOutput();
-    await handleSuggestionsCli(['apply', 'nonexistent'], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli(['apply', 'nonexistent'], store, PROJECT_FILE, out.write);
     expect(out.lines.join('\n')).toMatch(/not found/i);
   });
 });
@@ -199,7 +192,7 @@ describe('suggestions reject <id>', () => {
   it('sets status to rejected and confirms', async () => {
     const store = makeStore([makeSuggestion()]);
     const out = captureOutput();
-    await handleSuggestionsCli(['reject', 'abc-123'], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli(['reject', 'abc-123'], store, PROJECT_FILE, out.write);
 
     expect(vi.mocked(store.updateStatus)).toHaveBeenCalledWith('abc-123', 'rejected');
     expect(out.lines.join('\n')).toContain('abc-123');
@@ -208,7 +201,7 @@ describe('suggestions reject <id>', () => {
   it('prints an error when id is not found', async () => {
     const store = makeStore([]);
     const out = captureOutput();
-    await handleSuggestionsCli(['reject', 'nonexistent'], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli(['reject', 'nonexistent'], store, PROJECT_FILE, out.write);
     expect(out.lines.join('\n')).toMatch(/not found/i);
   });
 });
@@ -217,7 +210,7 @@ describe('unknown subcommand', () => {
   it('prints usage information', async () => {
     const store = makeStore([]);
     const out = captureOutput();
-    await handleSuggestionsCli(['foobar'], store, AGENT_MD_PATHS, out.write);
+    await handleSuggestionsCli(['foobar'], store, PROJECT_FILE, out.write);
     expect(out.lines.join('\n')).toMatch(/usage/i);
   });
 });

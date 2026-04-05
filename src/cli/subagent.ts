@@ -89,15 +89,6 @@ async function main(): Promise<void> {
   toolBus.register(webFetchTool);
   for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
 
-  const channel = new CaptureChannel(payload.prompt);
-  const ctx = {
-    cwd,
-    log,
-    logger,
-    progress: new NoopProgressReporter(),
-    allowedTools: payload.allowedTools,
-  };
-
   // Build a minimal config for the sub-agent.
   const config = {
     model: payload.model,
@@ -116,8 +107,9 @@ async function main(): Promise<void> {
     },
     agentPrompt: {
       projectFile: '.bolt/AGENT.md',
-      userFile: '~/.bolt/AGENT.md',
       suggestionsPath: '.bolt/suggestions',
+      maxTokens: 8000,
+      watchForChanges: false,
     },
     search: { provider: 'searxng' as const, maxResults: 10 },
     tasks: { maxSubtaskDepth: 5, maxRetries: 3 },
@@ -145,14 +137,29 @@ async function main(): Promise<void> {
     codeWorkflows: { testFixRetries: 3 },
   };
 
-  const agent = new AgentCore(
-    client,
-    channel,
-    toolBus,
-    ctx,
-    config,
-    payload.systemPrompt ?? (await loadAgentPrompt(config)),
-  );
+  const channel = new CaptureChannel(payload.prompt);
+  const ctx = {
+    cwd,
+    log,
+    logger,
+    progress: new NoopProgressReporter(),
+    allowedTools: payload.allowedTools,
+  };
+
+  // Build system prompt: inherited rules + skill/delegation prompt or loaded AGENT.md
+  let subAgentSystemPrompt: string;
+  if (payload.systemPrompt) {
+    subAgentSystemPrompt = payload.inheritedRules
+      ? payload.inheritedRules + '\n\n---\n\n' + payload.systemPrompt
+      : payload.systemPrompt;
+  } else {
+    const base = await loadAgentPrompt(config);
+    subAgentSystemPrompt = payload.inheritedRules
+      ? payload.inheritedRules + '\n\n---\n\n' + base
+      : base;
+  }
+
+  const agent = new AgentCore(client, channel, toolBus, ctx, config, subAgentSystemPrompt);
   await agent.run();
 
   const result: SubagentResult = { output: channel.getOutput() };

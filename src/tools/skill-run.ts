@@ -82,6 +82,7 @@ export function createSkillRunTool(
   model: string,
   scriptPath: string,
   runner: Runner,
+  inheritedRules: string,
 ): Tool<SkillRunInput, SkillRunOutput> {
   const skillMap = new Map<string, Skill>(skills.map((s) => [s.name, s]));
 
@@ -126,6 +127,7 @@ export function createSkillRunTool(
         model,
         systemPrompt: skill.systemPrompt,
         ...(effectiveTools !== undefined ? { allowedTools: effectiveTools } : {}),
+        ...(inheritedRules.length > 0 ? { inheritedRules } : {}),
       };
 
       let subagentOutput: string;

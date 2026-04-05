@@ -2,7 +2,7 @@ import { ToolError } from './tool';
 import type { Tool, ToolContext, JSONSchema } from './tool';
 import type { Skill } from '../skills/skill-loader';
 import type { AuthConfig } from '../auth/auth';
-import type { SubagentPayload, SubagentResult } from '../subagent/subagent-runner';
+import type { SubagentPayload, SubagentRunner } from '../subagent/subagent-runner';
 
 export interface SkillRunInput {
   name: string;
@@ -12,12 +12,6 @@ export interface SkillRunInput {
 export interface SkillRunOutput {
   result: unknown;
 }
-
-type Runner = (
-  payload: SubagentPayload,
-  scriptPath: string,
-  execPath?: string,
-) => Promise<SubagentResult>;
 
 /**
  * Validates that all required fields declared in the schema are present and
@@ -86,7 +80,7 @@ export function createSkillRunTool(
   model: string,
   scriptPath: string,
   execPath: string,
-  runner: Runner,
+  runner: SubagentRunner,
   inheritedRules: string,
 ): Tool<SkillRunInput, SkillRunOutput> {
   const skillMap = new Map<string, Skill>(skills.map((s) => [s.name, s]));

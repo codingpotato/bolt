@@ -1,6 +1,6 @@
 import type { Tool, ToolContext } from './tool';
 import type { AuthConfig } from '../auth/auth';
-import type { SubagentPayload, SubagentResult } from '../subagent/subagent-runner';
+import type { SubagentPayload, SubagentRunner } from '../subagent/subagent-runner';
 import { extractPromptSections } from '../agent-prompt/agent-prompt';
 
 export interface SubagentRunInput {
@@ -12,12 +12,6 @@ export interface SubagentRunOutput {
   output: string;
   error?: boolean;
 }
-
-type Runner = (
-  payload: SubagentPayload,
-  scriptPath: string,
-  execPath?: string,
-) => Promise<SubagentResult>;
 
 /**
  * Resolves the effective allowedTools for the child:
@@ -40,7 +34,7 @@ export function createSubagentRunTool(
   model: string,
   scriptPath: string,
   execPath: string,
-  runner: Runner,
+  runner: SubagentRunner,
   getSystemPrompt: () => string,
 ): Tool<SubagentRunInput, SubagentRunOutput> {
   return {

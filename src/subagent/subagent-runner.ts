@@ -16,6 +16,12 @@ export interface SubagentResult {
   output: string;
 }
 
+export type SubagentRunner = (
+  payload: SubagentPayload,
+  scriptPath: string,
+  execPath?: string,
+) => Promise<SubagentResult>;
+
 /**
  * Spawns a child bolt sub-agent process, passes the payload via stdin,
  * and returns the structured result from stdout.

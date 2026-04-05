@@ -1,14 +1,8 @@
 import type { SlashCommand } from '../slash-commands/slash-commands';
 import type { Skill } from './skill-loader';
 import type { AuthConfig } from '../auth/auth';
-import type { SubagentPayload, SubagentResult } from '../subagent/subagent-runner';
+import type { SubagentPayload, SubagentRunner } from '../subagent/subagent-runner';
 import { buildSkillPrompt } from '../tools/skill-run';
-
-type Runner = (
-  payload: SubagentPayload,
-  scriptPath: string,
-  execPath?: string,
-) => Promise<SubagentResult>;
 
 export function createRunSkillSlashCommand(
   skills: Skill[],
@@ -16,7 +10,7 @@ export function createRunSkillSlashCommand(
   model: string,
   scriptPath: string,
   execPath: string,
-  runner: Runner,
+  runner: SubagentRunner,
 ): SlashCommand {
   const skillMap = new Map<string, Skill>(skills.map((s) => [s.name, s]));
 

@@ -31,13 +31,15 @@ function makeStore(tasks: Task[]): MockStore {
   const state = [...tasks];
   return {
     list: vi.fn(() => [...state]),
-    update: vi.fn(async (id: string, changes: { status: TaskStatus; result?: string; error?: string }) => {
-      const task = state.find((t) => t.id === id);
-      if (!task) throw new Error(`task not found: ${id}`);
-      task.status = changes.status;
-      if (changes.result !== undefined) task.result = changes.result;
-      if (changes.error !== undefined) task.error = changes.error;
-    }),
+    update: vi.fn(
+      async (id: string, changes: { status: TaskStatus; result?: string; error?: string }) => {
+        const task = state.find((t) => t.id === id);
+        if (!task) throw new Error(`task not found: ${id}`);
+        task.status = changes.status;
+        if (changes.result !== undefined) task.result = changes.result;
+        if (changes.error !== undefined) task.error = changes.error;
+      },
+    ),
   };
 }
 
@@ -70,7 +72,9 @@ describe('TaskRunner', () => {
 
       await runner.run();
 
-      expect(executor).toHaveBeenCalledWith(expect.objectContaining({ id: task.id, title: 'my task' }));
+      expect(executor).toHaveBeenCalledWith(
+        expect.objectContaining({ id: task.id, title: 'my task' }),
+      );
     });
 
     it('does nothing when there are no tasks', async () => {
@@ -194,17 +198,19 @@ describe('TaskRunner', () => {
       // Simulate the store unlocking task-2 when task-1 completes
       const store = {
         list: vi.fn(() => [...state]),
-        update: vi.fn(async (id: string, changes: { status: string; result?: string; error?: string }) => {
-          const task = state.find((t) => t.id === id);
-          if (!task) throw new Error(`not found: ${id}`);
-          task.status = changes.status as Task['status'];
-          if (changes.result !== undefined) task.result = changes.result;
-          if (changes.error !== undefined) task.error = changes.error;
-          // Simulate store auto-unlocking dependent when dep completes
-          if (id === 'task-1' && changes.status === 'completed') {
-            dependent.status = 'pending';
-          }
-        }),
+        update: vi.fn(
+          async (id: string, changes: { status: string; result?: string; error?: string }) => {
+            const task = state.find((t) => t.id === id);
+            if (!task) throw new Error(`not found: ${id}`);
+            task.status = changes.status as Task['status'];
+            if (changes.result !== undefined) task.result = changes.result;
+            if (changes.error !== undefined) task.error = changes.error;
+            // Simulate store auto-unlocking dependent when dep completes
+            if (id === 'task-1' && changes.status === 'completed') {
+              dependent.status = 'pending';
+            }
+          },
+        ),
       };
       const runner = new TaskRunner(store as never, executor);
 

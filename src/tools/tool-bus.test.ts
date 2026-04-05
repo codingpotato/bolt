@@ -41,7 +41,23 @@ describe('ToolBus', () => {
   beforeEach(() => {
     bus = new ToolBus();
     mockLogger = { log: vi.fn().mockResolvedValue(undefined) };
-    ctx = { cwd: '/tmp', log: mockLogger, logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }, progress: { onSessionStart: vi.fn(), onThinking: vi.fn(), onToolCall: vi.fn(), onToolResult: vi.fn(), onTaskStatusChange: vi.fn(), onContextInjection: vi.fn(), onMemoryCompaction: vi.fn(), onLlmCall: vi.fn(), onLlmResponse: vi.fn(), onRetry: vi.fn() } };
+    ctx = {
+      cwd: '/tmp',
+      log: mockLogger,
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      progress: {
+        onSessionStart: vi.fn(),
+        onThinking: vi.fn(),
+        onToolCall: vi.fn(),
+        onToolResult: vi.fn(),
+        onTaskStatusChange: vi.fn(),
+        onContextInjection: vi.fn(),
+        onMemoryCompaction: vi.fn(),
+        onLlmCall: vi.fn(),
+        onLlmResponse: vi.fn(),
+        onRetry: vi.fn(),
+      },
+    };
   });
 
   // ── register / list / unregister ──────────────────────────────────────────
@@ -259,9 +275,7 @@ describe('ToolBus', () => {
     });
 
     it('handles non-JSON string result in summariseResult', async () => {
-      bus.register(
-        makeTool('textResult', async () => 'plain text string not json'),
-      );
+      bus.register(makeTool('textResult', async () => 'plain text string not json'));
       await bus.dispatch(makeCall('textResult', { value: 'x' }), ctx);
       expect(ctx.progress.onToolResult).toHaveBeenCalledWith(
         'textResult',
@@ -283,9 +297,7 @@ describe('ToolBus', () => {
     });
 
     it('summarises tasks count from JSON result', async () => {
-      bus.register(
-        makeTool('listTasks', async () => ({ tasks: [{ id: '1' }, { id: '2' }] })),
-      );
+      bus.register(makeTool('listTasks', async () => ({ tasks: [{ id: '1' }, { id: '2' }] })));
       await bus.dispatch(makeCall('listTasks', { value: 'x' }), ctx);
       expect(ctx.progress.onToolResult).toHaveBeenCalledWith('listTasks', true, '2 tasks');
     });
@@ -505,10 +517,10 @@ describe('ToolBus', () => {
 
   describe('intersectAllowlists', () => {
     it('returns intersection of two non-null lists', () => {
-      const result = ToolBus.intersectAllowlists(['bash', 'file_read', 'web_fetch'], [
-        'web_fetch',
-        'file_write',
-      ]);
+      const result = ToolBus.intersectAllowlists(
+        ['bash', 'file_read', 'web_fetch'],
+        ['web_fetch', 'file_write'],
+      );
       expect(result).toEqual(['web_fetch']);
     });
 

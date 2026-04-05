@@ -5,7 +5,7 @@ input:
   command:
     type: string
     description: Shell command to run the test suite
-    default: "npm test"
+    default: 'npm test'
   maxRetries:
     type: number
     description: Maximum number of fix-and-retry cycles before giving up (from codeWorkflows.testFixRetries)
@@ -55,6 +55,7 @@ You are an automated test-fix agent. Your job is to run a test suite, diagnose f
 ## Output format
 
 Respond with a JSON object:
+
 - `passed` (boolean): true if the final test run exited with code 0
 - `attempts` (number): total runs performed (1 = only the initial run, no fixes needed)
 - `finalOutput` (string): the full stdout+stderr from the last test run

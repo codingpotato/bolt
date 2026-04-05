@@ -21,9 +21,12 @@ function summariseResult(content: string): string {
     const parsed = JSON.parse(content) as Record<string, unknown>;
     if ('exitCode' in parsed) return `exit ${String(parsed['exitCode'])}`;
     if ('path' in parsed) return String(parsed['path']);
-    if ('tasks' in parsed && Array.isArray(parsed['tasks'])) return `${String((parsed['tasks'] as unknown[]).length)} tasks`;
+    if ('tasks' in parsed && Array.isArray(parsed['tasks']))
+      return `${String((parsed['tasks'] as unknown[]).length)} tasks`;
     if ('id' in parsed) return String(parsed['id']);
-  } catch { /* not JSON */ }
+  } catch {
+    /* not JSON */
+  }
   return content.slice(0, 80);
 }
 
@@ -141,7 +144,9 @@ export class ToolBus {
     await ctx.log.log(call.name, call.input, result);
     let content = typeof result === 'string' ? result : JSON.stringify(result);
     if (content.length > MAX_RESULT_CHARS) {
-      content = content.slice(0, MAX_RESULT_CHARS) + `\n\n[truncated — result exceeded ${MAX_RESULT_CHARS} characters]`;
+      content =
+        content.slice(0, MAX_RESULT_CHARS) +
+        `\n\n[truncated — result exceeded ${MAX_RESULT_CHARS} characters]`;
     }
     ctx.progress.onToolResult(call.name, true, summariseResult(content));
     return { id: call.id, content };

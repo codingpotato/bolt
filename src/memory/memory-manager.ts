@@ -111,7 +111,10 @@ export class MemoryManager {
         // Parse tags from the last line
         const tagLineMatch = /\nTags:\s*(.+)$/m.exec(fullText);
         if (tagLineMatch) {
-          tags = tagLineMatch[1]!.split(',').map((t) => t.trim()).filter(Boolean);
+          tags = tagLineMatch[1]!
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean);
           summary = fullText.replace(/\nTags:\s*.+$/m, '').trim();
         } else {
           summary = fullText.trim();
@@ -192,9 +195,7 @@ export class MemoryManager {
     return entriesToMessageParams(recent);
   }
 
-  private async loadRecentChatHistory(
-    currentSessionId: string,
-  ): Promise<Anthropic.MessageParam[]> {
+  private async loadRecentChatHistory(currentSessionId: string): Promise<Anthropic.MessageParam[]> {
     const allSessionIds = await this.sessionStore.listSessionIds();
 
     // Find the prior session with the most recent last-entry timestamp.
@@ -267,8 +268,7 @@ function entryToMessageParam(entry: SessionEntry): Anthropic.MessageParam | null
   if (entry.role === 'user') {
     return {
       role: 'user',
-      content:
-        typeof entry.content === 'string' ? entry.content : JSON.stringify(entry.content),
+      content: typeof entry.content === 'string' ? entry.content : JSON.stringify(entry.content),
     };
   }
   if (entry.role === 'assistant') {

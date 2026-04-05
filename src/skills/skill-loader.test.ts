@@ -318,8 +318,7 @@ User version prompt.`;
 
   it('ignores files that are not .skill.md', async () => {
     vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === projectSkillsDir)
-        return ['my-skill.skill.md', 'README.md', 'notes.txt'] as never;
+      if (dir === projectSkillsDir) return ['my-skill.skill.md', 'README.md', 'notes.txt'] as never;
       return [] as never;
     });
     vi.mocked(fsPromises.readFile).mockResolvedValue(validSkillContent);
@@ -335,8 +334,7 @@ User version prompt.`;
 body`;
 
     vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === projectSkillsDir)
-        return ['bad.skill.md', 'my-skill.skill.md'] as never;
+      if (dir === projectSkillsDir) return ['bad.skill.md', 'my-skill.skill.md'] as never;
       return [] as never;
     });
     vi.mocked(fsPromises.readFile).mockImplementation(async (filePath: unknown) => {

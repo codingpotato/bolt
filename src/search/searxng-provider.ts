@@ -57,9 +57,7 @@ export class SearXNGProvider implements SearchProvider {
     try {
       response = await fetch(url, { headers: FETCH_HEADERS });
     } catch (err) {
-      throw new Error(
-        `SearXNG network error: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      throw new Error(`SearXNG network error: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     if (!response.ok) {
@@ -85,7 +83,9 @@ export class SearXNGProvider implements SearchProvider {
 
   async checkConnectivity(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.endpoint}/search?q=test&format=json`, { headers: FETCH_HEADERS });
+      const response = await fetch(`${this.endpoint}/search?q=test&format=json`, {
+        headers: FETCH_HEADERS,
+      });
       return response.ok;
     } catch {
       return false;

@@ -44,9 +44,7 @@ describe('resolveAuth', () => {
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const auth = resolveAuth();
       expect(auth.mode).toBe('api-key');
-      expect(stderrSpy).toHaveBeenCalledWith(
-        expect.stringContaining('ANTHROPIC_API_KEY')
-      );
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('ANTHROPIC_API_KEY'));
       stderrSpy.mockRestore();
     });
 
@@ -55,7 +53,7 @@ describe('resolveAuth', () => {
       process.env['ANTHROPIC_SESSION_TOKEN'] = 'secret-token-value';
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       resolveAuth();
-      const warningOutput = stderrSpy.mock.calls.map(c => String(c[0])).join('');
+      const warningOutput = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
       expect(warningOutput).not.toContain('secret-key-value');
       expect(warningOutput).not.toContain('secret-token-value');
       stderrSpy.mockRestore();
@@ -85,9 +83,7 @@ describe('resolveAuth', () => {
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const auth = resolveAuth();
       expect(auth.mode).toBe('api-key');
-      expect(stderrSpy).toHaveBeenCalledWith(
-        expect.stringContaining('BOLT_LOCAL_ENDPOINT')
-      );
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('BOLT_LOCAL_ENDPOINT'));
       stderrSpy.mockRestore();
     });
 
@@ -97,9 +93,7 @@ describe('resolveAuth', () => {
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const auth = resolveAuth();
       expect(auth.mode).toBe('subscription');
-      expect(stderrSpy).toHaveBeenCalledWith(
-        expect.stringContaining('BOLT_LOCAL_ENDPOINT')
-      );
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('BOLT_LOCAL_ENDPOINT'));
       stderrSpy.mockRestore();
     });
 
@@ -142,41 +136,51 @@ describe('createAnthropicClient', () => {
   it('constructs client with apiKey for api-key mode', () => {
     createAnthropicClient({ mode: 'api-key', credential: 'sk-test-key' });
     expect(vi.mocked(Anthropic)).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'sk-test-key' })
+      expect.objectContaining({ apiKey: 'sk-test-key' }),
     );
   });
 
   it('constructs client with credential for subscription mode', () => {
     createAnthropicClient({ mode: 'subscription', credential: 'sess-token-123' });
     expect(vi.mocked(Anthropic)).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'sess-token-123' })
+      expect.objectContaining({ apiKey: 'sess-token-123' }),
     );
   });
 
   it('constructs client with baseURL for local mode', () => {
-    createAnthropicClient({ mode: 'local', credential: '', localEndpoint: 'http://localhost:8080' });
+    createAnthropicClient({
+      mode: 'local',
+      credential: '',
+      localEndpoint: 'http://localhost:8080',
+    });
     expect(vi.mocked(Anthropic)).toHaveBeenCalledWith(
-      expect.objectContaining({ baseURL: 'http://localhost:8080' })
+      expect.objectContaining({ baseURL: 'http://localhost:8080' }),
     );
   });
 
   it('uses local credential as apiKey when set in local mode', () => {
-    createAnthropicClient({ mode: 'local', credential: 'local-key', localEndpoint: 'http://localhost:8080' });
+    createAnthropicClient({
+      mode: 'local',
+      credential: 'local-key',
+      localEndpoint: 'http://localhost:8080',
+    });
     expect(vi.mocked(Anthropic)).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: 'local-key' })
+      expect.objectContaining({ apiKey: 'local-key' }),
     );
   });
 
   it('uses placeholder apiKey when local mode credential is empty', () => {
-    createAnthropicClient({ mode: 'local', credential: '', localEndpoint: 'http://localhost:8080' });
+    createAnthropicClient({
+      mode: 'local',
+      credential: '',
+      localEndpoint: 'http://localhost:8080',
+    });
     const callArg = vi.mocked(Anthropic).mock.calls[0]?.[0] as Record<string, unknown>;
     expect(typeof callArg?.['apiKey']).toBe('string');
     expect((callArg?.['apiKey'] as string).length).toBeGreaterThan(0);
   });
 
   it('throws AuthError when local mode is missing localEndpoint', () => {
-    expect(() =>
-      createAnthropicClient({ mode: 'local', credential: '' })
-    ).toThrow(AuthError);
+    expect(() => createAnthropicClient({ mode: 'local', credential: '' })).toThrow(AuthError);
   });
 });

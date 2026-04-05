@@ -13,7 +13,18 @@ function makeCtx(): ToolContext {
       warn: () => {},
       error: () => {},
     } as unknown as ToolContext['logger'],
-    progress: { onSessionStart: () => {}, onThinking: () => {}, onToolCall: () => {}, onToolResult: () => {}, onTaskStatusChange: () => {}, onContextInjection: () => {}, onMemoryCompaction: () => {}, onLlmCall: () => {}, onLlmResponse: () => {}, onRetry: () => {} },
+    progress: {
+      onSessionStart: () => {},
+      onThinking: () => {},
+      onToolCall: () => {},
+      onToolResult: () => {},
+      onTaskStatusChange: () => {},
+      onContextInjection: () => {},
+      onMemoryCompaction: () => {},
+      onLlmCall: () => {},
+      onLlmResponse: () => {},
+      onRetry: () => {},
+    },
   };
 }
 

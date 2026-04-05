@@ -176,7 +176,9 @@ describe('CliChannel', () => {
       errorStream.on('error', () => {});
       const channel = new CliChannel(Readable.from(''), errorStream);
 
-      await expect(channel.notifyTaskCompletion('t-1', 'My Task', 'completed')).rejects.toThrow('write failed');
+      await expect(channel.notifyTaskCompletion('t-1', 'My Task', 'completed')).rejects.toThrow(
+        'write failed',
+      );
     });
   });
 

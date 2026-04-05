@@ -337,20 +337,20 @@ describe('ContentProjectManager', () => {
 
     it('throws error for path traversal attempt with ../', () => {
       expect(() => manager.getProjectFilePath('my-project', '../secrets.txt')).toThrow(
-        'Path traversal attempt detected'
+        'Path traversal attempt detected',
       );
     });
 
     it('throws error for path traversal attempt with multiple ../', () => {
       expect(() => manager.getProjectFilePath('my-project', '../../etc/passwd')).toThrow(
-        'Path traversal attempt detected'
+        'Path traversal attempt detected',
       );
     });
 
     it('throws error for path traversal attempt with mixed path', () => {
-      expect(() =>
-        manager.getProjectFilePath('my-project', 'scenes/../../../secrets.txt')
-      ).toThrow('Path traversal attempt detected');
+      expect(() => manager.getProjectFilePath('my-project', 'scenes/../../../secrets.txt')).toThrow(
+        'Path traversal attempt detected',
+      );
     });
 
     it('accepts valid paths with dots in filename', () => {

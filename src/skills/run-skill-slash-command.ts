@@ -31,9 +31,7 @@ export function createRunSkillSlashCommand(
 
       const skill = skillMap.get(skillName);
       if (!skill) {
-        await ctx.send(
-          `Unknown skill: "${skillName}". Use /skills to list available skills.`,
-        );
+        await ctx.send(`Unknown skill: "${skillName}". Use /skills to list available skills.`);
         return {};
       }
 
@@ -44,9 +42,7 @@ export function createRunSkillSlashCommand(
         const key = remaining[i] ?? '';
         const value = remaining[i + 1];
         if (!key.startsWith('--') || value === undefined) {
-          await ctx.send(
-            `Invalid argument: "${key}". Arguments must be in --key value format.`,
-          );
+          await ctx.send(`Invalid argument: "${key}". Arguments must be in --key value format.`);
           return {};
         }
         skillArgs[key.slice(2)] = value;
@@ -56,9 +52,7 @@ export function createRunSkillSlashCommand(
       const required = (skill.inputSchema.required as string[] | undefined) ?? [];
       const missing = required.filter((f) => !(f in skillArgs));
       if (missing.length > 0) {
-        await ctx.send(
-          `Missing required arguments: ${missing.map((f) => `--${f}`).join(', ')}`,
-        );
+        await ctx.send(`Missing required arguments: ${missing.map((f) => `--${f}`).join(', ')}`);
         return {};
       }
 

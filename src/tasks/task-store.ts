@@ -2,7 +2,14 @@ import { readFileSync, existsSync } from 'node:fs';
 import { writeFile, mkdir, rename } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 
-export type TaskStatus = 'pending' | 'in_progress' | 'blocked' | 'waiting' | 'awaiting_approval' | 'completed' | 'failed';
+export type TaskStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'blocked'
+  | 'waiting'
+  | 'awaiting_approval'
+  | 'completed'
+  | 'failed';
 
 export interface Task {
   id: string;
@@ -74,7 +81,10 @@ export class TaskStore {
 
     this.counter = parsed.counter;
     // Cast to allow missing fields from data persisted before S4-4/S4-5
-    type StoredTask = Omit<Task, 'dependsOn' | 'requiresApproval'> & { dependsOn?: string[]; requiresApproval?: boolean };
+    type StoredTask = Omit<Task, 'dependsOn' | 'requiresApproval'> & {
+      dependsOn?: string[];
+      requiresApproval?: boolean;
+    };
     for (const task of parsed.tasks as StoredTask[]) {
       this.taskMap.set(task.id, { dependsOn: [], requiresApproval: false, ...task });
     }
@@ -98,7 +108,12 @@ export class TaskStore {
     await writeFile(this.filePath, JSON.stringify(data, null, 2), 'utf-8');
   }
 
-  async create(title: string, description: string, dependsOn: string[] = [], requiresApproval = false): Promise<string> {
+  async create(
+    title: string,
+    description: string,
+    dependsOn: string[] = [],
+    requiresApproval = false,
+  ): Promise<string> {
     for (const depId of dependsOn) {
       if (!this.taskMap.has(depId)) {
         throw new Error(`dependency not found: ${depId}`);
@@ -110,7 +125,9 @@ export class TaskStore {
     const candidateId = `task-${this.counter + 1}`;
 
     if (dependsOn.length > 0 && this.wouldCreateCycle(candidateId, dependsOn)) {
-      throw new Error(`circular dependency: task ${candidateId} with deps [${dependsOn.join(', ')}] would create a cycle`);
+      throw new Error(
+        `circular dependency: task ${candidateId} with deps [${dependsOn.join(', ')}] would create a cycle`,
+      );
     }
 
     const newId = `task-${++this.counter}`;
@@ -156,7 +173,9 @@ export class TaskStore {
     for (const task of this.taskMap.values()) {
       if (task.status !== 'waiting') continue;
       if (!task.dependsOn.includes(completedId)) continue;
-      const allDone = task.dependsOn.every((depId) => this.taskMap.get(depId)?.status === 'completed');
+      const allDone = task.dependsOn.every(
+        (depId) => this.taskMap.get(depId)?.status === 'completed',
+      );
       if (allDone) {
         task.status = 'pending';
         task.updatedAt = now;

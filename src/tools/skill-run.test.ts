@@ -84,7 +84,7 @@ describe('skill_run tool', () => {
     });
   });
 
-  const tool = createSkillRunTool([BLOG_SKILL, REVIEW_SKILL], AUTH, MODEL, SCRIPT, runnerSpy, "");
+  const tool = createSkillRunTool([BLOG_SKILL, REVIEW_SKILL], AUTH, MODEL, SCRIPT, runnerSpy, '');
 
   it('has name skill_run', () => {
     expect(tool.name).toBe('skill_run');
@@ -92,29 +92,29 @@ describe('skill_run tool', () => {
 
   describe('unknown skill', () => {
     it('throws ToolError for unknown skill name', async () => {
-      await expect(
-        tool.execute({ name: 'does-not-exist', args: {} }, makeCtx()),
-      ).rejects.toThrow(ToolError);
+      await expect(tool.execute({ name: 'does-not-exist', args: {} }, makeCtx())).rejects.toThrow(
+        ToolError,
+      );
     });
 
     it('error message names the unknown skill', async () => {
-      await expect(
-        tool.execute({ name: 'no-such-skill', args: {} }, makeCtx()),
-      ).rejects.toThrow(/no-such-skill/);
+      await expect(tool.execute({ name: 'no-such-skill', args: {} }, makeCtx())).rejects.toThrow(
+        /no-such-skill/,
+      );
     });
   });
 
   describe('input validation', () => {
     it('throws ToolError when a required arg is missing', async () => {
-      await expect(
-        tool.execute({ name: 'write-blog-post', args: {} }, makeCtx()),
-      ).rejects.toThrow(ToolError);
+      await expect(tool.execute({ name: 'write-blog-post', args: {} }, makeCtx())).rejects.toThrow(
+        ToolError,
+      );
     });
 
     it('error message names the missing field', async () => {
-      await expect(
-        tool.execute({ name: 'write-blog-post', args: {} }, makeCtx()),
-      ).rejects.toThrow(/topic/);
+      await expect(tool.execute({ name: 'write-blog-post', args: {} }, makeCtx())).rejects.toThrow(
+        /topic/,
+      );
     });
 
     it('accepts valid args with all required fields present', async () => {
@@ -272,7 +272,11 @@ describe('skill_run tool', () => {
     });
 
     it('includes the output schema', () => {
-      const schema = { type: 'object', properties: { result: { type: 'string' } }, required: ['result'] };
+      const schema = {
+        type: 'object',
+        properties: { result: { type: 'string' } },
+        required: ['result'],
+      };
       const prompt = buildSkillPrompt('s', {}, schema);
       expect(prompt).toContain('"result"');
     });

@@ -15,7 +15,10 @@ function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
 }
 
 describe('memory_write tool', () => {
-  const writeSpy = vi.fn((_entry: Parameters<import('../memory/memory-store').MemoryStore['write']>[0]) => Promise.resolve('new-entry-id'));
+  const writeSpy = vi.fn(
+    (_entry: Parameters<import('../memory/memory-store').MemoryStore['write']>[0]) =>
+      Promise.resolve('new-entry-id'),
+  );
   const mockStore = { write: writeSpy } as unknown as import('../memory/memory-store').MemoryStore;
   const tool = createMemoryWriteTool(mockStore);
 
@@ -48,7 +51,10 @@ describe('memory_write tool', () => {
   });
 
   it('sets tags from input when provided', async () => {
-    await tool.execute({ content: 'use tabs not spaces', tags: ['style', 'formatting'] }, makeCtx());
+    await tool.execute(
+      { content: 'use tabs not spaces', tags: ['style', 'formatting'] },
+      makeCtx(),
+    );
     const written = writeSpy.mock.calls[0]?.[0];
     expect(written?.tags).toEqual(['style', 'formatting']);
   });

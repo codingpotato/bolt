@@ -57,9 +57,12 @@ describe('fix-tests: pass on first run', () => {
       fixesApplied: [],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const r = (
-      await tool.execute({ name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } }, makeCtx())
+      await tool.execute(
+        { name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } },
+        makeCtx(),
+      )
     ).result as typeof result;
     expect(r.passed).toBe(true);
     expect(r.attempts).toBe(1);
@@ -70,9 +73,11 @@ describe('fix-tests: pass on first run', () => {
   it('omitting command leaves it absent from serialised args (default is LLM-inferred)', async () => {
     const result = { passed: true, attempts: 1, finalOutput: 'ok', fixesApplied: [] };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     await tool.execute({ name: 'fix-tests', args: { maxRetries: 3 } }, makeCtx());
-    const [payload] = runner.mock.calls[0] as [import('../subagent/subagent-runner').SubagentPayload];
+    const [payload] = runner.mock.calls[0] as [
+      import('../subagent/subagent-runner').SubagentPayload,
+    ];
     // command has a YAML default but skill-loader never injects defaults into args;
     // the LLM must rely on the system prompt fallback ("run npm test if command absent")
     expect(payload.prompt).not.toContain('"command"');
@@ -96,9 +101,12 @@ describe('fix-tests: fix on first retry', () => {
       fixesApplied: ['Fixed off-by-one error in src/utils.ts line 17'],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const r = (
-      await tool.execute({ name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } }, makeCtx())
+      await tool.execute(
+        { name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } },
+        makeCtx(),
+      )
     ).result as typeof result;
     expect(r.passed).toBe(true);
     expect(r.attempts).toBe(2);
@@ -124,9 +132,12 @@ describe('fix-tests: retries exhausted', () => {
       ],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const r = (
-      await tool.execute({ name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } }, makeCtx())
+      await tool.execute(
+        { name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } },
+        makeCtx(),
+      )
     ).result as typeof result;
     expect(r.passed).toBe(false);
     expect(r.attempts).toBe(4);
@@ -142,9 +153,12 @@ describe('fix-tests: retries exhausted', () => {
       fixesApplied: ['Attempted null-check in src/index.ts'],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const r = (
-      await tool.execute({ name: 'fix-tests', args: { command: 'npm test', maxRetries: 1 } }, makeCtx())
+      await tool.execute(
+        { name: 'fix-tests', args: { command: 'npm test', maxRetries: 1 } },
+        makeCtx(),
+      )
     ).result as typeof result;
     expect(r.passed).toBe(false);
     expect(r.attempts).toBe(2);
@@ -158,15 +172,20 @@ describe('fix-tests: retries exhausted', () => {
 
 describe('fix-tests: fixesApplied list', () => {
   it('preserves all fix descriptions in order', async () => {
-    const fixes = [
-      'Added missing await in async handler',
-      'Corrected expected value in assertion',
-    ];
-    const result = { passed: true, attempts: 3, finalOutput: 'All tests passed.', fixesApplied: fixes };
+    const fixes = ['Added missing await in async handler', 'Corrected expected value in assertion'];
+    const result = {
+      passed: true,
+      attempts: 3,
+      finalOutput: 'All tests passed.',
+      fixesApplied: fixes,
+    };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const r = (
-      await tool.execute({ name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } }, makeCtx())
+      await tool.execute(
+        { name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } },
+        makeCtx(),
+      )
     ).result as typeof result;
     expect(r.fixesApplied).toEqual(fixes);
   });
@@ -180,10 +199,9 @@ describe('fix-tests: attempts counter', () => {
   it('attempts equals 1 when passing on the first run', async () => {
     const result = { passed: true, attempts: 1, finalOutput: 'ok', fixesApplied: [] };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
-    const r = (
-      await tool.execute({ name: 'fix-tests', args: { maxRetries: 3 } }, makeCtx())
-    ).result as typeof result;
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const r = (await tool.execute({ name: 'fix-tests', args: { maxRetries: 3 } }, makeCtx()))
+      .result as typeof result;
     expect(r.attempts).toBe(1);
   });
 
@@ -196,9 +214,12 @@ describe('fix-tests: attempts counter', () => {
       fixesApplied: Array.from({ length: maxRetries }, (_, i) => `fix attempt ${i + 1}`),
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const r = (
-      await tool.execute({ name: 'fix-tests', args: { command: 'npm test', maxRetries } }, makeCtx())
+      await tool.execute(
+        { name: 'fix-tests', args: { command: 'npm test', maxRetries } },
+        makeCtx(),
+      )
     ).result as typeof result;
     expect(r.attempts).toBe(maxRetries + 1);
     expect(r.fixesApplied).toHaveLength(maxRetries);
@@ -244,21 +265,30 @@ describe('fix-tests sub-agent payload', () => {
   it('sends correct allowedTools to sub-agent', async () => {
     const result = { passed: true, attempts: 1, finalOutput: 'ok', fixesApplied: [] };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
-    await tool.execute({ name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } }, makeCtx());
-    const [payload] = runner.mock.calls[0] as [import('../subagent/subagent-runner').SubagentPayload];
-    expect(payload.allowedTools).toEqual(expect.arrayContaining(['bash', 'file_read', 'file_edit', 'file_write']));
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    await tool.execute(
+      { name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } },
+      makeCtx(),
+    );
+    const [payload] = runner.mock.calls[0] as [
+      import('../subagent/subagent-runner').SubagentPayload,
+    ];
+    expect(payload.allowedTools).toEqual(
+      expect.arrayContaining(['bash', 'file_read', 'file_edit', 'file_write']),
+    );
   });
 
   it('includes command and maxRetries in the prompt', async () => {
     const result = { passed: true, attempts: 1, finalOutput: 'ok', fixesApplied: [] };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     await tool.execute(
       { name: 'fix-tests', args: { command: 'npx vitest run', maxRetries: 5 } },
       makeCtx(),
     );
-    const [payload] = runner.mock.calls[0] as [import('../subagent/subagent-runner').SubagentPayload];
+    const [payload] = runner.mock.calls[0] as [
+      import('../subagent/subagent-runner').SubagentPayload,
+    ];
     expect(payload.prompt).toContain('npx vitest run');
     expect(payload.prompt).toContain('5');
   });

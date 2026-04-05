@@ -133,7 +133,12 @@ describe('MemoryStore.write()', () => {
 
   it('adds the written entry to the in-memory cache', async () => {
     const store = makeStore();
-    const id = await store.write({ type: 'agent_note', sessionId: 's1', summary: 'cached', tags: [] });
+    const id = await store.write({
+      type: 'agent_note',
+      sessionId: 's1',
+      summary: 'cached',
+      tags: [],
+    });
     expect(store.getAll().some((e: CompactEntry) => e.id === id)).toBe(true);
   });
 });

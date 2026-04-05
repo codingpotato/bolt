@@ -92,7 +92,7 @@ class FakeServer extends EventEmitter {
     method: string,
     path: string,
     body: unknown,
-    authHeader: string
+    authHeader: string,
   ): { res: FakeResponse } {
     const req = Object.assign(new EventEmitter(), {
       method,
@@ -147,7 +147,7 @@ function makeChannel(
     enabled?: boolean;
     workspaceRoot?: string;
     persistent?: boolean;
-  } = {}
+  } = {},
 ): {
   channel: WebChannel & { _onConnection: (ws: FakeWs, name?: string) => void };
   server: FakeServer;
@@ -162,13 +162,16 @@ function makeChannel(
       workspaceRoot: opts.workspaceRoot,
       persistent: opts.persistent,
     },
-    server as unknown as Server
+    server as unknown as Server,
   ) as WebChannel & { _onConnection: (ws: FakeWs, name?: string) => void };
 
   // Expose the private onConnection so tests can simulate WS connections
   // without going through the real WebSocketServer upgrade path.
   channel['_onConnection'] = (ws: FakeWs, name?: string) =>
-    (channel as unknown as { onConnection: (ws: FakeWs, name?: string) => void }).onConnection(ws, name);
+    (channel as unknown as { onConnection: (ws: FakeWs, name?: string) => void }).onConnection(
+      ws,
+      name,
+    );
 
   return { channel, server };
 }
@@ -183,7 +186,12 @@ describe('WebChannel', () => {
       const { channel } = makeChannel();
       const ws = new FakeWs();
       channel['_onConnection'](ws, 'Alice');
-      expect(ws.lastSent()).toMatchObject({ type: 'status', userId: 'Alice', connectedUsers: 1, queueDepth: 0 });
+      expect(ws.lastSent()).toMatchObject({
+        type: 'status',
+        userId: 'Alice',
+        connectedUsers: 1,
+        queueDepth: 0,
+      });
     });
 
     it('auto-assigns name when none provided', () => {
@@ -286,7 +294,11 @@ describe('WebChannel', () => {
       // processing may have been broadcast before or after the turn was queued
       // (depends on whether waiter was present); just confirm it exists
       const processingMsg = msgs.find((m) => m.type === 'processing');
-      expect(processingMsg).toMatchObject({ type: 'processing', author: 'Alice', content: 'process me' });
+      expect(processingMsg).toMatchObject({
+        type: 'processing',
+        author: 'Alice',
+        content: 'process me',
+      });
     });
 
     it('broadcasts send() to all connections with replyTo', async () => {
@@ -409,7 +421,9 @@ describe('WebChannel', () => {
     });
 
     it('returns 404 when the HTML file cannot be read', async () => {
-      vi.mocked(readFile).mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+      vi.mocked(readFile).mockRejectedValueOnce(
+        Object.assign(new Error('ENOENT'), { code: 'ENOENT' }),
+      );
       const { server } = makeChannel({ mode: 'http' });
       const { res } = server.simulateRequest('GET', '/', {}, '');
       await new Promise((r) => setTimeout(r, 10));
@@ -426,7 +440,7 @@ describe('WebChannel', () => {
         'POST',
         '/chat',
         { type: 'message', content: 'hi from http' },
-        ''
+        '',
       );
 
       await new Promise((r) => process.nextTick(r));
@@ -479,7 +493,7 @@ describe('WebChannel', () => {
         'POST',
         '/chat',
         { type: 'message', content: 'authorized' },
-        'Bearer secret'
+        'Bearer secret',
       );
 
       await new Promise((r) => process.nextTick(r));
@@ -496,7 +510,7 @@ describe('WebChannel', () => {
         'POST',
         '/chat',
         { type: 'message', content: 'open' },
-        ''
+        '',
       );
 
       await new Promise((r) => process.nextTick(r));
@@ -532,7 +546,7 @@ describe('WebChannel', () => {
     });
   });
 
-describe('WebSocket upgrade — token auth via ?token= query param', () => {
+  describe('WebSocket upgrade — token auth via ?token= query param', () => {
     it('rejects upgrade when token in query param does not match', () => {
       const { channel } = makeChannel({ token: 'secret' });
       const socket = { write: vi.fn(), destroy: vi.fn(), on: vi.fn() };
@@ -601,7 +615,9 @@ describe('WebSocket upgrade — token auth via ?token= query param', () => {
 
       let completed = false;
       const done = (async () => {
-        for await (const _turn of channel.receive()) { /* consume */ }
+        for await (const _turn of channel.receive()) {
+          /* consume */
+        }
         completed = true;
       })();
 
@@ -615,7 +631,9 @@ describe('WebSocket upgrade — token auth via ?token= query param', () => {
 
       let completed = false;
       const done = (async () => {
-        for await (const _turn of channel.receive()) { /* consume */ }
+        for await (const _turn of channel.receive()) {
+          /* consume */
+        }
         completed = true;
       })();
 
@@ -716,7 +734,7 @@ describe('WebSocket upgrade — token auth via ?token= query param', () => {
       const server = new FakeServer();
       const channel = new WebChannel(
         { port: 3000, host: '0.0.0.0', mode: 'websocket' },
-        server as unknown as Server
+        server as unknown as Server,
       );
       await channel.listen();
       expect(server.lastListenArgs).toEqual({ port: 3000, host: '0.0.0.0' });
@@ -733,7 +751,7 @@ describe('WebSocket upgrade — token auth via ?token= query param', () => {
       };
       const channel = new WebChannel(
         { port: 3000, mode: 'websocket' },
-        server as unknown as Server
+        server as unknown as Server,
       );
       await expect(channel.listen()).rejects.toThrow('Port 3000 is already in use');
     });
@@ -748,7 +766,7 @@ describe('WebSocket upgrade — token auth via ?token= query param', () => {
       };
       const channel = new WebChannel(
         { port: 3000, mode: 'websocket' },
-        server as unknown as Server
+        server as unknown as Server,
       );
       await expect(channel.listen()).rejects.toThrow('EACCES');
     });
@@ -795,7 +813,11 @@ describe('WebSocket upgrade — token auth via ?token= query param', () => {
 
       await channel.notifyTaskCompletion('t-1', 'My Task', 'completed');
 
-      expect(ws.lastSent()).toMatchObject({ type: 'task_complete', title: 'My Task', status: 'completed' });
+      expect(ws.lastSent()).toMatchObject({
+        type: 'task_complete',
+        title: 'My Task',
+        status: 'completed',
+      });
     });
 
     it('broadcasts task_complete event to WebSocket clients for failed status', async () => {
@@ -805,7 +827,11 @@ describe('WebSocket upgrade — token auth via ?token= query param', () => {
 
       await channel.notifyTaskCompletion('t-1', 'My Task', 'failed');
 
-      expect(ws.lastSent()).toMatchObject({ type: 'task_complete', title: 'My Task', status: 'failed' });
+      expect(ws.lastSent()).toMatchObject({
+        type: 'task_complete',
+        title: 'My Task',
+        status: 'failed',
+      });
     });
 
     it('includes result field when provided', async () => {

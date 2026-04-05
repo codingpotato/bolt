@@ -77,7 +77,12 @@ describe('WebChannelProgressReporter', () => {
 
   it('onLlmResponse emits token usage', () => {
     const { reporter, sent } = makeReporter();
-    reporter.onLlmResponse({ inputTokens: 12450, outputTokens: 234, stopReason: 'tool_use', windowCapacity: 200_000 });
+    reporter.onLlmResponse({
+      inputTokens: 12450,
+      outputTokens: 234,
+      stopReason: 'tool_use',
+      windowCapacity: 200_000,
+    });
     expect(sent[0]).toContain('12,450');
     expect(sent[0]).toContain('234');
     expect(sent[0]).toContain('tool_use');

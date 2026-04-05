@@ -72,9 +72,7 @@ export function createUserReviewTool(): Tool<UserReviewInput, UserReviewOutput> 
 
       // Fallback: use ctx.confirm for a simple approve/reject prompt.
       if (ctx.confirm) {
-        const message =
-          `[${input.contentType}] ${input.question}\n\n` +
-          `${input.content}`;
+        const message = `[${input.contentType}] ${input.question}\n\n` + `${input.content}`;
         const approved = await ctx.confirm(message);
         return { approved };
       }

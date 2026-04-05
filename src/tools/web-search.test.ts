@@ -73,7 +73,10 @@ describe('web_search tool', () => {
 
     await tool.execute({ query: 'test' }, ctx);
 
-    expect(provider.search).toHaveBeenCalledWith('test', expect.objectContaining({ maxResults: 7 }));
+    expect(provider.search).toHaveBeenCalledWith(
+      'test',
+      expect.objectContaining({ maxResults: 7 }),
+    );
   });
 
   it('passes maxResults from input when provided', async () => {
@@ -82,7 +85,10 @@ describe('web_search tool', () => {
 
     await tool.execute({ query: 'test', maxResults: 3 }, ctx);
 
-    expect(provider.search).toHaveBeenCalledWith('test', expect.objectContaining({ maxResults: 3 }));
+    expect(provider.search).toHaveBeenCalledWith(
+      'test',
+      expect.objectContaining({ maxResults: 3 }),
+    );
   });
 
   it('passes timeRange to the provider', async () => {
@@ -91,7 +97,10 @@ describe('web_search tool', () => {
 
     await tool.execute({ query: 'test', timeRange: 'week' }, ctx);
 
-    expect(provider.search).toHaveBeenCalledWith('test', expect.objectContaining({ timeRange: 'week' }));
+    expect(provider.search).toHaveBeenCalledWith(
+      'test',
+      expect.objectContaining({ timeRange: 'week' }),
+    );
   });
 
   it('passes category to the provider', async () => {
@@ -100,7 +109,10 @@ describe('web_search tool', () => {
 
     await tool.execute({ query: 'test', category: 'news' }, ctx);
 
-    expect(provider.search).toHaveBeenCalledWith('test', expect.objectContaining({ category: 'news' }));
+    expect(provider.search).toHaveBeenCalledWith(
+      'test',
+      expect.objectContaining({ category: 'news' }),
+    );
   });
 
   it('returns empty results array when provider returns no results', async () => {

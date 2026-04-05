@@ -82,11 +82,7 @@ describe('createAuditLogger', () => {
 
   it('scrubs nested credential fields', async () => {
     const logger = createAuditLogger('.bolt');
-    await logger.log(
-      'some_tool',
-      { auth: { password: 'p@ss', username: 'admin' } },
-      {}
-    );
+    await logger.log('some_tool', { auth: { password: 'p@ss', username: 'admin' } }, {});
 
     const [, data] = vi.mocked(fsPromises.appendFile).mock.calls[0] as [string, string];
     const entry = JSON.parse(data.trimEnd()) as {
@@ -109,7 +105,7 @@ describe('createAuditLogger', () => {
         sessionToken: 'k6',
         safe_field: 'ok',
       },
-      {}
+      {},
     );
 
     const [, data] = vi.mocked(fsPromises.appendFile).mock.calls[0] as [string, string];

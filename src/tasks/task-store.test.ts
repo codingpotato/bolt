@@ -318,7 +318,9 @@ describe('TaskStore', () => {
 
     it('rejects deps referencing non-existent task IDs', async () => {
       const store = new TaskStore(dataDir);
-      await expect(store.create('task', 'desc', ['nonexistent'])).rejects.toThrow(/dependency not found/i);
+      await expect(store.create('task', 'desc', ['nonexistent'])).rejects.toThrow(
+        /dependency not found/i,
+      );
     });
 
     it('does not advance the counter when dep validation fails', async () => {

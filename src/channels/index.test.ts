@@ -11,7 +11,9 @@ describe('channels/index re-exports', () => {
     // Compile-time check: a value typed as Channel and UserTurn can be constructed
     const turn: UserTurn = { content: 'hello' };
     const mockChannel: Channel = {
-      async *receive() { yield turn; },
+      async *receive() {
+        yield turn;
+      },
       async send(_r: string) {},
     };
     expect(mockChannel).toBeDefined();

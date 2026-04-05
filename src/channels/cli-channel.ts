@@ -7,7 +7,6 @@ const BOLD = '\x1b[1m';
 const DIM = '\x1b[2m';
 const CYAN = '\x1b[36m';
 
-
 /**
  * Channel implementation for CLI interaction.
  * Reads user input from stdin line by line; writes responses to stdout.
@@ -136,9 +135,7 @@ export class CliChannel implements Channel {
     this.beforeSend?.();
 
     const sep = this.separator();
-    const content = this.isTTY
-      ? `\n${sep}\n${response}\n${sep}\n\n`
-      : `${response}\n`;
+    const content = this.isTTY ? `\n${sep}\n${response}\n${sep}\n\n` : `${response}\n`;
 
     await new Promise<void>((resolve, reject) => {
       this.output.write(content, (err?: Error | null) => {

@@ -58,9 +58,7 @@ export class SerperProvider implements SearchProvider {
         body: JSON.stringify(body),
       });
     } catch (err) {
-      throw new Error(
-        `Serper network error: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      throw new Error(`Serper network error: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     if (!response.ok) {

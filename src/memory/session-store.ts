@@ -71,9 +71,7 @@ export class SessionStore {
       }
       throw err;
     }
-    return fileNames
-      .filter((name) => name.endsWith('.jsonl'))
-      .map((name) => name.slice(0, -6));
+    return fileNames.filter((name) => name.endsWith('.jsonl')).map((name) => name.slice(0, -6));
   }
 
   /**
@@ -105,7 +103,10 @@ export class SessionStore {
           this.logger.warn('Skipping malformed session entry', { sessionId, line: trimmed });
         }
       } catch {
-        this.logger.warn('Skipping corrupt session entry (invalid JSON)', { sessionId, line: trimmed });
+        this.logger.warn('Skipping corrupt session entry (invalid JSON)', {
+          sessionId,
+          line: trimmed,
+        });
       }
     }
     return entries;

@@ -13,7 +13,23 @@ describe('webFetchTool', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogger = { log: vi.fn().mockResolvedValue(undefined) };
-    ctx = { cwd: '/workspace', log: mockLogger, logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }, progress: { onSessionStart: vi.fn(), onThinking: vi.fn(), onToolCall: vi.fn(), onToolResult: vi.fn(), onTaskStatusChange: vi.fn(), onContextInjection: vi.fn(), onMemoryCompaction: vi.fn(), onLlmCall: vi.fn(), onLlmResponse: vi.fn(), onRetry: vi.fn() } };
+    ctx = {
+      cwd: '/workspace',
+      log: mockLogger,
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      progress: {
+        onSessionStart: vi.fn(),
+        onThinking: vi.fn(),
+        onToolCall: vi.fn(),
+        onToolResult: vi.fn(),
+        onTaskStatusChange: vi.fn(),
+        onContextInjection: vi.fn(),
+        onMemoryCompaction: vi.fn(),
+        onLlmCall: vi.fn(),
+        onLlmResponse: vi.fn(),
+        onRetry: vi.fn(),
+      },
+    };
   });
 
   it('has the name "web_fetch"', () => {
@@ -25,9 +41,7 @@ describe('webFetchTool', () => {
   });
 
   it('returns body, statusCode, and contentType on a 200 response', async () => {
-    fetchMock.mockResolvedValue(
-      makeMockResponse(200, 'text/html', '<html>hello</html>'),
-    );
+    fetchMock.mockResolvedValue(makeMockResponse(200, 'text/html', '<html>hello</html>'));
 
     const result = await webFetchTool.execute({ url: 'https://example.com' }, ctx);
     expect(result.body).toBe('<html>hello</html>');
@@ -39,14 +53,18 @@ describe('webFetchTool', () => {
     fetchMock.mockResolvedValue(makeMockResponse(404, 'text/plain', 'Not Found'));
 
     const { ToolError } = await import('./tool');
-    await expect(webFetchTool.execute({ url: 'https://example.com/missing' }, ctx)).rejects.toBeInstanceOf(ToolError);
+    await expect(
+      webFetchTool.execute({ url: 'https://example.com/missing' }, ctx),
+    ).rejects.toBeInstanceOf(ToolError);
   });
 
   it('throws ToolError on HTTP 5xx responses', async () => {
     fetchMock.mockResolvedValue(makeMockResponse(500, 'text/plain', 'Server Error'));
 
     const { ToolError } = await import('./tool');
-    await expect(webFetchTool.execute({ url: 'https://example.com' }, ctx)).rejects.toBeInstanceOf(ToolError);
+    await expect(webFetchTool.execute({ url: 'https://example.com' }, ctx)).rejects.toBeInstanceOf(
+      ToolError,
+    );
   });
 
   it('includes the status code in the 4xx ToolError message', async () => {

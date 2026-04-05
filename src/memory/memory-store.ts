@@ -101,7 +101,9 @@ export class MemoryStore {
       try {
         parsed = JSON.parse(raw);
       } catch {
-        this.logger.warn('Moving corrupt memory entry (invalid JSON) to corrupted dir', { file: name });
+        this.logger.warn('Moving corrupt memory entry (invalid JSON) to corrupted dir', {
+          file: name,
+        });
         await this.moveToCorrupted(filePath, name);
         continue;
       }

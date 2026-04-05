@@ -269,7 +269,9 @@ describe('SessionStore.listSessionIds()', () => {
 describe('SessionStore.loadSession()', () => {
   it('rethrows non-ENOENT readFile errors', async () => {
     const { readFile } = await import('node:fs/promises');
-    vi.mocked(readFile).mockRejectedValueOnce(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
+    vi.mocked(readFile).mockRejectedValueOnce(
+      Object.assign(new Error('EACCES'), { code: 'EACCES' }),
+    );
 
     const store = makeStore();
     await expect(store.loadSession('any-session')).rejects.toThrow('EACCES');

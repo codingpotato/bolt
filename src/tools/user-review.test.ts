@@ -69,10 +69,7 @@ describe('user_review tool', () => {
       const { access } = await import('node:fs/promises');
       vi.mocked(access).mockResolvedValue(undefined);
 
-      const result = await tool.execute(
-        { ...baseInput, mediaFiles: ['output/image.png'] },
-        ctx,
-      );
+      const result = await tool.execute({ ...baseInput, mediaFiles: ['output/image.png'] }, ctx);
 
       expect(channel.requestReview).toHaveBeenCalledWith(
         expect.objectContaining({ mediaFiles: ['output/image.png'] }),
@@ -161,7 +158,10 @@ describe('user_review tool', () => {
       await expect(
         tool.execute({ ...baseInput, mediaFiles: ['missing.png'] }, ctx),
       ).rejects.toSatisfy(
-        (err) => err instanceof ToolError && err.retryable === false && err.message.includes('missing.png'),
+        (err) =>
+          err instanceof ToolError &&
+          err.retryable === false &&
+          err.message.includes('missing.png'),
       );
     });
 

@@ -78,7 +78,8 @@ export function createTodoTools(store: TodoStore): Tool[] {
 
   const todoList: Tool<Record<string, never>, TodoListOutput> = {
     name: 'todo_list',
-    description: 'Return the current ordered todo list with ids, titles, statuses, and descriptions.',
+    description:
+      'Return the current ordered todo list with ids, titles, statuses, and descriptions.',
     inputSchema: { type: 'object', properties: {} },
     async execute(_input: Record<string, never>, _ctx: ToolContext): Promise<TodoListOutput> {
       return { items: store.list() };

@@ -11,9 +11,7 @@ import { createNoopLogger } from '../logger';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeEntry(
-  overrides: Partial<SessionEntry> & Pick<SessionEntry, 'role'>,
-): SessionEntry {
+function makeEntry(overrides: Partial<SessionEntry> & Pick<SessionEntry, 'role'>): SessionEntry {
   return {
     sessionId: 'session-1',
     seq: 1,
@@ -64,7 +62,11 @@ function makeMessage(role: 'user' | 'assistant', content: string): Anthropic.Mes
 }
 
 function makeCompactManager(options: CompactManagerOptions = {}): CompactManagerFixture {
-  const { keepRecentMessages = 3, modelResponse = 'Summary text\nTags: foo, bar', clientThrows = false } = options;
+  const {
+    keepRecentMessages = 3,
+    modelResponse = 'Summary text\nTags: foo, bar',
+    clientThrows = false,
+  } = options;
 
   const createSpy = vi.fn();
   if (clientThrows) {
@@ -130,13 +132,28 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
     loadSession.mockImplementation(async (id: string) => {
       if (id === 'prior-1') {
         return [
-          makeEntry({ sessionId: 'prior-1', role: 'user', content: 'task question', taskId: 'task-1' }),
-          makeEntry({ sessionId: 'prior-1', role: 'assistant', content: 'task answer', taskId: 'task-1' }),
+          makeEntry({
+            sessionId: 'prior-1',
+            role: 'user',
+            content: 'task question',
+            taskId: 'task-1',
+          }),
+          makeEntry({
+            sessionId: 'prior-1',
+            role: 'assistant',
+            content: 'task answer',
+            taskId: 'task-1',
+          }),
         ];
       }
       if (id === 'prior-2') {
         return [
-          makeEntry({ sessionId: 'prior-2', role: 'user', content: 'another question', taskId: 'task-1' }),
+          makeEntry({
+            sessionId: 'prior-2',
+            role: 'user',
+            content: 'another question',
+            taskId: 'task-1',
+          }),
         ];
       }
       return [];
@@ -160,9 +177,13 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
     listSessionIds.mockResolvedValue(['current', 'prior-1']);
     loadSession.mockImplementation(async (id: string) => {
       if (id === 'prior-1') {
-        return [makeEntry({ sessionId: 'prior-1', role: 'user', content: 'prior', taskId: 'task-1' })];
+        return [
+          makeEntry({ sessionId: 'prior-1', role: 'user', content: 'prior', taskId: 'task-1' }),
+        ];
       }
-      return [makeEntry({ sessionId: 'current', role: 'user', content: 'current', taskId: 'task-1' })];
+      return [
+        makeEntry({ sessionId: 'current', role: 'user', content: 'current', taskId: 'task-1' }),
+      ];
     });
 
     const manager = makeManager({ listSessionIds, loadSession });
@@ -286,9 +307,7 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
   });
 
   it('does not call listSessionIds for session resume', async () => {
-    loadSession.mockResolvedValue([
-      makeEntry({ role: 'user', content: 'hi' }),
-    ]);
+    loadSession.mockResolvedValue([makeEntry({ role: 'user', content: 'hi' })]);
 
     const manager = makeManager({ listSessionIds, loadSession });
     await manager.assembleInjectedHistory({
@@ -307,10 +326,24 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
     listSessionIds.mockResolvedValue(['old-session', 'recent-session', 'current']);
     loadSession.mockImplementation(async (id: string) => {
       if (id === 'old-session') {
-        return [makeEntry({ sessionId: 'old-session', role: 'user', content: 'old msg', ts: '2026-03-20T10:00:00.000Z' })];
+        return [
+          makeEntry({
+            sessionId: 'old-session',
+            role: 'user',
+            content: 'old msg',
+            ts: '2026-03-20T10:00:00.000Z',
+          }),
+        ];
       }
       if (id === 'recent-session') {
-        return [makeEntry({ sessionId: 'recent-session', role: 'user', content: 'recent msg', ts: '2026-03-21T10:00:00.000Z' })];
+        return [
+          makeEntry({
+            sessionId: 'recent-session',
+            role: 'user',
+            content: 'recent msg',
+            ts: '2026-03-21T10:00:00.000Z',
+          }),
+        ];
       }
       return [];
     });
@@ -495,7 +528,11 @@ describe('MemoryManager.compact()', () => {
       makeMessage('user', 'e'),
     ];
     await manager.compact(messages, 'session-1', undefined, progress);
-    expect(progress.onMemoryCompaction).toHaveBeenCalledWith(2, expect.any(String), expect.any(Array));
+    expect(progress.onMemoryCompaction).toHaveBeenCalledWith(
+      2,
+      expect.any(String),
+      expect.any(Array),
+    );
   });
 
   it('handles model failure gracefully — uses fallback summary', async () => {
@@ -546,7 +583,9 @@ describe('MemoryManager.compact()', () => {
       return 'entry-id';
     });
 
-    const mockClient = { messages: { create: createSpy } } as unknown as import('@anthropic-ai/sdk').default;
+    const mockClient = {
+      messages: { create: createSpy },
+    } as unknown as import('@anthropic-ai/sdk').default;
     const mockMemoryStore = { write: writeSpy } as unknown as MemoryStore;
     const mockProgress: ProgressReporter = {
       onSessionStart: vi.fn(),

@@ -11,7 +11,6 @@ dist/
 .bolt/tasks.json
 .bolt/tool-audit.jsonl
 .bolt/bolt.log
-# suggestions/ is debatable — omit to keep them trackable for audit purposes
 
 # The following .bolt/ entries ARE committed (project configuration):
 #   .bolt/AGENT.md      — project-level agent prompt

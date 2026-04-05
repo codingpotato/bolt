@@ -692,26 +692,6 @@ Acceptance Criteria:
 - [x] Unit tests verify entry is written with correct fields
 ```
 
-**S5-9: agent_suggest tool and suggestions CLI**
-
-```
-As an agent,
-I want to propose improvements to my own rules without being able to apply them directly,
-so that bolt can improve over time while humans stay in control of its core behaviour.
-
-Acceptance Criteria:
-- [x] agent_suggest({ target: 'AGENT.md', content, reason }) writes a Suggestion to .bolt/suggestions/<id>.json
-- [x] Suggestion schema matches docs/design/agent-prompt.md (id, createdAt, sessionId, taskId?, target, content, reason, status)
-- [x] agent_suggest is registered as a built-in tool; it is NOT in the default sub-agent or skill allowlist
-- [x] Returns { suggestionId, path }
-- [x] bolt suggestions CLI command lists all pending suggestions with id, createdAt, scope, and first line of reason
-- [x] bolt suggestions show <id> prints the full content and reason
-- [x] bolt suggestions apply <id> appends content to .bolt/AGENT.md (creates the file if absent); sets status to 'applied'
-- [x] bolt suggestions reject <id> sets status to 'rejected'
-- [x] Applied/rejected suggestions are retained in .bolt/suggestions/ for audit purposes
-- [x] Unit tests cover: suggest writes file, apply creates AGENT.md, apply appends to existing AGENT.md, reject updates status
-```
-
 ---
 
 ## Sprint 6 — Sub-agent Runner + Skills System
@@ -1233,7 +1213,6 @@ Acceptance Criteria:
 - [x] Skills section lists all discovered skills (built-in + user + project) with name + description
 - [x] Tools section lists all registered tools with name + one-line use-case summary
 - [x] Config removed: agentPrompt.userFile, BOLT_AGENT_USER_FILE env var
-- [x] agent_suggest simplified: no longer has 'scope' field (only applies to .bolt/AGENT.md)
 - [x] Works identically in dev (npm run dev) and prod (npm start / npm run build)
 - [x] Unit tests cover: first run copies built-in, subsequent run loads existing,
       skills catalog appended, tools reference appended, custom path via config

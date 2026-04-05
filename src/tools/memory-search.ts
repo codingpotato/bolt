@@ -36,11 +36,7 @@ function tokenize(text: string): string[] {
  * Each document is the concatenation of the entry's summary tokens and tag tokens.
  * Returns entries with score > 0, sorted descending by score, up to limit.
  */
-function bm25Search(
-  entries: CompactEntry[],
-  query: string,
-  limit: number,
-): CompactEntry[] {
+function bm25Search(entries: CompactEntry[], query: string, limit: number): CompactEntry[] {
   if (entries.length === 0 || query.trim() === '') return [];
 
   const K1 = 1.5;
@@ -71,7 +67,7 @@ function bm25Search(
 
     // Term frequency map for this document.
     const tf = new Map<string, number>();
-    for (const t of (tokens ?? [])) {
+    for (const t of tokens ?? []) {
       tf.set(t, (tf.get(t) ?? 0) + 1);
     }
 
@@ -111,7 +107,9 @@ function toSearchEntry(e: CompactEntry): MemorySearchEntry {
   return result;
 }
 
-export function createMemorySearchTool(store: MemoryStore): Tool<MemorySearchInput, MemorySearchResult> {
+export function createMemorySearchTool(
+  store: MemoryStore,
+): Tool<MemorySearchInput, MemorySearchResult> {
   return {
     name: 'memory_search',
     description:

@@ -5,7 +5,7 @@ input:
   topic:
     type: string
     description: The subject area to research (e.g. "AI coding tools", "skincare routines")
-    default: ""
+    default: ''
   platforms:
     type: array
     items:
@@ -88,9 +88,7 @@ Respond with a JSON object matching this structure exactly:
       "contentAngle": "Specific actionable angle the creator should take"
     }
   ],
-  "recommendedAngles": [
-    "Prioritised list of the best content angles to act on this week"
-  ],
+  "recommendedAngles": ["Prioritised list of the best content angles to act on this week"],
   "topPosts": [
     {
       "title": "Post or article title",

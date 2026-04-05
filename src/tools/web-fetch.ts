@@ -42,10 +42,7 @@ export const webFetchTool: Tool<WebFetchInput, WebFetchOutput> = {
       } catch {
         // ignore read failure for error body
       }
-      throw new ToolError(
-        `HTTP ${response.status} fetching ${input.url}: ${errorBody}`,
-        false,
-      );
+      throw new ToolError(`HTTP ${response.status} fetching ${input.url}: ${errorBody}`, false);
     }
 
     let body: string;
@@ -60,7 +57,9 @@ export const webFetchTool: Tool<WebFetchInput, WebFetchOutput> = {
     const contentType = response.headers.get('content-type') ?? '';
     const truncated = body.length > MAX_BODY_CHARS;
     if (truncated) {
-      body = body.slice(0, MAX_BODY_CHARS) + `\n\n[truncated — response exceeded ${MAX_BODY_CHARS} characters]`;
+      body =
+        body.slice(0, MAX_BODY_CHARS) +
+        `\n\n[truncated — response exceeded ${MAX_BODY_CHARS} characters]`;
     }
     return { body, statusCode: response.status, contentType };
   },

@@ -1,15 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  SlashCommandRegistry,
-  createSlashCommandRegistry,
-} from './slash-commands';
+import { SlashCommandRegistry, createSlashCommandRegistry } from './slash-commands';
 import type { SlashContext } from './slash-commands';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeCtx(sessionId = 'test-session-id'): { ctx: SlashContext; sendSpy: ReturnType<typeof vi.fn> } {
+function makeCtx(sessionId = 'test-session-id'): {
+  ctx: SlashContext;
+  sendSpy: ReturnType<typeof vi.fn>;
+} {
   const sendSpy = vi.fn().mockResolvedValue(undefined);
   return { ctx: { send: sendSpy, sessionId }, sendSpy };
 }

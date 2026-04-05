@@ -58,7 +58,7 @@ describe('review-code issue severity values', () => {
       approved: true,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { diff: '+const x = a + b + c + d;' } },
       makeCtx(),
@@ -72,13 +72,18 @@ describe('review-code issue severity values', () => {
     const review = {
       summary: 'Minor issues found; no blocking errors.',
       issues: [
-        { severity: 'warning', file: 'src/api.ts', line: 12, message: 'Potential null dereference.' },
+        {
+          severity: 'warning',
+          file: 'src/api.ts',
+          line: 12,
+          message: 'Potential null dereference.',
+        },
         { severity: 'suggestion', file: 'src/api.ts', message: 'Rename variable for clarity.' },
       ],
       approved: true,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { diff: 'some diff' } },
       makeCtx(),
@@ -92,13 +97,18 @@ describe('review-code issue severity values', () => {
     const review = {
       summary: 'SQL injection vulnerability detected.',
       issues: [
-        { severity: 'error', file: 'src/db.ts', line: 42, message: 'Unsanitised user input in query.' },
+        {
+          severity: 'error',
+          file: 'src/db.ts',
+          line: 42,
+          message: 'Unsanitised user input in query.',
+        },
         { severity: 'suggestion', file: 'src/db.ts', message: 'Use parameterised queries.' },
       ],
       approved: false,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { path: 'src/db.ts' } },
       makeCtx(),
@@ -130,7 +140,7 @@ describe('review-code issue field completeness', () => {
       approved: true,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { diff: '+export const HUGE_CONFIG = {...}' } },
       makeCtx(),
@@ -152,7 +162,7 @@ describe('review-code issue field completeness', () => {
     };
     const review = { summary: 'Critical security issue.', issues: [issue], approved: false };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { path: 'src/auth.ts' } },
       makeCtx(),
@@ -167,7 +177,7 @@ describe('review-code issue field completeness', () => {
   it('returns zero issues and approved true for clean code', async () => {
     const review = { summary: 'Code looks good. No issues found.', issues: [], approved: true };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { diff: '+const x: number = 1;' } },
       makeCtx(),
@@ -194,11 +204,8 @@ describe('review-code with no code provided', () => {
       approved: false,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
-    const result = await tool.execute(
-      { name: 'review-code', args: {} },
-      makeCtx(),
-    );
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    const result = await tool.execute({ name: 'review-code', args: {} }, makeCtx());
     const r = result.result as typeof review;
     expect(r.summary).toBe('No code provided for review');
     expect(r.issues).toHaveLength(0);
@@ -219,12 +226,11 @@ describe('review-code uses file_read for path input', () => {
   it('sub-agent receives path in prompt when path arg is supplied', async () => {
     const review = { summary: 'Looks fine.', issues: [], approved: true };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
-    await tool.execute(
-      { name: 'review-code', args: { path: 'src/agent/core.ts' } },
-      makeCtx(),
-    );
-    const [payload] = runner.mock.calls[0] as [import('../subagent/subagent-runner').SubagentPayload];
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
+    await tool.execute({ name: 'review-code', args: { path: 'src/agent/core.ts' } }, makeCtx());
+    const [payload] = runner.mock.calls[0] as [
+      import('../subagent/subagent-runner').SubagentPayload,
+    ];
     expect(payload.prompt).toContain('src/agent/core.ts');
     expect(payload.allowedTools).toEqual(['file_read']);
   });
@@ -232,11 +238,13 @@ describe('review-code uses file_read for path input', () => {
   it('both path and diff can be provided together', async () => {
     const review = {
       summary: 'Reviewed diff in context of full file.',
-      issues: [{ severity: 'warning', file: 'src/tool.ts', line: 3, message: 'Missing return type.' }],
+      issues: [
+        { severity: 'warning', file: 'src/tool.ts', line: 3, message: 'Missing return type.' },
+      ],
       approved: true,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, "");
+    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, runner, '');
     const result = await tool.execute(
       {
         name: 'review-code',

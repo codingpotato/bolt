@@ -10,7 +10,9 @@ export interface MemoryWriteResult {
   id: string;
 }
 
-export function createMemoryWriteTool(store: MemoryStore): Tool<MemoryWriteInput, MemoryWriteResult> {
+export function createMemoryWriteTool(
+  store: MemoryStore,
+): Tool<MemoryWriteInput, MemoryWriteResult> {
   return {
     name: 'memory_write',
     description:

@@ -28,7 +28,6 @@ export interface Config {
   };
   agentPrompt: {
     projectFile: string;
-    suggestionsPath: string;
     maxTokens: number;
     watchForChanges: boolean;
   };
@@ -109,7 +108,6 @@ const DEFAULTS: Config = {
   },
   agentPrompt: {
     projectFile: '.bolt/AGENT.md',
-    suggestionsPath: '.bolt/suggestions',
     maxTokens: 8000,
     watchForChanges: true,
   },

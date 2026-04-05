@@ -31,12 +31,12 @@ export function resolveAuth(): AuthConfig {
   if (apiKey) {
     if (sessionToken) {
       process.stderr.write(
-        'Warning: both ANTHROPIC_API_KEY and ANTHROPIC_SESSION_TOKEN are set; using ANTHROPIC_API_KEY\n'
+        'Warning: both ANTHROPIC_API_KEY and ANTHROPIC_SESSION_TOKEN are set; using ANTHROPIC_API_KEY\n',
       );
     }
     if (localEndpoint) {
       process.stderr.write(
-        'Warning: both ANTHROPIC_API_KEY and BOLT_LOCAL_ENDPOINT are set; using ANTHROPIC_API_KEY\n'
+        'Warning: both ANTHROPIC_API_KEY and BOLT_LOCAL_ENDPOINT are set; using ANTHROPIC_API_KEY\n',
       );
     }
     return { mode: 'api-key', credential: apiKey };
@@ -45,7 +45,7 @@ export function resolveAuth(): AuthConfig {
   if (sessionToken) {
     if (localEndpoint) {
       process.stderr.write(
-        'Warning: both ANTHROPIC_SESSION_TOKEN and BOLT_LOCAL_ENDPOINT are set; using ANTHROPIC_SESSION_TOKEN\n'
+        'Warning: both ANTHROPIC_SESSION_TOKEN and BOLT_LOCAL_ENDPOINT are set; using ANTHROPIC_SESSION_TOKEN\n',
       );
     }
     return { mode: 'subscription', credential: sessionToken };
@@ -58,7 +58,7 @@ export function resolveAuth(): AuthConfig {
   throw new AuthError(
     'Authentication required. Set ANTHROPIC_API_KEY for API key mode, ' +
       'ANTHROPIC_SESSION_TOKEN for subscription mode, or BOLT_LOCAL_ENDPOINT ' +
-      'to point bolt at a local Anthropic-compatible server.'
+      'to point bolt at a local Anthropic-compatible server.',
   );
 }
 

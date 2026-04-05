@@ -46,7 +46,9 @@ function makeChildProcess(exitCode = 0) {
       if (event === 'close') {
         closeHandlers.push(cb);
         // Schedule close after any already-queued data events
-        setTimeout(() => { for (const h of closeHandlers) h(exitCode); }, 0);
+        setTimeout(() => {
+          for (const h of closeHandlers) h(exitCode);
+        }, 0);
       }
       return proc;
     },
@@ -95,7 +97,10 @@ describe('runSubagent()', () => {
     const child = makeChildProcess(0);
     vi.mocked(spawn).mockReturnValue(child as never);
 
-    setTimeout(() => child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'result text' }))), 0);
+    setTimeout(
+      () => child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'result text' }))),
+      0,
+    );
 
     const result = await runSubagent(makePayload(), '/path/to/subagent.js');
     expect(result.output).toBe('result text');

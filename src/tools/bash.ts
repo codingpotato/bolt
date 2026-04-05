@@ -10,16 +10,16 @@ export interface BashInput {
 
 /** Patterns that require explicit user confirmation before running. */
 const DANGEROUS_PATTERNS: RegExp[] = [
-  /\brm\b.*-[a-zA-Z]*[rR]/,        // rm -r, rm -rf, rm -Rf, etc.
-  /\bsudo\b/,                        // sudo
-  /\bsu(\s|$)/,                      // su <user> or bare su
-  /\|\s*(sh|bash)\b/,               // pipe to shell
-  /\bmkfs/,                          // filesystem format
-  /\bdd\b.*\bof=/,                   // raw disk write
-  />\s*\/dev\/(sd[a-z]|nvme)/,      // write to block device
-  /\bkillall\b/,                     // killall
-  /\bpkill\b/,                       // pkill
-  /\bshred\b/,                       // shred
+  /\brm\b.*-[a-zA-Z]*[rR]/, // rm -r, rm -rf, rm -Rf, etc.
+  /\bsudo\b/, // sudo
+  /\bsu(\s|$)/, // su <user> or bare su
+  /\|\s*(sh|bash)\b/, // pipe to shell
+  /\bmkfs/, // filesystem format
+  /\bdd\b.*\bof=/, // raw disk write
+  />\s*\/dev\/(sd[a-z]|nvme)/, // write to block device
+  /\bkillall\b/, // killall
+  /\bpkill\b/, // pkill
+  /\bshred\b/, // shred
 ];
 
 /** Returns the matched pattern description, or null if the command is safe. */
@@ -62,7 +62,9 @@ function runCommand(command: string, cwd: string): Promise<string> {
         let output = parts.join('\n') || '(no output)';
         if (output.length > MAX_OUTPUT_CHARS) {
           const exitSuffix = exitCode !== 0 ? `; exit code: ${exitCode}` : '';
-          output = output.slice(0, MAX_OUTPUT_CHARS) + `\n\n[truncated — output exceeded ${MAX_OUTPUT_CHARS} characters${exitSuffix}]`;
+          output =
+            output.slice(0, MAX_OUTPUT_CHARS) +
+            `\n\n[truncated — output exceeded ${MAX_OUTPUT_CHARS} characters${exitSuffix}]`;
         } else if (exitCode !== 0) {
           output += `\nExit code: ${exitCode}`;
         }

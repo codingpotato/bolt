@@ -299,11 +299,7 @@ export class ContentProjectManager {
   /**
    * Set a task ID for a workflow step.
    */
-  async setTaskId(
-    project: ContentProject,
-    step: keyof TaskIdMap,
-    taskId: string,
-  ): Promise<void> {
+  async setTaskId(project: ContentProject, step: keyof TaskIdMap, taskId: string): Promise<void> {
     project.taskIds[step] = taskId;
     await this.writeManifest(project);
   }
@@ -320,7 +316,7 @@ export class ContentProjectManager {
     // Ensure the resolved path is within the project directory
     if (!resolvedPath.startsWith(projectDir + '/') && resolvedPath !== projectDir) {
       throw new Error(
-        `Path traversal attempt detected: "${relativePath}" resolves outside project directory`
+        `Path traversal attempt detected: "${relativePath}" resolves outside project directory`,
       );
     }
 

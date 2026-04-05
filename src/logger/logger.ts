@@ -59,7 +59,9 @@ export function createLogger(logLevel: LogLevel, logFilePath: string): Logger {
     const line = JSON.stringify(entry) + '\n';
 
     // Fire-and-forget: ensure the dir exists then append.
-    void ensureDir().then(() => appendFile(logFilePath, line)).catch(() => undefined);
+    void ensureDir()
+      .then(() => appendFile(logFilePath, line))
+      .catch(() => undefined);
 
     // error-level entries are also written to stderr for immediate visibility.
     if (level === 'error') {
@@ -68,19 +70,35 @@ export function createLogger(logLevel: LogLevel, logFilePath: string): Logger {
   }
 
   return {
-    debug(message, meta) { write('debug', message, meta); },
-    info(message, meta)  { write('info',  message, meta); },
-    warn(message, meta)  { write('warn',  message, meta); },
-    error(message, meta) { write('error', message, meta); },
+    debug(message, meta) {
+      write('debug', message, meta);
+    },
+    info(message, meta) {
+      write('info', message, meta);
+    },
+    warn(message, meta) {
+      write('warn', message, meta);
+    },
+    error(message, meta) {
+      write('error', message, meta);
+    },
   };
 }
 
 /** A no-op logger that discards all entries — used as the default in tests and optional parameters. */
 export function createNoopLogger(): Logger {
   return {
-    debug() { /* noop */ },
-    info()  { /* noop */ },
-    warn()  { /* noop */ },
-    error() { /* noop */ },
+    debug() {
+      /* noop */
+    },
+    info() {
+      /* noop */
+    },
+    warn() {
+      /* noop */
+    },
+    error() {
+      /* noop */
+    },
   };
 }

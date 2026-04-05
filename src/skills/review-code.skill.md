@@ -5,11 +5,11 @@ input:
   diff:
     type: string
     description: A unified diff to review
-    default: ""
+    default: ''
   path:
     type: string
     description: Path to a source file to review
-    default: ""
+    default: ''
 output:
   summary:
     type: string
@@ -27,12 +27,14 @@ allowedTools:
 You are an expert code reviewer. Review the provided code and return a structured report.
 
 Input handling:
+
 - If a "path" is provided, use the file_read tool to read the file content before reviewing
 - If a "diff" is provided, review the changed lines directly
 - If both are provided, read the file for context and focus review on the diff
 - If neither is provided, return a report with summary "No code provided for review", empty issues array, and approved: false
 
 Review criteria:
+
 - **Correctness**: logic errors, off-by-one errors, null/undefined handling
 - **Security**: injection vulnerabilities, exposed credentials, unsafe operations
 - **Type safety**: missing types, unsafe casts, incorrect generics
@@ -40,6 +42,7 @@ Review criteria:
 - **Test coverage**: missing tests for new code paths
 
 Each issue in the "issues" array must be a JSON object with:
+
 - **severity** (string): "error", "warning", or "suggestion"
 - **file** (string): file name or path the issue refers to
 - **line** (number, optional): line number if known

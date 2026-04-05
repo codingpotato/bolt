@@ -29,7 +29,18 @@ function makeCtx(): ToolContext {
       warn: () => {},
       error: () => {},
     } as unknown as ToolContext['logger'],
-    progress: { onSessionStart: () => {}, onThinking: () => {}, onToolCall: () => {}, onToolResult: () => {}, onTaskStatusChange: () => {}, onContextInjection: () => {}, onMemoryCompaction: () => {}, onLlmCall: () => {}, onLlmResponse: () => {}, onRetry: () => {} },
+    progress: {
+      onSessionStart: () => {},
+      onThinking: () => {},
+      onToolCall: () => {},
+      onToolResult: () => {},
+      onTaskStatusChange: () => {},
+      onContextInjection: () => {},
+      onMemoryCompaction: () => {},
+      onLlmCall: () => {},
+      onLlmResponse: () => {},
+      onRetry: () => {},
+    },
   };
 }
 
@@ -84,17 +95,26 @@ describe('task tools', () => {
     });
 
     it('passes dependsOn to store.create when provided', async () => {
-      await getTool('task_create').execute({ title: 'T', description: 'D', dependsOn: ['task-1'] }, ctx);
+      await getTool('task_create').execute(
+        { title: 'T', description: 'D', dependsOn: ['task-1'] },
+        ctx,
+      );
       expect(store.create).toHaveBeenCalledWith('T', 'D', ['task-1'], undefined);
     });
 
     it('passes requiresApproval to store.create when provided', async () => {
-      await getTool('task_create').execute({ title: 'T', description: 'D', requiresApproval: true }, ctx);
+      await getTool('task_create').execute(
+        { title: 'T', description: 'D', requiresApproval: true },
+        ctx,
+      );
       expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, true);
     });
 
     it('passes requiresApproval=false to store.create when explicitly false', async () => {
-      await getTool('task_create').execute({ title: 'T', description: 'D', requiresApproval: false }, ctx);
+      await getTool('task_create').execute(
+        { title: 'T', description: 'D', requiresApproval: false },
+        ctx,
+      );
       expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, false);
     });
 
@@ -105,7 +125,10 @@ describe('task tools', () => {
     it('throws ToolError when store.create rejects', async () => {
       store.create.mockRejectedValue(new Error('dependency not found: bad-id'));
       await expect(
-        getTool('task_create').execute({ title: 'T', description: 'D', dependsOn: ['bad-id'] }, ctx),
+        getTool('task_create').execute(
+          { title: 'T', description: 'D', dependsOn: ['bad-id'] },
+          ctx,
+        ),
       ).rejects.toThrow('dependency not found: bad-id');
     });
   });
@@ -127,10 +150,7 @@ describe('task tools', () => {
     });
 
     it('passes error when provided', async () => {
-      await getTool('task_update').execute(
-        { id: 'task-1', status: 'failed', error: 'oops' },
-        ctx,
-      );
+      await getTool('task_update').execute({ id: 'task-1', status: 'failed', error: 'oops' }, ctx);
       expect(store.update).toHaveBeenCalledWith('task-1', { status: 'failed', error: 'oops' });
     });
 
@@ -238,9 +258,18 @@ describe('task tools', () => {
       ctx.channel = { receive: vi.fn(), send: vi.fn(), notifyTaskCompletion };
       store.list.mockReturnValue([makeTask({ id: 'task-1', title: 'My Task' })]);
 
-      await getTool('task_update').execute({ id: 'task-1', status: 'completed', result: 'done' }, ctx);
+      await getTool('task_update').execute(
+        { id: 'task-1', status: 'completed', result: 'done' },
+        ctx,
+      );
 
-      expect(notifyTaskCompletion).toHaveBeenCalledWith('task-1', 'My Task', 'completed', 'done', undefined);
+      expect(notifyTaskCompletion).toHaveBeenCalledWith(
+        'task-1',
+        'My Task',
+        'completed',
+        'done',
+        undefined,
+      );
     });
 
     it('calls notifyTaskCompletion when status transitions to failed', async () => {
@@ -248,16 +277,31 @@ describe('task tools', () => {
       ctx.channel = { receive: vi.fn(), send: vi.fn(), notifyTaskCompletion };
       store.list.mockReturnValue([makeTask({ id: 'task-1', title: 'My Task' })]);
 
-      await getTool('task_update').execute({ id: 'task-1', status: 'failed', error: 'network timeout' }, ctx);
+      await getTool('task_update').execute(
+        { id: 'task-1', status: 'failed', error: 'network timeout' },
+        ctx,
+      );
 
-      expect(notifyTaskCompletion).toHaveBeenCalledWith('task-1', 'My Task', 'failed', undefined, 'network timeout');
+      expect(notifyTaskCompletion).toHaveBeenCalledWith(
+        'task-1',
+        'My Task',
+        'failed',
+        undefined,
+        'network timeout',
+      );
     });
 
     it('does not call notifyTaskCompletion for intermediate statuses', async () => {
       const notifyTaskCompletion = vi.fn().mockResolvedValue(undefined);
       ctx.channel = { receive: vi.fn(), send: vi.fn(), notifyTaskCompletion };
 
-      for (const status of ['pending', 'in_progress', 'blocked', 'waiting', 'awaiting_approval'] as TaskStatus[]) {
+      for (const status of [
+        'pending',
+        'in_progress',
+        'blocked',
+        'waiting',
+        'awaiting_approval',
+      ] as TaskStatus[]) {
         await getTool('task_update').execute({ id: 'task-1', status }, ctx);
       }
 

@@ -64,7 +64,13 @@ describe('createRunSkillSlashCommand', () => {
     });
   });
 
-  const cmd = createRunSkillSlashCommand([BLOG_SKILL, SIMPLE_SKILL], AUTH, MODEL, SCRIPT, runnerSpy);
+  const cmd = createRunSkillSlashCommand(
+    [BLOG_SKILL, SIMPLE_SKILL],
+    AUTH,
+    MODEL,
+    SCRIPT,
+    runnerSpy,
+  );
 
   it('has name "run-skill"', () => {
     expect(cmd.name).toBe('run-skill');

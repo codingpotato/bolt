@@ -15,7 +15,17 @@ interface ClientMessage {
 
 /** Shape of messages sent from server → client. */
 export interface ServerMessage {
-  type: 'response' | 'review' | 'error' | 'status' | 'media' | 'progress' | 'user_message' | 'processing' | 'queue_status' | 'task_complete';
+  type:
+    | 'response'
+    | 'review'
+    | 'error'
+    | 'status'
+    | 'media'
+    | 'progress'
+    | 'user_message'
+    | 'processing'
+    | 'queue_status'
+    | 'task_complete';
   content?: string;
   reviewId?: string;
   reviewRequest?: UserReviewRequest;

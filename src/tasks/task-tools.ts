@@ -31,27 +31,38 @@ interface TaskListOutput {
 export function createTaskTools(store: TaskStore): Tool[] {
   const taskCreate: Tool<TaskCreateInput, TaskCreateOutput> = {
     name: 'task_create',
-    description: 'Create a structured task with a title and description. Returns the new task id. Writes to .bolt/tasks.json immediately.',
+    description:
+      'Create a structured task with a title and description. Returns the new task id. Writes to .bolt/tasks.json immediately.',
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Short title for the task.' },
-        description: { type: 'string', description: 'Full description of the task and its success criteria.' },
+        description: {
+          type: 'string',
+          description: 'Full description of the task and its success criteria.',
+        },
         dependsOn: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Optional list of task IDs that must complete before this task can start. Tasks with deps start in waiting status.',
+          description:
+            'Optional list of task IDs that must complete before this task can start. Tasks with deps start in waiting status.',
         },
         requiresApproval: {
           type: 'boolean',
-          description: 'If true, the agent must present output via user_review before marking the task completed.',
+          description:
+            'If true, the agent must present output via user_review before marking the task completed.',
         },
       },
       required: ['title', 'description'],
     },
     async execute(input: TaskCreateInput, _ctx: ToolContext): Promise<TaskCreateOutput> {
       try {
-        const id = await store.create(input.title, input.description, input.dependsOn, input.requiresApproval);
+        const id = await store.create(
+          input.title,
+          input.description,
+          input.dependsOn,
+          input.requiresApproval,
+        );
         return { id };
       } catch (err) {
         throw new ToolError(err instanceof Error ? err.message : String(err));
@@ -61,7 +72,8 @@ export function createTaskTools(store: TaskStore): Tool[] {
 
   const taskUpdate: Tool<TaskUpdateInput, TaskUpdateOutput> = {
     name: 'task_update',
-    description: 'Update the status of a task. Optionally set result (on completion) or error (on failure).',
+    description:
+      'Update the status of a task. Optionally set result (on completion) or error (on failure).',
     sequential: true,
     inputSchema: {
       type: 'object',
@@ -69,8 +81,17 @@ export function createTaskTools(store: TaskStore): Tool[] {
         id: { type: 'string', description: 'Id of the task to update.' },
         status: {
           type: 'string',
-          enum: ['pending', 'in_progress', 'blocked', 'waiting', 'awaiting_approval', 'completed', 'failed'],
-          description: 'New status. Tasks start as pending (no deps) or waiting (has unmet deps). waiting → pending is managed automatically by the store when deps complete. awaiting_approval is only valid when requiresApproval is true.',
+          enum: [
+            'pending',
+            'in_progress',
+            'blocked',
+            'waiting',
+            'awaiting_approval',
+            'completed',
+            'failed',
+          ],
+          description:
+            'New status. Tasks start as pending (no deps) or waiting (has unmet deps). waiting → pending is managed automatically by the store when deps complete. awaiting_approval is only valid when requiresApproval is true.',
         },
         result: { type: 'string', description: 'Output of the task when completed.' },
         error: { type: 'string', description: 'Reason for failure when status is failed.' },
@@ -101,7 +122,13 @@ export function createTaskTools(store: TaskStore): Tool[] {
       ctx.progress.onTaskStatusChange(input.id, title, input.status);
       if ((input.status === 'completed' || input.status === 'failed') && ctx.channel) {
         try {
-          await ctx.channel.notifyTaskCompletion?.(input.id, title, input.status, input.result, input.error);
+          await ctx.channel.notifyTaskCompletion?.(
+            input.id,
+            title,
+            input.status,
+            input.result,
+            input.error,
+          );
         } catch {
           // Never let a notification failure surface to the agent
         }

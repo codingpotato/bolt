@@ -29,7 +29,9 @@ function makeCtx(): ToolContext {
 
 describe('memory_search tool', () => {
   const getAllSpy = vi.fn(() => [] as CompactEntry[]);
-  const mockStore = { getAll: getAllSpy } as unknown as import('../memory/memory-store').MemoryStore;
+  const mockStore = {
+    getAll: getAllSpy,
+  } as unknown as import('../memory/memory-store').MemoryStore;
   const tool = createMemorySearchTool(mockStore);
 
   beforeEach(() => {
@@ -47,9 +49,7 @@ describe('memory_search tool', () => {
   });
 
   it('returns empty entries (not an error) when no matches found', async () => {
-    getAllSpy.mockReturnValue([
-      makeEntry({ summary: 'completely unrelated content', tags: [] }),
-    ]);
+    getAllSpy.mockReturnValue([makeEntry({ summary: 'completely unrelated content', tags: [] })]);
     const result = await tool.execute({ query: 'xyzzy unique token' }, makeCtx());
     expect(result.entries).toEqual([]);
   });
@@ -58,7 +58,11 @@ describe('memory_search tool', () => {
     getAllSpy.mockReturnValue([
       makeEntry({ id: 'e1', summary: 'typescript compiler errors', tags: ['typescript'] }),
       makeEntry({ id: 'e2', summary: 'unrelated database stuff', tags: ['sql'] }),
-      makeEntry({ id: 'e3', summary: 'typescript types and interfaces', tags: ['typescript', 'types'] }),
+      makeEntry({
+        id: 'e3',
+        summary: 'typescript types and interfaces',
+        tags: ['typescript', 'types'],
+      }),
     ]);
     const result = await tool.execute({ query: 'typescript', limit: 5 }, makeCtx());
     const ids = result.entries.map((e) => e.id);
@@ -88,11 +92,29 @@ describe('memory_search tool', () => {
 
   it('filters by taskId', async () => {
     getAllSpy.mockReturnValue([
-      makeEntry({ id: 'e1', summary: 'refactoring the auth module', tags: ['auth'], taskId: 'task-A' }),
-      makeEntry({ id: 'e2', summary: 'refactoring the payment module', tags: ['payment'], taskId: 'task-B' }),
-      makeEntry({ id: 'e3', summary: 'refactoring the cache layer', tags: ['cache'], taskId: 'task-A' }),
+      makeEntry({
+        id: 'e1',
+        summary: 'refactoring the auth module',
+        tags: ['auth'],
+        taskId: 'task-A',
+      }),
+      makeEntry({
+        id: 'e2',
+        summary: 'refactoring the payment module',
+        tags: ['payment'],
+        taskId: 'task-B',
+      }),
+      makeEntry({
+        id: 'e3',
+        summary: 'refactoring the cache layer',
+        tags: ['cache'],
+        taskId: 'task-A',
+      }),
     ]);
-    const result = await tool.execute({ query: 'refactoring', taskId: 'task-A', limit: 10 }, makeCtx());
+    const result = await tool.execute(
+      { query: 'refactoring', taskId: 'task-A', limit: 10 },
+      makeCtx(),
+    );
     const ids = result.entries.map((e) => e.id);
     expect(ids).toContain('e1');
     expect(ids).toContain('e3');
@@ -104,7 +126,10 @@ describe('memory_search tool', () => {
       makeEntry({ id: 'e1', summary: 'deploy pipeline fix', tags: [], date: '2025-01-10' }),
       makeEntry({ id: 'e2', summary: 'deploy configuration update', tags: [], date: '2025-01-20' }),
     ]);
-    const result = await tool.execute({ query: 'deploy', dateFrom: '2025-01-15', limit: 10 }, makeCtx());
+    const result = await tool.execute(
+      { query: 'deploy', dateFrom: '2025-01-15', limit: 10 },
+      makeCtx(),
+    );
     const ids = result.entries.map((e) => e.id);
     expect(ids).toContain('e2');
     expect(ids).not.toContain('e1');
@@ -115,7 +140,10 @@ describe('memory_search tool', () => {
       makeEntry({ id: 'e1', summary: 'deploy pipeline fix', tags: [], date: '2025-01-10' }),
       makeEntry({ id: 'e2', summary: 'deploy configuration update', tags: [], date: '2025-01-20' }),
     ]);
-    const result = await tool.execute({ query: 'deploy', dateTo: '2025-01-15', limit: 10 }, makeCtx());
+    const result = await tool.execute(
+      { query: 'deploy', dateTo: '2025-01-15', limit: 10 },
+      makeCtx(),
+    );
     const ids = result.entries.map((e) => e.id);
     expect(ids).toContain('e1');
     expect(ids).not.toContain('e2');
@@ -127,12 +155,15 @@ describe('memory_search tool', () => {
       makeEntry({ id: 'e2', summary: 'cache warm up logic', tags: [], date: '2025-01-10' }),
       makeEntry({ id: 'e3', summary: 'cache eviction policy', tags: [], date: '2025-01-20' }),
     ]);
-    const result = await tool.execute({
-      query: 'cache',
-      dateFrom: '2025-01-05',
-      dateTo: '2025-01-15',
-      limit: 10,
-    }, makeCtx());
+    const result = await tool.execute(
+      {
+        query: 'cache',
+        dateFrom: '2025-01-05',
+        dateTo: '2025-01-15',
+        limit: 10,
+      },
+      makeCtx(),
+    );
     const ids = result.entries.map((e) => e.id);
     expect(ids).toContain('e2');
     expect(ids).not.toContain('e1');

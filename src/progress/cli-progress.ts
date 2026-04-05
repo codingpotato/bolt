@@ -31,8 +31,6 @@ export function summariseInput(name: string, input: unknown): string {
       return `"${String(obj['query'] ?? '')}"`;
     case 'memory_write':
       return String(obj['content'] ?? '').slice(0, 80);
-    case 'agent_suggest':
-      return `${String(obj['scope'] ?? '')}/AGENT.md`;
     default:
       return JSON.stringify(input).slice(0, 120);
   }

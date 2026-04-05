@@ -13,7 +13,7 @@ import * as fsPromises from 'node:fs/promises';
 // ---------------------------------------------------------------------------
 
 const LOG_PATH = '/tmp/test-bolt.log';
-const LOG_DIR  = '/tmp';
+const LOG_DIR = '/tmp';
 
 /** Flush the microtask queue so fire-and-forget promises settle. */
 async function flush(): Promise<void> {
@@ -190,9 +190,9 @@ describe('createLogger', () => {
     let stderrSpy: { mockRestore(): void; mock: { calls: unknown[][] } };
 
     beforeEach(() => {
-      stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(
-        () => true,
-      ) as unknown as typeof stderrSpy;
+      stderrSpy = vi
+        .spyOn(process.stderr, 'write')
+        .mockImplementation(() => true) as unknown as typeof stderrSpy;
     });
 
     afterEach(() => {

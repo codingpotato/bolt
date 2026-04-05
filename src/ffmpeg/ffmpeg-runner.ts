@@ -84,10 +84,7 @@ export class FfmpegRunner {
     const abs = resolvePath(this.cwd, filePath);
     const boundary = this.cwd.endsWith(sep) ? this.cwd : this.cwd + sep;
     if (!abs.startsWith(boundary)) {
-      throw new ToolError(
-        `path "${filePath}" is outside the workspace (${this.cwd})`,
-        false,
-      );
+      throw new ToolError(`path "${filePath}" is outside the workspace (${this.cwd})`, false);
     }
   }
 
@@ -151,9 +148,7 @@ export class FfmpegRunner {
           const outputPath = resolvePath(this.cwd, args.at(-1) ?? '');
           resolve({ outputPath, durationMs: Date.now() - startTime, stderr });
         } else {
-          reject(
-            new FfmpegError(`ffmpeg exited with code ${code ?? -1}`, stderr, code ?? -1),
-          );
+          reject(new FfmpegError(`ffmpeg exited with code ${code ?? -1}`, stderr, code ?? -1));
         }
       });
     });

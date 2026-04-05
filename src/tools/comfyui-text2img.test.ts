@@ -79,15 +79,31 @@ describe('comfyuiText2ImgTool', () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 
-  it('uses custom outputPath when provided', async () => {
+  it('uses custom outputPath when provided, resolving to absolute path', async () => {
     const input: ComfyUIText2ImgInput = { prompt: 'test', outputPath: 'custom-output.png' };
     await tool.execute(input, ctx);
 
     expect(mockPool.downloadOutput).toHaveBeenCalledWith(
       expect.objectContaining({ filename: 'output.png' }),
       expect.objectContaining({ url: 'http://comfy:8188' }),
-      'custom-output.png',
+      '/workspace/custom-output.png',
     );
+  });
+
+  it('rejects outputPath that escapes the workspace', async () => {
+    const input: ComfyUIText2ImgInput = { prompt: 'test', outputPath: '../../outside/image.png' };
+    await expect(tool.execute(input, ctx)).rejects.toMatchObject({
+      message: expect.stringContaining('outside the workspace'),
+      retryable: false,
+    });
+  });
+
+  it('rejects absolute outputPath outside workspace', async () => {
+    const input: ComfyUIText2ImgInput = { prompt: 'test', outputPath: '/tmp/image.png' };
+    await expect(tool.execute(input, ctx)).rejects.toMatchObject({
+      message: expect.stringContaining('outside the workspace'),
+      retryable: false,
+    });
   });
 
   it('selects a server, queues workflow, polls, and downloads', async () => {

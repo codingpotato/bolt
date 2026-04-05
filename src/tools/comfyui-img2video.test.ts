@@ -83,12 +83,12 @@ describe('comfyuiImg2VideoTool', () => {
     const input: ComfyUIImg2VideoInput = { imagePath: 'input.png', prompt: 'camera pans left' };
     const result = await tool.execute(input, ctx);
 
-    expect(mockPool.uploadImage).toHaveBeenCalledWith('input.png', expect.anything());
+    expect(mockPool.uploadImage).toHaveBeenCalledWith('/workspace/input.png', expect.anything());
     expect(result.outputPath).toBeDefined();
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 
-  it('uses custom outputPath when provided', async () => {
+  it('uses custom outputPath when provided, resolving to absolute path', async () => {
     const input: ComfyUIImg2VideoInput = {
       imagePath: 'test.png',
       prompt: 'motion',
@@ -99,14 +99,32 @@ describe('comfyuiImg2VideoTool', () => {
     expect(mockPool.downloadOutput).toHaveBeenCalledWith(
       expect.objectContaining({ filename: 'output.mp4' }),
       expect.objectContaining({ url: 'http://comfy:8188' }),
-      'custom-video.mp4',
+      '/workspace/custom-video.mp4',
     );
+  });
+
+  it('rejects outputPath that escapes the workspace', async () => {
+    await expect(
+      tool.execute({ imagePath: 'test.png', prompt: 'motion', outputPath: '../../outside.mp4' }, ctx),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('outside the workspace'),
+      retryable: false,
+    });
+  });
+
+  it('rejects imagePath that escapes the workspace', async () => {
+    await expect(
+      tool.execute({ imagePath: '/etc/passwd', prompt: 'motion' }, ctx),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('outside the workspace'),
+      retryable: false,
+    });
   });
 
   it('uploads image to server, queues workflow, polls, and downloads', async () => {
     await tool.execute({ imagePath: 'test.png', prompt: 'panning shot' }, ctx);
 
-    expect(mockPool.uploadImage).toHaveBeenCalledWith('test.png', expect.anything());
+    expect(mockPool.uploadImage).toHaveBeenCalledWith('/workspace/test.png', expect.anything());
     expect(mockPool.selectServer).toHaveBeenCalled();
     expect(mockPool.queueWorkflow).toHaveBeenCalled();
     expect(mockPool.pollResult).toHaveBeenCalledWith(

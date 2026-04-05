@@ -2,6 +2,7 @@ import { ToolError } from './tool';
 import type { Tool, ToolContext } from './tool';
 import type { ComfyUIPool } from '../comfyui/comfyui-pool';
 import { patchWorkflow } from '../comfyui/comfyui-pool';
+import { resolvePath, assertWithinWorkspace } from './fs-utils';
 
 export interface ComfyUIText2ImgInput {
   prompt: string;
@@ -59,7 +60,9 @@ export function createComfyUIText2ImgTool(
         );
       }
 
-      const resolvedOutputPath = input.outputPath ?? `${Date.now()}-text2img.png`;
+      const rawOutputPath = input.outputPath ?? `${Date.now()}-text2img.png`;
+      const absOutputPath = resolvePath(ctx.cwd, rawOutputPath);
+      assertWithinWorkspace(ctx.cwd, absOutputPath, rawOutputPath);
 
       const { workflow, patchmap } = pool.loadWorkflow('image_z_image_turbo');
 
@@ -107,10 +110,10 @@ export function createComfyUIText2ImgTool(
         throw new ToolError('Workflow completed but produced no output files', false);
       }
 
-      await pool.downloadOutput(outputs.files[0]!, server, resolvedOutputPath);
+      await pool.downloadOutput(outputs.files[0]!, server, absOutputPath);
 
       return {
-        outputPath: resolvedOutputPath,
+        outputPath: absOutputPath,
         seed,
         durationMs: Date.now() - startTime,
       };

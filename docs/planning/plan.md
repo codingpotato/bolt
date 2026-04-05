@@ -1124,6 +1124,36 @@ Acceptance Criteria:
 - [x] Unit tests cover CliChannel and WebChannel completion message paths
 ```
 
+**S10-5: Content project tools + comfyUI workspace fix** ✅
+
+```
+As an agent,
+I want built-in tools to create and manage content project manifests,
+so that I can set up the project directory and track artifact status
+without using raw file_write / bash calls, and so that all generated
+files land inside the workspace.
+
+Acceptance Criteria:
+- [x] content_project_create({ topic, title? }) wraps ContentProjectManager.createProject()
+      and returns { projectId, manifestPath, projectDir }
+- [x] content_project_read({ projectId }) wraps ContentProjectManager.readProject()
+      and returns the full ContentProject manifest; ToolError if not found
+- [x] content_project_update_artifact({ projectId, artifactPath, status }) wraps
+      ContentProjectManager.updateArtifactStatus(); returns { updated: boolean }
+- [x] All three tools are marked sequential: true (shared manifest state)
+- [x] All three tools are registered as built-in tools
+- [x] All three tools are documented in docs/design/tools-system.md and
+      docs/design/content-generation.md (Content Project Tools section)
+- [x] Unit tests cover: create project (directory + manifest written), read project
+      (returns manifest, error when missing), update artifact status (approved/failed/not-found)
+- [x] comfyui_text2img: outputPath is resolved against ctx.cwd; path containment check
+      rejects any path outside workspace with non-retryable ToolError before pool.downloadOutput
+- [x] comfyui_img2video: outputPath and imagePath are both resolved against ctx.cwd;
+      containment check applied to both before any pool operation
+- [x] Unit tests for both comfyUI tools cover: path within workspace (allowed),
+      absolute path outside workspace (rejected), traversal path (rejected)
+```
+
 **S10-6: FFmpeg Runner** ✅
 
 ```
@@ -1183,6 +1213,39 @@ Acceptance Criteria:
 - [x] Each post-production task has requiresApproval: true; user can reject and trigger a redo
 - [x] project.json manifest postProduction fields are updated after each step
 - [x] Integration test covers merge + audio + subtitles with mocked FfmpegRunner and channel
+```
+
+**S10-9: `produce-video` orchestrator skill** ✅
+
+```
+As a blogger,
+I want to say "make a video about X" and have bolt handle the entire pipeline,
+so that I don't need to manually invoke each production step.
+
+Acceptance Criteria:
+- [x] produce-video.skill.md created in src/skills/ with:
+      - input schema: { topic, title?, targetPlatform?, audioFile?, projectId? }
+      - output schema: { projectId, manifestPath, finalVideoPath }
+      - allowedTools: content_project_create, content_project_read,
+        content_project_update_artifact, task_create, task_update, task_list,
+        skill_run, user_review, file_read, file_write
+- [x] Skill system prompt encodes the full pipeline sequence:
+      1. If projectId is provided, read project.json and resume from last incomplete step
+      2. Else call content_project_create to initialize the project
+      3. Create the full task DAG (analyzeTrends → generateScript → generateImagePrompts
+         → generateImages → generateVideoPrompts → generateVideos → mergeClips
+         → addAudio (if audioFile provided) → addSubtitles (if storyboard has dialogue))
+      4. Store { projectId, manifestPath } in the analyzeTrends task result
+      5. For each task: invoke the matching sub-skill, present via user_review,
+         call content_project_update_artifact on approval, then mark task completed
+      6. Return { projectId, manifestPath, finalVideoPath } on full completion
+- [x] produce-video is listed in the Built-in Skills table in docs/design/skills-system.md
+- [x] Skill is discoverable via /skills and invocable via /run-skill produce-video
+- [x] Unit tests verify skill metadata (name, input/output schema, allowedTools, system prompt)
+      and invocation via skill_run returns a structured project reference
+- [x] Resume flow: when projectId input is provided, skill reads project.json,
+      identifies the first task without status 'completed', and continues from there
+      without recreating the project or the DAG
 ```
 
 ---
@@ -1472,7 +1535,9 @@ Sprint 0 (Foundation)
 │          S10 (ComfyUI Client + Video Production + Post-Production)
 │              S10-1..3: ComfyUI Pool + tools + production workflow
 │              S10-4: channel task completion notification
+│              S10-5: content project tools + comfyUI workspace fix
 │              S10-6..8: FFmpeg Runner + video editing tools
+│              S10-9: produce-video orchestrator skill
 │                        │
 └───────────────────────►S11 (Simplified AGENT.md + Skills/Tools Injection)
                            │    S11-1:  AGENT.md simplification + dynamic catalogs
@@ -1494,35 +1559,6 @@ Sprint 0 (Foundation)
 
 Sprint 12 depends on S2 (Tool Bus + Core Tools) since it extends the existing file tools.
 It is placed after S11 so it does not block the v1 release — these are enhancements, not blockers.
-S0 (Foundation)
-│
-├─► S1 (Auth + Channel + CLI)
-│ │
-│ └─► S3 (Agent Core) ◄─── S2 (Tool Bus + Tools)
-│ │
-│ ┌─────────┼──────────┐
-│ ▼ ▼ ▼
-│ S4 S5 S6
-│ (Tasks) (Memory) (Sub-agent
-│ │ │ + Skills)
-│ └────────┴─────┐ │
-│ ▼ ▼
-│ S7 (Web Search + User Review)
-│ │
-│ ┌───────┼────────┐
-│ ▼ ▼
-│ S8 (WebChannel) S9 (Content + Trends)
-│ │ │
-│ └───────┬────────┘
-│ ▼
-│ S10 (ComfyUI Client + Video Production + Post-Production)
-│ S10-1..3: ComfyUI Pool + tools + production workflow
-│ S10-4: channel task completion notification
-│ S10-6..8: FFmpeg Runner + video editing tools
-│ │
-└───────────────────────►S11 (Polish)
-
-```
 
 ---
 

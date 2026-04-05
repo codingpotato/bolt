@@ -58,6 +58,15 @@ import { FfmpegRunner } from '../ffmpeg/ffmpeg-runner';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
 
+const INHERITED_SECTIONS = ['Safety Rules', 'Communication Style', 'Operating Modes'] as const;
+
+function buildInheritedRules(systemPrompt: string): string {
+  const sections = extractPromptSections(systemPrompt, INHERITED_SECTIONS);
+  return Object.entries(sections)
+    .map(([name, content]) => `## ${name}\n\n${content}`)
+    .join('\n\n');
+}
+
 async function serve(serveArgs: string[]): Promise<void> {
   const config = resolveConfig();
 
@@ -152,17 +161,10 @@ async function serve(serveArgs: string[]): Promise<void> {
   }
 
   // Register subagent-run and skill-run with inherited rules
-  const inheritedSections = extractPromptSections(systemPrompt, [
-    'Safety Rules',
-    'Communication Style',
-    'Operating Modes',
-  ]);
-  const inheritedRules = Object.entries(inheritedSections)
-    .map(([name, content]) => `## ${name}\n\n${content}`)
-    .join('\n\n');
+  const inheritedRules = buildInheritedRules(systemPrompt);
 
   toolBus.register(
-    createSubagentRunTool(auth, config.model, subagentScript, runSubagent, systemPrompt),
+    createSubagentRunTool(auth, config.model, subagentScript, runSubagent, () => systemPrompt),
   );
   toolBus.register(
     createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent, inheritedRules),
@@ -379,17 +381,10 @@ async function main(): Promise<void> {
   }
 
   // Register subagent-run and skill-run with inherited rules
-  const inheritedSections = extractPromptSections(systemPrompt, [
-    'Safety Rules',
-    'Communication Style',
-    'Operating Modes',
-  ]);
-  const inheritedRules = Object.entries(inheritedSections)
-    .map(([name, content]) => `## ${name}\n\n${content}`)
-    .join('\n\n');
+  const inheritedRules = buildInheritedRules(systemPrompt);
 
   toolBus.register(
-    createSubagentRunTool(auth, config.model, subagentScript, runSubagent, systemPrompt),
+    createSubagentRunTool(auth, config.model, subagentScript, runSubagent, () => systemPrompt),
   );
   toolBus.register(
     createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent, inheritedRules),
@@ -466,6 +461,7 @@ async function main(): Promise<void> {
   process.stderr.write('Type a message and press Enter. Ctrl+D to exit.\n\n');
 
   await agent.run();
+  _cleanupWatcher?.();
 }
 
 main().catch((err: unknown) => {

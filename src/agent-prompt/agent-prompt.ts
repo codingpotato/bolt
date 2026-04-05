@@ -1,4 +1,4 @@
-import { readFile, copyFile } from 'node:fs/promises';
+import { readFile, copyFile, mkdir } from 'node:fs/promises';
 import { existsSync, watch, FSWatcher } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Config } from '../config/config';
@@ -23,7 +23,7 @@ export async function ensureAgentFile(config: Config): Promise<string> {
   if (!existsSync(projectPath)) {
     const dir = dirname(projectPath);
     if (!existsSync(dir)) {
-      await import('node:fs/promises').then((fs) => fs.mkdir(dir, { recursive: true }));
+      await mkdir(dir, { recursive: true });
     }
     await copyFile(BUILTIN_AGENT_MD, projectPath);
   }
@@ -121,8 +121,11 @@ export function watchAgentPrompt(config: Config, onChange: () => void): () => vo
   const watcher: FSWatcher = watch(filePath, () => {
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => {
-      onChange();
-      timeout = null;
+      try {
+        onChange();
+      } finally {
+        timeout = null;
+      }
     }, 500);
   });
 
@@ -138,7 +141,7 @@ export function watchAgentPrompt(config: Config, onChange: () => void): () => vo
  */
 export function extractPromptSections(
   prompt: string,
-  sectionNames: string[],
+  sectionNames: readonly string[],
 ): Record<string, string> {
   const result: Record<string, string> = {};
   const lines = prompt.split('\n');

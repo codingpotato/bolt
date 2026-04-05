@@ -36,17 +36,8 @@ export function createSubagentRunTool(
   model: string,
   scriptPath: string,
   runner: Runner,
-  parentSystemPrompt: string,
+  getSystemPrompt: () => string,
 ): Tool<SubagentRunInput, SubagentRunOutput> {
-  const inheritedSections = extractPromptSections(parentSystemPrompt, [
-    'Safety Rules',
-    'Communication Style',
-    'Operating Modes',
-  ]);
-  const inheritedRules = Object.entries(inheritedSections)
-    .map(([name, content]) => `## ${name}\n\n${content}`)
-    .join('\n\n');
-
   return {
     name: 'subagent_run',
     description:
@@ -72,6 +63,16 @@ export function createSubagentRunTool(
 
     async execute(input: SubagentRunInput, ctx: ToolContext): Promise<SubagentRunOutput> {
       const allowedTools = resolveAllowedTools(ctx.allowedTools, input.allowedTools);
+
+      const parentSystemPrompt = getSystemPrompt();
+      const inheritedSections = extractPromptSections(parentSystemPrompt, [
+        'Safety Rules',
+        'Communication Style',
+        'Operating Modes',
+      ]);
+      const inheritedRules = Object.entries(inheritedSections)
+        .map(([name, content]) => `## ${name}\n\n${content}`)
+        .join('\n\n');
 
       const payload: SubagentPayload = {
         prompt: input.prompt,

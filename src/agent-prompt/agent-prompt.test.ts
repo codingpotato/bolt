@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   loadAgentPrompt,
   ensureAgentFile,
@@ -7,6 +7,7 @@ import {
   estimateTokenCount,
   assembleSystemPrompt,
   extractPromptSections,
+  watchAgentPrompt,
 } from './agent-prompt';
 import type { Config } from '../config/config';
 import type { Skill } from '../skills/skill-loader';
@@ -284,5 +285,89 @@ describe('assembleSystemPrompt with custom path', () => {
     );
     expect(result).toBe('custom content');
     expect(readFile).toHaveBeenCalledWith('/custom/project.md', 'utf8');
+  });
+});
+
+describe('ensureAgentFile with missing directory', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('creates parent directory when it does not exist', async () => {
+    const { copyFile, mkdir } = await import('node:fs/promises');
+    const fs = await import('node:fs');
+    vi.mocked(fs.existsSync)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    vi.mocked(copyFile).mockResolvedValue(undefined);
+    vi.mocked(mkdir).mockResolvedValue(undefined);
+
+    await ensureAgentFile(makeConfig());
+    expect(mkdir).toHaveBeenCalled();
+    expect(copyFile).toHaveBeenCalled();
+  });
+});
+
+describe('watchAgentPrompt', () => {
+  const mockClose = vi.fn();
+  const mockWatcher = { close: mockClose };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns no-op cleanup when file does not exist', async () => {
+    const fs = await import('node:fs');
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const cleanup = watchAgentPrompt(makeConfig(), () => {});
+    expect(typeof cleanup).toBe('function');
+    cleanup();
+  });
+
+  it('watches the file and calls onChange on change', async () => {
+    const fs = await import('node:fs');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    const watchFn = vi.mocked(fs.watch);
+    watchFn.mockReturnValue(mockWatcher as never);
+
+    const onChange = vi.fn();
+    const cleanup = watchAgentPrompt(makeConfig(), onChange);
+
+    expect(watchFn).toHaveBeenCalled();
+    const listener = watchFn.mock.calls[0]?.[1] as (() => void) | undefined;
+    expect(listener).toBeDefined();
+
+    listener!();
+    vi.advanceTimersByTime(600);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    expect(mockClose).toHaveBeenCalled();
+  });
+
+  it('debounces rapid file changes', async () => {
+    const fs = await import('node:fs');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    const watchFn = vi.mocked(fs.watch);
+    watchFn.mockReturnValue(mockWatcher as never);
+
+    const onChange = vi.fn();
+    const cleanup = watchAgentPrompt(makeConfig(), onChange);
+
+    const listener = watchFn.mock.calls[0]?.[1] as (() => void) | undefined;
+    listener!();
+    listener!();
+    listener!();
+    vi.advanceTimersByTime(600);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    cleanup();
   });
 });

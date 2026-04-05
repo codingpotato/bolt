@@ -4,11 +4,11 @@
 
 bolt has three complementary logging mechanisms:
 
-| Mechanism             | File                     | Purpose                                                                                 |
-| --------------------- | ------------------------ | --------------------------------------------------------------------------------------- |
-| **Structured logger** | `.bolt/bolt.log`         | Operational and debug output — agent lifecycle, LLM requests/responses, retry warnings  |
-| **Trace logger**      | `.bolt/trace.jsonl`      | Full LLM payloads — system prompts, messages, tool calls, sub-agent dispatches (opt-in) |
-| **Audit logger**      | `.bolt/tool-audit.jsonl` | Security record — every tool call with scrubbed input/output                            |
+| Mechanism             | Output                   | Purpose                                                                                |
+| --------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
+| **Structured logger** | `.bolt/bolt.log`         | Operational and debug output — agent lifecycle, LLM requests/responses, retry warnings |
+| **Trace logger**      | stderr (pretty blocks)   | Real-time LLM payload inspection — system prompts, messages, tool calls (opt-in)       |
+| **Audit logger**      | `.bolt/tool-audit.jsonl` | Security record — every tool call with scrubbed input/output                           |
 
 This document covers the structured logger and trace logger. See `docs/design/tools-system.md` for the audit logger.
 
@@ -46,14 +46,17 @@ Entries **below** the configured level are silently dropped and never reach the 
 
 ## Log Entry Format
 
-Each line in `.bolt/bolt.log` is a JSON object followed by `\n`:
+Each line in `.bolt/bolt.log` is a JSON object followed by `\n`. At `debug` level, meta fields contain **full content** (complete message text, full tool inputs/outputs) rather than truncated previews.
 
 ```jsonc
-// debug — LLM request
-{"ts":"2026-03-21T10:00:00.000Z","level":"debug","message":"Sending request to LLM","model":"claude-opus-4-6","messageCount":3}
+// debug — user message (full content in `message` field)
+{"ts":"2026-03-21T10:00:00.000Z","level":"debug","message":"User turn received","sessionId":"abc","author":"anonymous","messageLength":42,"message":"What trending topics should I write about?"}
 
-// debug — LLM response
-{"ts":"2026-03-21T10:00:01.123Z","level":"debug","message":"Received response from LLM","model":"claude-opus-4-6","inputTokens":1240,"outputTokens":312,"stopReason":"tool_use"}
+// debug — LLM request
+{"ts":"2026-03-21T10:00:01.000Z","level":"debug","message":"Sending request to LLM","model":"claude-opus-4-6","messageCount":3,"systemPromptLength":5432,"llmCallNumber":1}
+
+// debug — LLM response (full text in contentBlocks)
+{"ts":"2026-03-21T10:00:02.000Z","level":"debug","message":"Received response from LLM","model":"claude-opus-4-6","inputTokens":1240,"outputTokens":312,"stopReason":"tool_use","contentBlocks":[{"type":"tool_use","id":"toolu_abc","name":"bash","input":{"command":"ls -la"}}]}
 
 // info — startup
 {"ts":"2026-03-21T10:00:00.001Z","level":"info","message":"bolt started","model":"claude-opus-4-6","auth":"api-key","logLevel":"info"}
@@ -89,7 +92,7 @@ All levels are written to stderr in a **pretty, human-readable format** with ANS
 2026-03-21 10:00:03 ERR Context window exceeded
 ```
 
-Key metadata fields (model, toolName, sessionId, error, etc.) are highlighted inline. Long values (previews) are shown in the log file only, not on stderr.
+Priority metadata fields (model, toolName, sessionId, error, etc.) are shown inline. String values are truncated to 80 chars; object/array values are JSON-stringified and truncated to 80 chars.
 
 ### Production mode (any other level)
 
@@ -99,7 +102,7 @@ Only `error`-level entries are written to stderr:
 [bolt] ERROR: Context window exceeded and cannot be compacted further (195,000/200,000 tokens used).
 ```
 
-All other levels (`debug`, `info`, `warn`) are file-only JSON. This ensures errors surface immediately in the terminal without polluting normal output with debug noise.
+All other levels (`debug`, `info`, `warn`) are file-only JSON.
 
 ---
 
@@ -118,45 +121,66 @@ All other levels (`debug`, `info`, `warn`) are file-only JSON. This ensures erro
 
 ### Trace mode (opt-in)
 
-`BOLT_LOG_TRACE` (or `logTrace` in `.bolt/config.json`) enables the **trace logger** which writes full LLM payloads to a separate file. Default: `false`.
+`BOLT_LOG_TRACE` (or `logTrace` in `.bolt/config.json`) enables the **trace logger** which writes pretty colored blocks to stderr for every LLM interaction. Default: `false`.
 
 ```sh
+BOLT_LOG_TRACE=true bolt
+# combine with debug for both structured metadata and rich trace blocks:
 BOLT_LOG_LEVEL=debug BOLT_LOG_TRACE=true bolt
 ```
 
-When enabled, `.bolt/trace.jsonl` receives full payloads:
+When enabled, each event is rendered as a bordered block on stderr:
 
-```jsonc
-// system_prompt — full system prompt (logged once per session)
-{"ts":"2026-03-21T10:00:00.000Z","type":"system_prompt","model":"claude-opus-4-6","promptLength":5432,"prompt":"You are bolt, an autonomous AI agent..."}
+```
+╔══ SYSTEM PROMPT ════════════════════════════════════════════════════╗
+║ model=claude-opus-4-6  length=5432                                  ║
+╟─────────────────────────────────────────────────────────────────────╢
+║ You are bolt, an autonomous AI agent for social media content       ║
+║ creators. Your goal is to help bloggers automate the content...     ║
+╚═════════════════════════════════════════════════════════════════════╝
 
-// llm_request — full messages array and tools
-{"ts":"2026-03-21T10:00:01.000Z","type":"llm_request","model":"claude-opus-4-6","messageCount":5,"toolCount":12,"messages":[...],"tools":[...]}
+╔══ LLM REQUEST ══════════════════════════════════════════════════════╗
+║ model=claude-opus-4-6  messages=3  tools=14                         ║
+╟─────────────────────────────────────────────────────────────────────╢
+║ [user]                                                              ║
+║ What are the trending topics I should write about today?            ║
+╚═════════════════════════════════════════════════════════════════════╝
 
-// llm_response — full LLM response with all content blocks
-{"ts":"2026-03-21T10:00:02.000Z","type":"llm_response","response":{"id":"msg_abc","content":[...],"usage":{...}}}
+╔══ TOOL CALL: bash ══════════════════════════════════════════════════╗
+║ id=toolu_abc123                                                     ║
+╟─────────────────────────────────────────────────────────────────────╢
+║ {                                                                   ║
+║   "command": "trend_analyzer --region US --limit 10"               ║
+║ }                                                                   ║
+╚═════════════════════════════════════════════════════════════════════╝
 
-// tool_call — full tool call input
-{"ts":"2026-03-21T10:00:02.100Z","type":"tool_call","toolName":"bash","callId":"toolu_abc","input":{"command":"ls -la"}}
+╔══ TOOL RESULT ✓: bash ══════════════════════════════════════════════╗
+║ id=toolu_abc123                                                     ║
+╟─────────────────────────────────────────────────────────────────────╢
+║ 1. AI productivity tools                                            ║
+║ 2. Creator economy news                                             ║
+╚═════════════════════════════════════════════════════════════════════╝
 
-// tool_result — full tool call result
-{"ts":"2026-03-21T10:00:02.200Z","type":"tool_result","toolName":"bash","callId":"toolu_abc","isError":false,"result":{"exitCode":0,"stdout":"...","stderr":""}}
-
-// subagent_dispatch — full sub-agent prompt
-{"ts":"2026-03-21T10:00:03.000Z","type":"subagent_dispatch","model":"claude-opus-4-6","promptLength":1234,"prompt":"Research the latest trends...","allowedTools":["bash","web_search"]}
-
-// subagent_result — full sub-agent output
-{"ts":"2026-03-21T10:00:15.000Z","type":"subagent_result","outputLength":5678,"output":"Here are the latest trends...","durationMs":12000}
+╔══ SUBAGENT DISPATCH ════════════════════════════════════════════════╗
+║ model=claude-opus-4-6  tools=[bash, write_file]                     ║
+╟─────────────────────────────────────────────────────────────────────╢
+║ Write a viral LinkedIn post about AI productivity tools...          ║
+╚═════════════════════════════════════════════════════════════════════╝
 ```
 
-The trace file is separate from `bolt.log` to avoid polluting normal logs with multi-kilobyte payloads. It is intended for:
+Trace events:
 
-- **Prompt engineering** — analyze exactly what was sent to the LLM
-- **Debugging tool calls** — see full inputs and outputs
-- **Replay** — reconstruct the exact conversation for reproduction
-- **Sub-agent analysis** — understand what child agents received and produced
+| Block header             | What it shows                                            |
+| ------------------------ | -------------------------------------------------------- |
+| `SYSTEM PROMPT`          | Full system prompt (truncated at 60 lines), logged once  |
+| `LLM REQUEST`            | Last message in the conversation + message/tool counts   |
+| `LLM RESPONSE`           | Text content and tool calls in the response              |
+| `TOOL CALL: <name>`      | Full tool input (JSON)                                   |
+| `TOOL RESULT ✓/✗: <name>`| Full tool output, green (success) or red (error)         |
+| `SUBAGENT DISPATCH`      | Full sub-agent/skill prompt + allowed tools              |
+| `SUBAGENT RESULT`        | Full sub-agent output + duration                         |
 
-**Security note**: The trace file contains full prompts and responses, which may include sensitive information. It is gitignored by default and should be rotated or deleted after debugging.
+**Note**: Trace output goes to stderr only — no file is written. Long bodies are truncated after ~30–60 lines on screen; the structured log file (`bolt.log` at `debug` level) retains full content.
 
 ---
 
@@ -165,7 +189,6 @@ The trace file is separate from `bolt.log` to avoid polluting normal logs with m
 | File                     | When created                         |
 | ------------------------ | ------------------------------------ |
 | `.bolt/bolt.log`         | Always — structured operational logs |
-| `.bolt/trace.jsonl`      | Only when `BOLT_LOG_TRACE=true`      |
 | `.bolt/tool-audit.jsonl` | Always — security audit trail        |
 
 Files and their parent directories are created lazily on the first write — no manual setup required.
@@ -183,7 +206,7 @@ createLogger(config.logLevel, '.bolt/bolt.log')
   │
   └─► ToolContext.logger (required field — pass createNoopLogger() in tests)
 
-createTraceLogger('.bolt/trace.jsonl')  // only if logTrace=true, else noop
+createTraceLogger()   // only if logTrace=true, else createNoopTraceLogger()
   │
   └─► AgentCore constructor (traceLogger argument)
 ```
@@ -197,5 +220,5 @@ createTraceLogger('.bolt/trace.jsonl')  // only if logTrace=true, else noop
 | Logger                | Writes to                | Controls         | Credential scrubbing                           |
 | --------------------- | ------------------------ | ---------------- | ---------------------------------------------- |
 | Structured (`Logger`) | `.bolt/bolt.log`         | `BOLT_LOG_LEVEL` | Not applicable (no tool inputs/outputs)        |
-| Trace (`TraceLogger`) | `.bolt/trace.jsonl`      | `BOLT_LOG_TRACE` | No — contains full payloads (use with caution) |
+| Trace (`TraceLogger`) | stderr (pretty blocks)   | `BOLT_LOG_TRACE` | No — contains full payloads (use with caution) |
 | Audit (`ToolLogger`)  | `.bolt/tool-audit.jsonl` | Always on        | Yes — credential fields redacted               |

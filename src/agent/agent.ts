@@ -218,7 +218,7 @@ export class AgentCore {
       sessionId,
       author: author ?? 'anonymous',
       messageLength: messageContent.length,
-      messagePreview: messageContent.slice(0, 100),
+      message: messageContent,
     });
 
     // Append the user message to L1 and persist to L2.
@@ -233,7 +233,6 @@ export class AgentCore {
           model: this.config.model,
           messageCount: this.l1.length,
           tools: toolNames,
-          systemPromptPreview: this.systemPrompt.slice(0, 500),
           systemPromptLength: this.systemPrompt.length,
           llmCallNumber: llmCalls,
         });
@@ -304,10 +303,8 @@ export class AgentCore {
           stopReason: response.stop_reason,
           contentBlocks: response.content.map((b) => ({
             type: b.type,
-            ...(b.type === 'tool_use'
-              ? { id: b.id, name: b.name, inputPreview: JSON.stringify(b.input).slice(0, 200) }
-              : {}),
-            ...(b.type === 'text' ? { textPreview: b.text.slice(0, 200) } : {}),
+            ...(b.type === 'tool_use' ? { id: b.id, name: b.name, input: b.input } : {}),
+            ...(b.type === 'text' ? { text: b.text } : {}),
           })),
         });
         this.ctx.progress.onLlmResponse({
@@ -339,7 +336,7 @@ export class AgentCore {
             tools: toolCalls.map((tc) => ({
               id: tc.id,
               name: tc.name,
-              inputPreview: JSON.stringify(tc.input).slice(0, 300),
+              input: tc.input,
             })),
           });
 
@@ -368,7 +365,7 @@ export class AgentCore {
             results: toolResults.map((tr) => ({
               id: tr.id,
               isError: tr.is_error ?? false,
-              contentPreview: tr.content.slice(0, 300),
+              content: tr.content,
             })),
           });
 
@@ -453,7 +450,7 @@ export class AgentCore {
           const text = textBlock?.text ?? '';
 
           this.logger.debug('Assistant final response', {
-            textPreview: text.slice(0, 500),
+            text,
             textLength: text.length,
             stopReason: response.stop_reason,
           });

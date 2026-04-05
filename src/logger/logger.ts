@@ -89,10 +89,10 @@ function formatPretty(level: LogLevel, message: string, meta?: Record<string, un
       }
     }
 
-    // Show remaining keys (excluding preview/preview fields that are too long)
+    // Show remaining keys
     const shownKeys = new Set(priorityKeys);
     for (const [key, val] of Object.entries(meta)) {
-      if (!shownKeys.has(key) && !key.endsWith('Preview') && !key.endsWith('preview')) {
+      if (!shownKeys.has(key)) {
         metaParts.push(`${DIM}${key}${RESET}=${CYAN}${formatValue(val)}${RESET}`);
       }
     }
@@ -102,12 +102,12 @@ function formatPretty(level: LogLevel, message: string, meta?: Record<string, un
   return `${tsLabel} ${levelLabel} ${msgLabel}${metaStr}`;
 }
 
-/** Formats a value for display, truncating long strings. */
+/** Formats a value for display, truncating long strings/objects to 80 chars. */
 function formatValue(val: unknown): string {
   if (typeof val === 'string') {
     return val.length > 80 ? val.slice(0, 77) + '...' : val;
   }
-  if (Array.isArray(val)) {
+  if (typeof val === 'object' && val !== null) {
     const s = JSON.stringify(val);
     return s.length > 80 ? s.slice(0, 77) + '...' : s;
   }

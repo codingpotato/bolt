@@ -13,7 +13,11 @@ export interface SkillRunOutput {
   result: unknown;
 }
 
-type Runner = (payload: SubagentPayload, scriptPath: string) => Promise<SubagentResult>;
+type Runner = (
+  payload: SubagentPayload,
+  scriptPath: string,
+  execPath?: string,
+) => Promise<SubagentResult>;
 
 /**
  * Validates that all required fields declared in the schema are present and
@@ -81,6 +85,7 @@ export function createSkillRunTool(
   authConfig: AuthConfig,
   model: string,
   scriptPath: string,
+  execPath: string,
   runner: Runner,
   inheritedRules: string,
 ): Tool<SkillRunInput, SkillRunOutput> {
@@ -132,7 +137,7 @@ export function createSkillRunTool(
 
       let subagentOutput: string;
       try {
-        const result = await runner(payload, scriptPath);
+        const result = await runner(payload, scriptPath, execPath);
         subagentOutput = result.output;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

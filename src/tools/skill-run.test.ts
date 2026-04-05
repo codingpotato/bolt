@@ -9,6 +9,7 @@ import { NoopProgressReporter } from '../progress';
 
 const AUTH: AuthConfig = { mode: 'api-key', credential: 'key' };
 const SCRIPT = '/path/to/subagent.js';
+const EXEC = process.execPath;
 const MODEL = 'claude-opus-4-6';
 
 const BLOG_SKILL: Skill = {
@@ -84,7 +85,15 @@ describe('skill_run tool', () => {
     });
   });
 
-  const tool = createSkillRunTool([BLOG_SKILL, REVIEW_SKILL], AUTH, MODEL, SCRIPT, runnerSpy, '');
+  const tool = createSkillRunTool(
+    [BLOG_SKILL, REVIEW_SKILL],
+    AUTH,
+    MODEL,
+    SCRIPT,
+    EXEC,
+    runnerSpy,
+    '',
+  );
 
   it('has name skill_run', () => {
     expect(tool.name).toBe('skill_run');

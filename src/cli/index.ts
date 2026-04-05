@@ -54,8 +54,31 @@ import { createVideoAddSubtitlesTool } from '../tools/video-add-subtitles';
 import { FfmpegRunner } from '../ffmpeg/ffmpeg-runner';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
+import { existsSync } from 'node:fs';
 
 const INHERITED_SECTIONS = ['Safety Rules', 'Communication Style', 'Operating Modes'] as const;
+
+/**
+ * Resolves the subagent script path and execution info.
+ * In production (running from dist/), uses subagent.js with node.
+ * In development (running from src/ with tsx), uses subagent.ts with tsx.
+ */
+function resolveSubagentScript(): { scriptPath: string; execPath: string } {
+  const jsPath = join(__dirname, 'subagent.js');
+  const tsPath = join(__dirname, 'subagent.ts');
+
+  if (existsSync(jsPath)) {
+    return { scriptPath: jsPath, execPath: process.execPath };
+  }
+  if (existsSync(tsPath)) {
+    // In development mode, use tsx to run TypeScript directly
+    return { scriptPath: tsPath, execPath: 'tsx' };
+  }
+  throw new Error(
+    `Subagent script not found. Expected ${jsPath} or ${tsPath}. ` +
+      'Run "npm run build" to compile TypeScript.',
+  );
+}
 
 function buildInheritedRules(systemPrompt: string): string {
   const sections = extractPromptSections(systemPrompt, INHERITED_SECTIONS);
@@ -126,7 +149,7 @@ async function serve(serveArgs: string[]): Promise<void> {
   for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
   toolBus.register(createMemorySearchTool(memoryStore));
   toolBus.register(createMemoryWriteTool(memoryStore));
-  const subagentScript = join(__dirname, 'subagent.js');
+  const { scriptPath: subagentScript, execPath: subagentExec } = resolveSubagentScript();
 
   const projectSkillsDir = join(dataDir, 'skills');
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
@@ -158,15 +181,37 @@ async function serve(serveArgs: string[]): Promise<void> {
   const inheritedRules = buildInheritedRules(systemPrompt);
 
   toolBus.register(
-    createSubagentRunTool(auth, config.model, subagentScript, runSubagent, () => systemPrompt),
+    createSubagentRunTool(
+      auth,
+      config.model,
+      subagentScript,
+      subagentExec,
+      runSubagent,
+      () => systemPrompt,
+    ),
   );
   toolBus.register(
-    createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent, inheritedRules),
+    createSkillRunTool(
+      skills,
+      auth,
+      config.model,
+      subagentScript,
+      subagentExec,
+      runSubagent,
+      inheritedRules,
+    ),
   );
   const slashRegistry = createSlashCommandRegistry();
   slashRegistry.register(createSkillsSlashCommand(skills));
   slashRegistry.register(
-    createRunSkillSlashCommand(skills, auth, config.model, subagentScript, runSubagent),
+    createRunSkillSlashCommand(
+      skills,
+      auth,
+      config.model,
+      subagentScript,
+      subagentExec,
+      runSubagent,
+    ),
   );
   // /exit is console-only in daemon mode — disable it from the web UI.
   slashRegistry.register({
@@ -328,7 +373,7 @@ async function main(): Promise<void> {
   for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
   toolBus.register(createMemorySearchTool(memoryStore));
   toolBus.register(createMemoryWriteTool(memoryStore));
-  const subagentScript = join(__dirname, 'subagent.js');
+  const { scriptPath: subagentScript, execPath: subagentExec } = resolveSubagentScript();
 
   const projectSkillsDir = join(dataDir, 'skills');
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
@@ -361,17 +406,38 @@ async function main(): Promise<void> {
   const inheritedRules = buildInheritedRules(systemPrompt);
 
   toolBus.register(
-    createSubagentRunTool(auth, config.model, subagentScript, runSubagent, () => systemPrompt),
+    createSubagentRunTool(
+      auth,
+      config.model,
+      subagentScript,
+      subagentExec,
+      runSubagent,
+      () => systemPrompt,
+    ),
   );
   toolBus.register(
-    createSkillRunTool(skills, auth, config.model, subagentScript, runSubagent, inheritedRules),
+    createSkillRunTool(
+      skills,
+      auth,
+      config.model,
+      subagentScript,
+      subagentExec,
+      runSubagent,
+      inheritedRules,
+    ),
   );
   const slashRegistry = createSlashCommandRegistry();
   slashRegistry.register(createSkillsSlashCommand(skills));
   slashRegistry.register(
-    createRunSkillSlashCommand(skills, auth, config.model, subagentScript, runSubagent),
+    createRunSkillSlashCommand(
+      skills,
+      auth,
+      config.model,
+      subagentScript,
+      subagentExec,
+      runSubagent,
+    ),
   );
-
   const channel = new CliChannel(process.stdin, process.stdout, () =>
     progress.clearPendingThinking(),
   );

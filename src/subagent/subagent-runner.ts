@@ -23,14 +23,18 @@ export interface SubagentResult {
  * The child constructs its Anthropic client from `authConfig` — it does not
  * read process.env for credentials, ensuring full auth isolation.
  *
+ * @param payload - The subagent payload containing prompt and config
+ * @param scriptPath - Path to the subagent script (JS or TS)
+ * @param execPath - Optional Node.js executable path (defaults to process.execPath)
  * @throws if the child exits with a non-zero code (includes captured stderr)
  */
 export async function runSubagent(
   payload: SubagentPayload,
   scriptPath: string,
+  execPath: string = process.execPath,
 ): Promise<SubagentResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [scriptPath], {
+    const child = spawn(execPath, [scriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 

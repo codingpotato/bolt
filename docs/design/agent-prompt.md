@@ -8,7 +8,6 @@
 - Track system prompt size and warn when it consumes too much context budget
 - Hot-reload AGENT.md changes without restarting
 - Inherit safety and communication rules into sub-agents
-- Allow the agent to propose improvements to its own rules without being able to apply them unilaterally
 
 ---
 
@@ -107,69 +106,6 @@ The assembled prompt is used as the `system` field in every Anthropic API call f
 
 ---
 
-## Self-Improvement: agent_suggest Tool
-
-The agent cannot directly edit `AGENT.md`. Instead, it uses `agent_suggest` to propose a change. Proposals are written to `.bolt/suggestions/` and require explicit human approval before taking effect.
-
-### Why the agent cannot self-edit
-
-- `AGENT.md` is the human's voice — it defines the agent's authoritative rules including safety constraints
-- Free self-modification would allow a confused or misbehaving agent to rewrite its own rules
-- The proposal flow keeps humans in the loop for any change to core identity and behavior
-
-### agent_suggest tool
-
-```ts
-interface AgentSuggestInput {
-  target: 'AGENT.md'; // only AGENT.md is supported for now
-  content: string; // the proposed content to append to the target file
-  reason: string; // why the agent thinks this change is warranted
-}
-
-interface AgentSuggestResult {
-  suggestionId: string; // ID of the created proposal
-  path: string; // path to the proposal file
-}
-```
-
-Proposals are written to `.bolt/suggestions/<id>.json`:
-
-```ts
-interface Suggestion {
-  id: string;
-  createdAt: string;
-  sessionId: string;
-  taskId?: string;
-  target: 'AGENT.md';
-  content: string;
-  reason: string;
-  status: 'pending' | 'applied' | 'rejected';
-}
-```
-
-### Human review CLI
-
-```
-bolt suggestions          — list all pending proposals
-bolt suggestions show <id> — show the full proposal content and reason
-bolt suggestions apply <id> — append the proposal content to .bolt/AGENT.md
-bolt suggestions reject <id> — mark the proposal as rejected
-```
-
-`apply` appends `content` to `.bolt/AGENT.md`, creating it if it does not exist. The change takes effect on the next bolt startup (or immediately if hot-reload is active).
-
-### When should the agent call agent_suggest?
-
-The agent should call `agent_suggest` when it has observed a consistent pattern across multiple interactions that would be better encoded as a standing rule — not for one-off preferences. Examples:
-
-- The user has corrected the same behavior 3+ times
-- The agent discovers a project convention not documented anywhere
-- A task repeatedly fails because of a missing rule
-
-For ephemeral or session-specific observations, `memory_write` is the right tool. `agent_suggest` is reserved for changes that belong in the permanent rulebook.
-
----
-
 ## Sub-Agent System Prompt Inheritance
 
 Sub-agents spawned via `subagent_run` are fully context-isolated from the parent — they have no access to the parent's message history, memory, or tasks. However, they **do** inherit a subset of the parent's system prompt rules.
@@ -202,11 +138,10 @@ Without rule inheritance, sub-agents operate with no safety constraints or commu
 
 ## Relationship to Memory
 
-| Mechanism           | Controlled by                 | Lifetime                 | Priority                                    |
-| ------------------- | ----------------------------- | ------------------------ | ------------------------------------------- |
-| `AGENT.md`          | Human                         | Permanent until edited   | Highest — defines rules                     |
-| `memory_write` (L3) | Agent freely                  | Persistent, searchable   | Informs context; can be overridden by rules |
-| `agent_suggest`     | Agent proposes, human applies | Permanent after approval | Becomes part of AGENT.md on apply           |
+| Mechanism           | Controlled by | Lifetime               | Priority                                    |
+| ------------------- | ------------- | ---------------------- | ------------------------------------------- |
+| `AGENT.md`          | Human         | Permanent until edited | Highest — defines rules                     |
+| `memory_write` (L3) | Agent freely  | Persistent, searchable | Informs context; can be overridden by rules |
 
 The system prompt (`AGENT.md`) always takes precedence over L3 memory. If a rule in `AGENT.md` conflicts with something in L3 memory, the rule wins.
 
@@ -214,12 +149,11 @@ The system prompt (`AGENT.md`) always takes precedence over L3 memory. If a rule
 
 ## Configuration
 
-| Key                           | Default             | Description                                        |
-| ----------------------------- | ------------------- | -------------------------------------------------- |
-| `agentPrompt.projectFile`     | `.bolt/AGENT.md`    | Path to the workspace agent prompt file            |
-| `agentPrompt.suggestionsPath` | `.bolt/suggestions` | Directory for pending suggestion files             |
-| `agentPrompt.maxTokens`       | `8000`              | Warning threshold for assembled system prompt size |
-| `agentPrompt.watchForChanges` | `true`              | Enable hot-reload when AGENT.md files change       |
+| Key                           | Default          | Description                                        |
+| ----------------------------- | ---------------- | -------------------------------------------------- |
+| `agentPrompt.projectFile`     | `.bolt/AGENT.md` | Path to the workspace agent prompt file            |
+| `agentPrompt.maxTokens`       | `8000`           | Warning threshold for assembled system prompt size |
+| `agentPrompt.watchForChanges` | `true`           | Enable hot-reload when AGENT.md files change       |
 
 ### Environment Variables
 

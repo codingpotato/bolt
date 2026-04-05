@@ -242,8 +242,6 @@ Use `.bolt/config.json` for complex structures that are awkward in environment v
     // Path to the workspace agent prompt file
     // On first run, the built-in AGENT.md is copied here if it does not exist
     "projectFile": ".bolt/AGENT.md",
-    // Directory for pending suggestion files
-    "suggestionsPath": ".bolt/suggestions",
     // Warning threshold for assembled system prompt size in tokens (default: 8000)
     "maxTokens": 8000,
     // Enable hot-reload when AGENT.md files change (default: true in TTY mode)

@@ -10,7 +10,10 @@ import { CliProgressReporter, summariseInput } from './cli-progress';
 function makeFakeStream(isTTY: boolean): { stream: NodeJS.WritableStream; output(): string } {
   const chunks: string[] = [];
   const stream = {
-    write: vi.fn((chunk: string) => { chunks.push(chunk); return true; }),
+    write: vi.fn((chunk: string) => {
+      chunks.push(chunk);
+      return true;
+    }),
     isTTY,
   } as unknown as NodeJS.WritableStream;
   return { stream, output: () => chunks.join('') };
@@ -32,7 +35,12 @@ describe('NoopProgressReporter', () => {
       r.onContextInjection('task', 5, 't1');
       r.onContextInjection('chat', 3);
       r.onLlmCall({ messageCount: 5, injectedTokens: 1000 });
-      r.onLlmResponse({ inputTokens: 5000, outputTokens: 200, stopReason: 'end_turn', windowCapacity: 200_000 });
+      r.onLlmResponse({
+        inputTokens: 5000,
+        outputTokens: 200,
+        stopReason: 'end_turn',
+        windowCapacity: 200_000,
+      });
       r.onMemoryCompaction(42, 'Discussion summary', ['auth', 'jwt']);
       r.onRetry(1, 3, 'ECONNREFUSED');
     }).not.toThrow();
@@ -85,7 +93,12 @@ describe('CliProgressReporter', () => {
       const fake = makeFakeStream(true);
       reporter = new CliProgressReporter(fake.stream);
       reporter.onThinking();
-      reporter.onLlmResponse({ inputTokens: 12450, outputTokens: 234, stopReason: 'tool_use', windowCapacity: 200_000 });
+      reporter.onLlmResponse({
+        inputTokens: 12450,
+        outputTokens: 234,
+        stopReason: 'tool_use',
+        windowCapacity: 200_000,
+      });
       const out = fake.output();
       expect(out).toContain('\x1b[1A\x1b[2K');
       expect(out).toContain('12,450');
@@ -161,7 +174,7 @@ describe('CliProgressReporter', () => {
 
     it('clearPendingThinking does nothing if no thinking line is pending', () => {
       const fake = makeFakeStream(true);
-      const writeSpy = (fake.stream.write as ReturnType<typeof vi.fn>);
+      const writeSpy = fake.stream.write as ReturnType<typeof vi.fn>;
       reporter = new CliProgressReporter(fake.stream);
       reporter.clearPendingThinking();
       // write should not have been called for the erase sequence
@@ -204,7 +217,12 @@ describe('CliProgressReporter', () => {
       reporter.onSessionStart('abc', false);
       reporter.onThinking();
       reporter.onLlmCall({ messageCount: 5, injectedTokens: 1000 });
-      reporter.onLlmResponse({ inputTokens: 5000, outputTokens: 100, stopReason: 'end_turn', windowCapacity: 200_000 });
+      reporter.onLlmResponse({
+        inputTokens: 5000,
+        outputTokens: 100,
+        stopReason: 'end_turn',
+        windowCapacity: 200_000,
+      });
       reporter.onToolCall('bash', { command: 'ls' });
       reporter.onToolResult('bash', true, 'ok');
       reporter.onTaskStatusChange('t1', 'My task', 'completed');
@@ -266,7 +284,9 @@ describe('summariseInput', () => {
   });
 
   it('task_update: shows id → status', () => {
-    expect(summariseInput('task_update', { id: 'abc', status: 'completed' })).toBe('abc → completed');
+    expect(summariseInput('task_update', { id: 'abc', status: 'completed' })).toBe(
+      'abc → completed',
+    );
   });
 
   it('memory_search: shows quoted query', () => {
@@ -276,10 +296,6 @@ describe('summariseInput', () => {
   it('memory_write: shows first 80 chars of content', () => {
     const content = 'x'.repeat(100);
     expect(summariseInput('memory_write', { content })).toBe('x'.repeat(80));
-  });
-
-  it('agent_suggest: shows scope/AGENT.md', () => {
-    expect(summariseInput('agent_suggest', { scope: 'project' })).toBe('project/AGENT.md');
   });
 
   it('default: shows first 120 chars of JSON', () => {

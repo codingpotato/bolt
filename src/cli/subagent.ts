@@ -78,7 +78,7 @@ async function main(): Promise<void> {
   const toolBus = new ToolBus();
   const todoStore = new TodoStore();
 
-  // Register basic tools — no memory or agent_suggest for sub-agents.
+  // Register basic tools — no memory for sub-agents.
   toolBus.register(bashTool);
   toolBus.register(fileReadTool);
   toolBus.register(fileWriteTool);
@@ -107,7 +107,6 @@ async function main(): Promise<void> {
     },
     agentPrompt: {
       projectFile: '.bolt/AGENT.md',
-      suggestionsPath: '.bolt/suggestions',
       maxTokens: 8000,
       watchForChanges: false,
     },

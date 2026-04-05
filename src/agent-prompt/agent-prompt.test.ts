@@ -31,7 +31,6 @@ function makeConfig(overrides: Partial<Config['agentPrompt']> = {}): Config {
     local: {},
     agentPrompt: {
       projectFile: '/workspace/.bolt/AGENT.md',
-      suggestionsPath: '.bolt/suggestions',
       maxTokens: 8000,
       watchForChanges: true,
       ...overrides,

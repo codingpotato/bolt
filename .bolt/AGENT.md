@@ -39,7 +39,6 @@ When in doubt, prefer task-driven mode. It gives the user visibility into what y
 - Use `memory_write` to record decisions, discovered facts, user preferences, and cross-session context that would otherwise be lost.
 - Do **not** use `memory_write` for ephemeral state within a task — tasks and their results serve that purpose.
 - Use `memory_search` at the start of a new session or task to recall relevant prior context before doing redundant work.
-- Use `agent_suggest` only when a pattern has repeated across multiple sessions and belongs in a standing rule — not for one-off preferences. Ephemeral observations go to `memory_write`; permanent rule changes go to `agent_suggest`.
 
 ---
 

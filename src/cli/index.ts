@@ -34,9 +34,6 @@ import { MemoryStore } from '../memory/memory-store';
 import { MemoryManager } from '../memory/memory-manager';
 import { createMemorySearchTool } from '../tools/memory-search';
 import { createMemoryWriteTool } from '../tools/memory-write';
-import { createAgentSuggestTool } from '../tools/agent-suggest';
-import { SuggestionStore } from '../suggestions/suggestion-store';
-import { handleSuggestionsCli } from '../suggestions/suggestions-cli';
 import { createSubagentRunTool } from '../tools/subagent-run';
 import { createSkillRunTool } from '../tools/skill-run';
 import { runSubagent } from '../subagent/subagent-runner';
@@ -129,9 +126,6 @@ async function serve(serveArgs: string[]): Promise<void> {
   for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
   toolBus.register(createMemorySearchTool(memoryStore));
   toolBus.register(createMemoryWriteTool(memoryStore));
-  const suggestionsDir = resolve(cwd, config.agentPrompt.suggestionsPath);
-  const suggestionStore = new SuggestionStore(suggestionsDir, logger);
-  toolBus.register(createAgentSuggestTool(suggestionStore, suggestionsDir));
   const subagentScript = join(__dirname, 'subagent.js');
 
   const projectSkillsDir = join(dataDir, 'skills');
@@ -282,20 +276,6 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Dispatch 'bolt suggestions [...]' sub-command before starting the agent.
-  if (args[0] === 'suggestions') {
-    const cwd = process.cwd();
-    const dataDir = resolve(cwd, config.dataDir);
-    const suggestionsDir = resolve(cwd, config.agentPrompt.suggestionsPath);
-    const projectFile = resolve(cwd, config.agentPrompt.projectFile);
-    const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
-    const store = new SuggestionStore(suggestionsDir, logger);
-    await handleSuggestionsCli(args.slice(1), store, projectFile, (s) =>
-      process.stdout.write(s + '\n'),
-    );
-    return;
-  }
-
   const auth = resolveAuth();
   const client = createAnthropicClient(auth);
 
@@ -348,9 +328,6 @@ async function main(): Promise<void> {
   for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
   toolBus.register(createMemorySearchTool(memoryStore));
   toolBus.register(createMemoryWriteTool(memoryStore));
-  const suggestionsDir = resolve(cwd, config.agentPrompt.suggestionsPath);
-  const suggestionStore = new SuggestionStore(suggestionsDir, logger);
-  toolBus.register(createAgentSuggestTool(suggestionStore, suggestionsDir));
   const subagentScript = join(__dirname, 'subagent.js');
 
   const projectSkillsDir = join(dataDir, 'skills');

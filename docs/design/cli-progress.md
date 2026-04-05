@@ -62,12 +62,12 @@ class NoopProgressReporter implements ProgressReporter {
 
 ## Injection Points
 
-| Component | Events emitted |
-|-----------|---------------|
-| `AgentCore` | `onSessionStart`, `onThinking`, `onRetry` |
-| `ToolBus.dispatch` | `onToolCall`, `onToolResult` |
-| `MemoryManager` | `onContextInjection`, `onMemoryCompaction` |
-| Task tools (`task_update`) | `onTaskStatusChange` |
+| Component                  | Events emitted                             |
+| -------------------------- | ------------------------------------------ |
+| `AgentCore`                | `onSessionStart`, `onThinking`, `onRetry`  |
+| `ToolBus.dispatch`         | `onToolCall`, `onToolResult`               |
+| `MemoryManager`            | `onContextInjection`, `onMemoryCompaction` |
+| Task tools (`task_update`) | `onTaskStatusChange`                       |
 
 `ProgressReporter` is added to `ToolContext` so tool implementations (including task tools) can emit events without depending on AgentCore:
 
@@ -77,7 +77,7 @@ interface ToolContext {
   log: ToolLogger;
   logger: Logger;
   allowedTools?: string[];
-  progress: ProgressReporter;   // ← added
+  progress: ProgressReporter; // ← added
 }
 ```
 
@@ -124,19 +124,18 @@ The CLI implementation writes formatted lines to `process.stdout`. It replaces t
 
 `CliProgressReporter` summarises tool inputs for display — raw input is never dumped verbatim. Each tool has a known summary format:
 
-| Tool | Summary shown |
-|------|--------------|
-| `bash` | `$ <command>` (truncated to 120 chars) |
-| `file_read` | `<path>` |
-| `file_write` | `<path>` |
-| `file_edit` | `<path>` |
-| `web_fetch` | `<url>` (truncated to 120 chars) |
-| `task_create` | `"<title>"` |
-| `task_update` | `<id> → <status>` |
-| `memory_search` | `"<query>"` |
-| `memory_write` | first 80 chars of content |
-| `agent_suggest` | `<scope>/AGENT.md` |
-| _(default)_ | first 120 chars of `JSON.stringify(input)` |
+| Tool            | Summary shown                              |
+| --------------- | ------------------------------------------ |
+| `bash`          | `$ <command>` (truncated to 120 chars)     |
+| `file_read`     | `<path>`                                   |
+| `file_write`    | `<path>`                                   |
+| `file_edit`     | `<path>`                                   |
+| `web_fetch`     | `<url>` (truncated to 120 chars)           |
+| `task_create`   | `"<title>"`                                |
+| `task_update`   | `<id> → <status>`                          |
+| `memory_search` | `"<query>"`                                |
+| `memory_write`  | first 80 chars of content                  |
+| _(default)_     | first 120 chars of `JSON.stringify(input)` |
 
 ### TTY guard
 
@@ -164,9 +163,9 @@ bolt | cat               → no progress output (non-TTY, no --verbose)
 
 ## Configuration
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `cli.progress` | `true` | Enable progress output in TTY mode |
-| `cli.verbose` | `false` | Enable progress output even in non-TTY mode |
+| Key            | Default | Description                                 |
+| -------------- | ------- | ------------------------------------------- |
+| `cli.progress` | `true`  | Enable progress output in TTY mode          |
+| `cli.verbose`  | `false` | Enable progress output even in non-TTY mode |
 
 Both are also settable via CLI flags `--quiet` (disables progress) and `--verbose` (enables in non-TTY).

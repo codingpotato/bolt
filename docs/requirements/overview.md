@@ -16,14 +16,15 @@ bolt automates the end-to-end content creation workflow for social media blogger
 
 **bolt operates in two modes:**
 
-| Mode | Description |
-|------|-------------|
-| **Simple chat** | The user sends a message; bolt responds directly. No task is created. History is persisted and conversation continuity is maintained across sessions automatically. |
+| Mode            | Description                                                                                                                                                                                                                            |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Simple chat** | The user sends a message; bolt responds directly. No task is created. History is persisted and conversation continuity is maintained across sessions automatically.                                                                    |
 | **Task-driven** | The primary mode for structured, autonomous work. bolt breaks goals into tasks, executes them step by step, and tracks outcomes. Tasks survive process restarts, can be delegated to sub-agents, and carry their full session history. |
 
 Tasks are the primary building block for non-trivial work, but simple chat is a first-class mode and bolt must not force users to create a task before receiving a response.
 
 The task-driven principle shapes the heavier subsystems:
+
 - **Memory** is organized around tasks for structured work — prior context for a task is automatically injected when the task is resumed
 - **Sub-agents** are spawned to execute specific tasks — they receive a task description, not a raw prompt
 - **Skills** are invoked within the context of a task — their results are recorded against the task
@@ -32,6 +33,7 @@ The task-driven principle shapes the heavier subsystems:
 ## Functional Requirements
 
 ### Interface
+
 - Operated via the command line (primary development/debug interface)
 - **WebChannel** — HTTP/WebSocket web chat interface accessible from phone or desktop browser, enabling:
   - Remote control of the agent without a terminal
@@ -42,6 +44,7 @@ The task-driven principle shapes the heavier subsystems:
 - **Slash commands** — CLI directives starting with `/` are intercepted before the LLM: `/exit` terminates the session, `/help` lists commands, `/session` shows the current session ID. New commands can be registered without modifying core code.
 
 ### Tools Execution
+
 - The agent must be able to call tools during its reasoning loop using the Anthropic tool-use API
 - Tools are registered with a JSON schema; the model decides when and how to call them
 - Tool results are fed back into the conversation and the loop continues until the model stops calling tools
@@ -61,12 +64,12 @@ The task-driven principle shapes the heavier subsystems:
   - **subagent_run** — delegate a free-form task to an isolated child agent
   - **memory_search** — query the long-term memory store (L3) by keyword or embedding
   - **memory_write** — explicitly write a fact or note to the long-term memory store (L3)
-  - **agent_suggest** — propose a change to AGENT.md; written to `.bolt/suggestions/` for human review
 - New tools can be registered at runtime without restarting the agent
 - Tools may be restricted per skill or sub-agent (allowlist model)
 - All tool calls and their results must be logged for auditability
 
 ### ComfyUI Client
+
 - bolt must support connecting to one or more ComfyUI servers for image and video generation
 - Servers are declared in `config.comfyui.servers[]` with a URL and optional weight for load balancing
 - Server selection is queue-depth-aware: the server with the lowest `queue_remaining / weight` score is chosen
@@ -74,6 +77,7 @@ The task-driven principle shapes the heavier subsystems:
 - The `comfyui_text2img` and `comfyui_img2video` tools handle the full async flow: upload → queue → poll → download
 
 ### Skills System
+
 - Support loadable, composable skills that extend agent capabilities
 - Skills are discrete, reusable capability modules (e.g. "write a blog post", "analyse trends", "generate a video storyboard")
 - Skills can be invoked by name from the CLI or by the agent itself during task execution
@@ -84,10 +88,12 @@ The task-driven principle shapes the heavier subsystems:
 ### Task & Todo Management
 
 **Todo list** — a flat, ordered checklist of immediate work items for the current session:
+
 - Create, update, list, and delete todo items
 - Execute work step by step according to the todo list
 
 **Tasks** — structured, serializable work items with full lifecycle tracking:
+
 - Create tasks with titles, descriptions, status, and optional subtasks
 - Serialize task state to disk so sessions can be paused, resumed, or handed off after a crash
 - Delegate subtasks to sub-agents; parent/child contexts are fully isolated
@@ -100,6 +106,7 @@ The task-driven principle shapes the heavier subsystems:
 The CLI must surface significant agent steps in real time so the user can follow what the agent is doing without waiting for the final response.
 
 Events that must be shown:
+
 - Session start or resume (with context injection summary)
 - Model thinking (spinner while generating)
 - Each tool call — name and a brief input summary
@@ -119,19 +126,18 @@ bolt loads one or two `AGENT.md` files at startup and uses them as the system pr
 
 Both files are optional; bolt falls back to a built-in default if neither exists. Project-level content is appended after user-level content, so it can override user-level rules.
 
-The agent **cannot directly edit** `AGENT.md`. It may propose changes via the `agent_suggest` tool, which writes a proposal to `.bolt/suggestions/` for human review. A human applies proposals via the `bolt suggestions apply <id>` CLI command.
-
 ### Memory System
 
 bolt uses a three-level memory architecture:
 
-| Level | Name | Storage | Written | Purpose |
-|-------|------|---------|---------|---------|
-| L1 | Active context | In-process array | Always | Current session messages sent to the LLM |
-| L2 | Session store | `.bolt/sessions/<id>.jsonl` | Every turn, immediately | Durable raw log of all turns; survives crashes |
-| L3 | Long-term memory | `.bolt/memory/*.json` | Compaction + `memory_write` | Summarised history and agent-written facts; searchable across sessions |
+| Level | Name             | Storage                     | Written                     | Purpose                                                                |
+| ----- | ---------------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------- |
+| L1    | Active context   | In-process array            | Always                      | Current session messages sent to the LLM                               |
+| L2    | Session store    | `.bolt/sessions/<id>.jsonl` | Every turn, immediately     | Durable raw log of all turns; survives crashes                         |
+| L3    | Long-term memory | `.bolt/memory/*.json`       | Compaction + `memory_write` | Summarised history and agent-written facts; searchable across sessions |
 
 Key requirements:
+
 - Every user input, tool call, tool result, and assistant response must be persisted to L2 **before** the next turn — no data loss on crash
 - Every L2 entry carries a `sessionId` and an optional `taskId`
 - When the agent works on a task, the last N messages from prior sessions on that same task are automatically injected into the LLM context — no explicit search needed
@@ -140,22 +146,24 @@ Key requirements:
 - Compaction (L1 → L3) is triggered when the active context approaches the token limit
 
 ### Code Workflows
+
 - Write code, write tests, run tests, perform code review
 
 ### Content Generation
 
 bolt must be able to generate content for social media platforms:
 
-| Content Type | Description | Output |
-|-------------|-------------|--------|
-| **Trend analysis** | Search and analyse trending topics on social media | Structured report with trends, angles, and recommendations |
-| **Social post** | Short-form posts for Twitter/X, LinkedIn, Xiaohongshu, etc. | Platform-optimised copy |
-| **Article** | Long-form written content (blog post, thread, newsletter) | Markdown text |
-| **Video script + storyboard** | Script with shot-by-shot breakdown for short-form video | Structured Markdown with scene descriptions |
-| **Image prompt** | Detailed prompt for image generation (ComfyUI) | Plain text prompt optimised for the target model |
-| **Video prompt** | Motion/animation prompt for image-to-video generation | Plain text prompt optimised for the target model |
+| Content Type                  | Description                                                 | Output                                                     |
+| ----------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
+| **Trend analysis**            | Search and analyse trending topics on social media          | Structured report with trends, angles, and recommendations |
+| **Social post**               | Short-form posts for Twitter/X, LinkedIn, Xiaohongshu, etc. | Platform-optimised copy                                    |
+| **Article**                   | Long-form written content (blog post, thread, newsletter)   | Markdown text                                              |
+| **Video script + storyboard** | Script with shot-by-shot breakdown for short-form video     | Structured Markdown with scene descriptions                |
+| **Image prompt**              | Detailed prompt for image generation (ComfyUI)              | Plain text prompt optimised for the target model           |
+| **Video prompt**              | Motion/animation prompt for image-to-video generation       | Plain text prompt optimised for the target model           |
 
 The content generation workflow supports an **interactive review loop**:
+
 - For fast, low-cost operations (text generation): run autonomously
 - For expensive operations (image/video generation): present intermediate results for user approval before proceeding
 - Users can provide feedback at any approval gate; the agent adjusts and re-presents
@@ -163,6 +171,7 @@ The content generation workflow supports an **interactive review loop**:
 ### Notifications
 
 For long-running tasks (image/video generation), bolt must notify the user when results are ready:
+
 - **WebChannel**: real-time updates via WebSocket (primary)
 - **System notification**: macOS/Linux desktop notification as fallback when running locally
 
@@ -170,11 +179,11 @@ For long-running tasks (image/video generation), bolt must notify the user when 
 
 bolt must support three mutually exclusive authentication modes:
 
-| Mode | Description |
-|------|-------------|
-| **API Key** | User provides an `ANTHROPIC_API_KEY` environment variable; requests are authenticated via the standard Anthropic API |
-| **Anthropic Subscription** | User is authenticated via an Anthropic account session (e.g. Claude.ai subscription); no API key required |
-| **Local** | User points bolt at a local OpenAI-compatible inference server (llama.cpp, Ollama, etc.) via `BOLT_LOCAL_ENDPOINT`; no API key required |
+| Mode                       | Description                                                                                                                             |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **API Key**                | User provides an `ANTHROPIC_API_KEY` environment variable; requests are authenticated via the standard Anthropic API                    |
+| **Anthropic Subscription** | User is authenticated via an Anthropic account session (e.g. Claude.ai subscription); no API key required                               |
+| **Local**                  | User points bolt at a local OpenAI-compatible inference server (llama.cpp, Ollama, etc.) via `BOLT_LOCAL_ENDPOINT`; no API key required |
 
 - The active mode must be configurable at startup (env var, config file, or CLI flag)
 - If none is configured, bolt must fail fast with a clear error message indicating how to set up authentication

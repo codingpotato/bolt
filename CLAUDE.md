@@ -60,4 +60,3 @@ Read these docs before making decisions in the relevant area:
 - All task and memory state must be serializable and survive process restarts
 - No `any` types — `"strict": true` is enforced in `tsconfig.json`
 - Default model: `claude-opus-4-6`
-

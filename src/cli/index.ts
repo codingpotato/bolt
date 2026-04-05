@@ -118,9 +118,7 @@ async function serve(serveArgs: string[]): Promise<void> {
 
   const log = createAuditLogger(dataDir);
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
-  const traceLogger = config.logTrace
-    ? createTraceLogger(join(dataDir, 'trace.jsonl'))
-    : createNoopTraceLogger();
+  const traceLogger = config.logTrace ? createTraceLogger() : createNoopTraceLogger();
 
   const todoStore = new TodoStore();
   const taskStore = new TaskStore(dataDir);
@@ -355,9 +353,7 @@ async function main(): Promise<void> {
 
   const log = createAuditLogger(dataDir);
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
-  const traceLogger = config.logTrace
-    ? createTraceLogger(join(dataDir, 'trace.jsonl'))
-    : createNoopTraceLogger();
+  const traceLogger = config.logTrace ? createTraceLogger() : createNoopTraceLogger();
 
   const verbose = args.includes('--verbose') || config.cli.verbose;
   const quiet = args.includes('--quiet') || !config.cli.progress;

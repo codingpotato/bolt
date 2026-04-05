@@ -159,4 +159,42 @@ describe('runSubagent()', () => {
     const written = JSON.parse(child.stdin.write.mock.calls[0]?.[0] as string) as SubagentPayload;
     expect(written.allowedTools).toEqual(['bash', 'file_read']);
   });
+
+  it('rejects when spawn itself throws', async () => {
+    const { spawn } = await import('node:child_process');
+    vi.mocked(spawn).mockImplementation(() => {
+      throw new Error('spawn ENOENT');
+    });
+
+    await expect(runSubagent(makePayload(), '/bad/path')).rejects.toThrow(
+      'Failed to spawn sub-agent: spawn ENOENT',
+    );
+  });
+
+  it('rejects when the child process emits an error event', async () => {
+    const { spawn } = await import('node:child_process');
+    const stdin = makeStream();
+    const stdout = makeStream();
+    const stderr = makeStream();
+    const errorHandlers: Array<(...args: unknown[]) => void> = [];
+    const proc = {
+      stdin,
+      stdout,
+      stderr,
+      pid: 123,
+      on(event: string, cb: (...args: unknown[]) => void) {
+        if (event === 'error') errorHandlers.push(cb);
+        // never fire 'close' so error fires first
+        return proc;
+      },
+    };
+    vi.mocked(spawn).mockReturnValue(proc as never);
+
+    const promise = runSubagent(makePayload(), '/path/to/subagent.js');
+    setTimeout(() => {
+      for (const h of errorHandlers) h(new Error('EPERM'));
+    }, 0);
+
+    await expect(promise).rejects.toThrow('Sub-agent process error: EPERM');
+  });
 });

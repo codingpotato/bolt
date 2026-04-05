@@ -17,6 +17,7 @@ import { fileInsertTool } from '../tools/file-insert';
 import { webFetchTool } from '../tools/web-fetch';
 import { createAuditLogger } from '../audit/audit-logger';
 import { createLogger } from '../logger';
+import { createTraceLogger, createNoopTraceLogger } from '../logger/trace-logger';
 import { AgentCore } from '../agent/agent';
 import { TodoStore } from '../todo/todo-store';
 import { createTodoTools } from '../todo/todo-tools';
@@ -71,7 +72,6 @@ function resolveSubagentScript(): { scriptPath: string; execPath: string } {
     return { scriptPath: jsPath, execPath: process.execPath };
   }
   if (existsSync(tsPath)) {
-    // In development mode, use tsx to run TypeScript directly
     return { scriptPath: tsPath, execPath: 'tsx' };
   }
   throw new Error(
@@ -90,7 +90,6 @@ function buildInheritedRules(systemPrompt: string): string {
 async function serve(serveArgs: string[]): Promise<void> {
   const config = resolveConfig();
 
-  // Parse --port and --token overrides
   const portFlagIndex = serveArgs.indexOf('--port');
   const port =
     portFlagIndex !== -1
@@ -117,6 +116,9 @@ async function serve(serveArgs: string[]): Promise<void> {
 
   const log = createAuditLogger(dataDir);
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
+  const traceLogger = config.logTrace
+    ? createTraceLogger(join(dataDir, 'trace.jsonl'))
+    : createNoopTraceLogger();
 
   const todoStore = new TodoStore();
   const taskStore = new TaskStore(dataDir);
@@ -136,7 +138,7 @@ async function serve(serveArgs: string[]): Promise<void> {
     config.model,
   );
 
-  const toolBus = new ToolBus();
+  const toolBus = new ToolBus(logger);
   toolBus.register(bashTool);
   toolBus.register(fileReadTool);
   toolBus.register(fileWriteTool);
@@ -151,6 +153,8 @@ async function serve(serveArgs: string[]): Promise<void> {
   toolBus.register(createMemoryWriteTool(memoryStore));
   const { scriptPath: subagentScript, execPath: subagentExec } = resolveSubagentScript();
 
+  logger.debug('Subagent script resolved', { scriptPath: subagentScript, execPath: subagentExec });
+
   const projectSkillsDir = join(dataDir, 'skills');
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
   const builtinSkillsDir = join(__dirname, '../skills');
@@ -161,11 +165,9 @@ async function serve(serveArgs: string[]): Promise<void> {
     builtinSkillsDir,
   );
 
-  // Assemble system prompt with skills + tools catalogs
   const allTools = toolBus.list();
-  const systemPrompt = await assembleSystemPrompt(config, skills, allTools);
+  const systemPrompt = await assembleSystemPrompt(config, skills, allTools, logger);
 
-  // Token size warning
   const estimatedTokens = estimateTokenCount(systemPrompt);
   if (estimatedTokens > config.agentPrompt.maxTokens) {
     logger.warn('System prompt exceeds token threshold', {
@@ -177,7 +179,6 @@ async function serve(serveArgs: string[]): Promise<void> {
     );
   }
 
-  // Register subagent-run and skill-run with inherited rules
   const inheritedRules = buildInheritedRules(systemPrompt);
 
   toolBus.register(
@@ -188,6 +189,8 @@ async function serve(serveArgs: string[]): Promise<void> {
       subagentExec,
       runSubagent,
       () => systemPrompt,
+      logger,
+      traceLogger,
     ),
   );
   toolBus.register(
@@ -199,6 +202,7 @@ async function serve(serveArgs: string[]): Promise<void> {
       subagentExec,
       runSubagent,
       inheritedRules,
+      logger,
     ),
   );
   const slashRegistry = createSlashCommandRegistry();
@@ -213,7 +217,6 @@ async function serve(serveArgs: string[]): Promise<void> {
       runSubagent,
     ),
   );
-  // /exit is console-only in daemon mode — disable it from the web UI.
   slashRegistry.register({
     name: 'exit',
     description: 'Not available in daemon mode.',
@@ -223,15 +226,18 @@ async function serve(serveArgs: string[]): Promise<void> {
     },
   });
 
-  const channel = new WebChannel({
-    port,
-    host,
-    token,
-    mode: config.channels.web.mode,
-    enabled: true,
-    workspaceRoot: cwd,
-    persistent: true,
-  });
+  const channel = new WebChannel(
+    {
+      port,
+      host,
+      token,
+      mode: config.channels.web.mode,
+      enabled: true,
+      workspaceRoot: cwd,
+      persistent: true,
+    },
+    logger,
+  );
 
   const progress = new WebChannelProgressReporter((text) => channel.sendProgress(text));
   const ctx = {
@@ -255,6 +261,7 @@ async function serve(serveArgs: string[]): Promise<void> {
     undefined,
     memoryManager,
     slashRegistry,
+    traceLogger,
   );
 
   const searchProvider = createSearchProvider(config);
@@ -272,28 +279,43 @@ async function serve(serveArgs: string[]): Promise<void> {
   toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
 
   const ffmpegPath = await FfmpegRunner.detect(config.ffmpeg.path);
+  if (ffmpegPath) {
+    logger.info('FFmpeg detected', { path: ffmpegPath });
+  } else {
+    logger.warn('FFmpeg not found; video tools will be unavailable');
+  }
   const ffmpegRunner = ffmpegPath ? new FfmpegRunner(ffmpegPath, config.ffmpeg, cwd) : null;
   toolBus.register(createVideoMergeTool(ffmpegRunner));
   toolBus.register(createVideoAddAudioTool(ffmpegRunner));
   toolBus.register(createVideoAddSubtitlesTool(ffmpegRunner));
 
+  logger.info('Tools registered', {
+    count: toolBus.list().length,
+    tools: toolBus.list().map((t) => t.name),
+  });
+  logger.info('Skills loaded', { count: skills.length, skills: skills.map((s) => s.name) });
+
   const shutdown = async (): Promise<void> => {
     process.off('SIGTERM', handleSignal);
     process.off('SIGINT', handleSignal);
+    logger.info('Shutdown initiated');
     process.stderr.write('\nbolt serve: shutting down gracefully...\n');
     await channel.stop();
+    logger.info('Shutdown complete');
     process.exit(0);
   };
-  const handleSignal = (): void => {
+  const handleSignal = (signal: string): void => {
+    logger.info('Signal received', { signal });
     shutdown().catch((err: unknown) => {
+      logger.error('Shutdown error', { error: err instanceof Error ? err.message : String(err) });
       process.stderr.write(
         `bolt serve: shutdown error: ${err instanceof Error ? err.message : String(err)}\n`,
       );
       process.exit(1);
     });
   };
-  process.on('SIGTERM', handleSignal);
-  process.on('SIGINT', handleSignal);
+  process.on('SIGTERM', () => handleSignal('SIGTERM'));
+  process.on('SIGINT', () => handleSignal('SIGINT'));
 
   await channel.listen();
   const boundHost = host ?? '127.0.0.1';
@@ -315,7 +337,6 @@ async function main(): Promise<void> {
   const config = resolveConfig();
   const args = process.argv.slice(2);
 
-  // Dispatch 'bolt serve [...]' sub-command — daemon mode with WebChannel.
   if (args[0] === 'serve') {
     await serve(args.slice(1));
     return;
@@ -325,18 +346,17 @@ async function main(): Promise<void> {
   const client = createAnthropicClient(auth);
 
   const cwd = process.cwd();
-  // Resolve dataDir to an absolute path so audit logger and future components
-  // are not sensitive to cwd changes after startup.
   const dataDir = resolve(cwd, config.dataDir);
 
   const log = createAuditLogger(dataDir);
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
+  const traceLogger = config.logTrace
+    ? createTraceLogger(join(dataDir, 'trace.jsonl'))
+    : createNoopTraceLogger();
 
-  // Parse progress-related CLI flags (override config defaults).
   const verbose = args.includes('--verbose') || config.cli.verbose;
   const quiet = args.includes('--quiet') || !config.cli.progress;
 
-  // Parse --session <id> flag for resuming a prior session.
   const sessionFlagIndex = args.indexOf('--session');
   const sessionId = sessionFlagIndex !== -1 ? args[sessionFlagIndex + 1] : undefined;
 
@@ -360,7 +380,7 @@ async function main(): Promise<void> {
     config.model,
   );
 
-  const toolBus = new ToolBus();
+  const toolBus = new ToolBus(logger);
   toolBus.register(bashTool);
   toolBus.register(fileReadTool);
   toolBus.register(fileWriteTool);
@@ -375,9 +395,10 @@ async function main(): Promise<void> {
   toolBus.register(createMemoryWriteTool(memoryStore));
   const { scriptPath: subagentScript, execPath: subagentExec } = resolveSubagentScript();
 
+  logger.debug('Subagent script resolved', { scriptPath: subagentScript, execPath: subagentExec });
+
   const projectSkillsDir = join(dataDir, 'skills');
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
-  // Built-in skills are co-located with this file in src/skills/ (dev) or dist/skills/ (prod).
   const builtinSkillsDir = join(__dirname, '../skills');
   const skills = await loadSkills(
     projectSkillsDir,
@@ -386,11 +407,9 @@ async function main(): Promise<void> {
     builtinSkillsDir,
   );
 
-  // Assemble system prompt with skills + tools catalogs
   const allTools = toolBus.list();
-  const systemPrompt = await assembleSystemPrompt(config, skills, allTools);
+  const systemPrompt = await assembleSystemPrompt(config, skills, allTools, logger);
 
-  // Token size warning
   const estimatedTokens = estimateTokenCount(systemPrompt);
   if (estimatedTokens > config.agentPrompt.maxTokens) {
     logger.warn('System prompt exceeds token threshold', {
@@ -402,7 +421,6 @@ async function main(): Promise<void> {
     );
   }
 
-  // Register subagent-run and skill-run with inherited rules
   const inheritedRules = buildInheritedRules(systemPrompt);
 
   toolBus.register(
@@ -413,6 +431,8 @@ async function main(): Promise<void> {
       subagentExec,
       runSubagent,
       () => systemPrompt,
+      logger,
+      traceLogger,
     ),
   );
   toolBus.register(
@@ -424,6 +444,7 @@ async function main(): Promise<void> {
       subagentExec,
       runSubagent,
       inheritedRules,
+      logger,
     ),
   );
   const slashRegistry = createSlashCommandRegistry();
@@ -466,13 +487,13 @@ async function main(): Promise<void> {
     sessionId,
     memoryManager,
     slashRegistry,
+    traceLogger,
   );
 
-  // Set up hot-reload if enabled
   let _cleanupWatcher: (() => void) | null = null;
   if (config.agentPrompt.watchForChanges && process.stdout.isTTY) {
     _cleanupWatcher = watchAgentPrompt(config, async () => {
-      const newPrompt = await assembleSystemPrompt(config, skills, toolBus.list());
+      const newPrompt = await assembleSystemPrompt(config, skills, toolBus.list(), logger);
       logger.info('System prompt reloaded after AGENT.md change');
       agent.updateSystemPrompt(newPrompt);
     });
@@ -493,10 +514,21 @@ async function main(): Promise<void> {
   toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
 
   const ffmpegPath = await FfmpegRunner.detect(config.ffmpeg.path);
+  if (ffmpegPath) {
+    logger.info('FFmpeg detected', { path: ffmpegPath });
+  } else {
+    logger.warn('FFmpeg not found; video tools will be unavailable');
+  }
   const ffmpegRunner = ffmpegPath ? new FfmpegRunner(ffmpegPath, config.ffmpeg, cwd) : null;
   toolBus.register(createVideoMergeTool(ffmpegRunner));
   toolBus.register(createVideoAddAudioTool(ffmpegRunner));
   toolBus.register(createVideoAddSubtitlesTool(ffmpegRunner));
+
+  logger.info('Tools registered', {
+    count: toolBus.list().length,
+    tools: toolBus.list().map((t) => t.name),
+  });
+  logger.info('Skills loaded', { count: skills.length, skills: skills.map((s) => s.name) });
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });
 

@@ -5,6 +5,8 @@ import type { Config } from '../config/config';
 import type { Skill } from '../skills/skill-loader';
 import type { Tool } from '../tools/tool';
 import { BUILTIN_AGENT_MD } from '../assets';
+import type { Logger } from '../logger';
+import { createNoopLogger } from '../logger';
 
 /**
  * Assembles the system prompt from a single .bolt/AGENT.md file,
@@ -18,7 +20,10 @@ import { BUILTIN_AGENT_MD } from '../assets';
  * Ensures .bolt/AGENT.md exists. If missing, copies the built-in default.
  * Returns the path to the file.
  */
-export async function ensureAgentFile(config: Config): Promise<string> {
+export async function ensureAgentFile(
+  config: Config,
+  logger: Logger = createNoopLogger(),
+): Promise<string> {
   const projectPath = config.agentPrompt.projectFile;
   if (!existsSync(projectPath)) {
     const dir = dirname(projectPath);
@@ -26,6 +31,10 @@ export async function ensureAgentFile(config: Config): Promise<string> {
       await mkdir(dir, { recursive: true });
     }
     await copyFile(BUILTIN_AGENT_MD, projectPath);
+    logger.info('AGENT.md copied from built-in', {
+      source: BUILTIN_AGENT_MD,
+      destination: projectPath,
+    });
   }
   return projectPath;
 }
@@ -100,10 +109,27 @@ export async function assembleSystemPrompt(
   config: Config,
   skills: Skill[],
   tools: Tool[],
+  logger: Logger = createNoopLogger(),
 ): Promise<string> {
   const base = await loadAgentPrompt(config);
   const withSkills = appendSkillsCatalog(base, skills);
   const withTools = appendToolsReference(withSkills, tools);
+
+  const estimatedTokens = estimateTokenCount(withTools);
+  logger.info('System prompt assembled', {
+    baseSize: base.length,
+    skillsCount: skills.length,
+    toolsCount: tools.length,
+    estimatedTokens,
+  });
+
+  if (skills.length === 0) {
+    logger.warn('No skills found for system prompt');
+  }
+  if (tools.length === 0) {
+    logger.warn('No tools found for system prompt');
+  }
+
   return withTools;
 }
 

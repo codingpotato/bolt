@@ -45,17 +45,41 @@ export class MemoryManager {
     const { currentSessionId, resumedSessionId, activeTaskId } = opts;
 
     if (activeTaskId) {
-      return this.loadTaskHistory(activeTaskId, currentSessionId);
+      this.logger.debug('Assembling injected history: active task', { taskId: activeTaskId });
+      const history = await this.loadTaskHistory(activeTaskId, currentSessionId);
+      const tokenEstimate = history.reduce((sum, p) => sum + estimateTokens(p), 0);
+      this.logger.debug('Task history assembled', {
+        messageCount: history.length,
+        tokenEstimate,
+      });
+      return history;
     }
 
     if (resumedSessionId) {
-      return this.loadResumedSessionHistory(resumedSessionId);
+      this.logger.debug('Assembling injected history: session resume', {
+        sessionId: resumedSessionId,
+      });
+      const history = await this.loadResumedSessionHistory(resumedSessionId);
+      const tokenEstimate = history.reduce((sum, p) => sum + estimateTokens(p), 0);
+      this.logger.debug('Resumed session history assembled', {
+        messageCount: history.length,
+        tokenEstimate,
+      });
+      return history;
     }
 
     if (this.memConfig.injectRecentChat) {
-      return this.loadRecentChatHistory(currentSessionId);
+      this.logger.debug('Assembling injected history: recent chat');
+      const history = await this.loadRecentChatHistory(currentSessionId);
+      const tokenEstimate = history.reduce((sum, p) => sum + estimateTokens(p), 0);
+      this.logger.debug('Recent chat history assembled', {
+        messageCount: history.length,
+        tokenEstimate,
+      });
+      return history;
     }
 
+    this.logger.debug('No injected history');
     return [];
   }
 
@@ -74,11 +98,21 @@ export class MemoryManager {
   ): Promise<Anthropic.MessageParam[] | null> {
     const keep = this.memConfig.keepRecentMessages;
     if (messages.length <= keep) {
+      this.logger.debug('Memory compaction skipped: not enough messages to evict', {
+        messageCount: messages.length,
+        keepRecent: keep,
+      });
       return null;
     }
 
     const toEvict = messages.slice(0, messages.length - keep);
     const toKeep = messages.slice(-keep);
+
+    this.logger.debug('Memory compaction started', {
+      totalMessages: messages.length,
+      messagesToEvict: toEvict.length,
+      messagesToKeep: toKeep.length,
+    });
 
     let summary: string;
     let tags: string[] = [];
@@ -142,6 +176,12 @@ export class MemoryManager {
         tags,
       });
     }
+
+    this.logger.debug('Memory compaction completed', {
+      summaryPreview: summary.slice(0, 200),
+      tags,
+      messagesEvicted: toEvict.length,
+    });
 
     progress.onMemoryCompaction(toEvict.length, summary, tags);
 

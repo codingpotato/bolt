@@ -6,6 +6,8 @@ import type { ToolContext } from '../tools/tool';
 import type { Config } from '../config/config';
 import type { Logger } from '../logger';
 import { createNoopLogger } from '../logger';
+import type { TraceLogger } from '../logger/trace-logger';
+import { createNoopTraceLogger } from '../logger/trace-logger';
 import type { SessionStore } from '../memory/session-store';
 import type { MemoryManager } from '../memory/memory-manager';
 import { estimateTokens } from '../memory/memory-manager';
@@ -107,6 +109,7 @@ export class AgentCore {
     private readonly initialSessionId?: string,
     private readonly memoryManager: MemoryManager | null = null,
     private readonly slashRegistry: SlashCommandRegistry = createSlashCommandRegistry(),
+    private readonly traceLogger: TraceLogger = createNoopTraceLogger(),
   ) {}
 
   /** Update the system prompt at runtime (e.g. after AGENT.md hot-reload). */
@@ -121,6 +124,18 @@ export class AgentCore {
     // can record which session is doing the work.
     this.ctx.sessionId = sessionId;
     this.ctx.progress.onSessionStart(sessionId, this.initialSessionId !== undefined);
+
+    this.logger.info('Session started', {
+      sessionId,
+      resumed: this.initialSessionId !== undefined,
+      ...(this.initialSessionId ? { resumedSessionId: this.initialSessionId } : {}),
+    });
+
+    // Trace: log the full system prompt once per session
+    this.traceLogger.systemPrompt(this.systemPrompt, this.config.model);
+
+    const sessionStart = Date.now();
+    let turnCount = 0;
 
     // Initialise L1 with injected history ONCE at session start.
     // This covers task history, session resume, and chat continuity.
@@ -137,6 +152,11 @@ export class AgentCore {
         this.ctx.progress.onContextInjection(source, injected.length, this.ctx.activeTaskId);
         this.l1 = [...injected];
         this.injectedTokenEstimate = injected.reduce((sum, p) => sum + estimateTokens(p), 0);
+        this.logger.info('Injected history loaded', {
+          source,
+          messageCount: injected.length,
+          tokenEstimate: this.injectedTokenEstimate,
+        });
       }
     }
 
@@ -147,11 +167,23 @@ export class AgentCore {
           send: (msg) => this.channel.send(msg),
           sessionId,
         });
+        this.logger.debug('Slash command dispatched', {
+          command: content.split(/\s/)[0],
+          exit: result.exit,
+        });
         if (result.exit) break;
         continue;
       }
       await this.handleTurn(turn.content, sessionId, turn.author);
+      turnCount++;
     }
+
+    const sessionDuration = Date.now() - sessionStart;
+    this.logger.info('Session ended', {
+      sessionId,
+      turnCount,
+      durationMs: sessionDuration,
+    });
   }
 
   /**
@@ -170,6 +202,10 @@ export class AgentCore {
     sessionId: string = randomUUID(),
     author?: string,
   ): Promise<void> {
+    const turnStart = Date.now();
+    let llmCalls = 0;
+    let toolCallsTotal = 0;
+
     // Tool definitions are stable for the lifetime of a turn — hoist the call
     // outside the loop to avoid redundant work on every round-trip.
     const tools = this.toolBus.getAnthropicDefinitions() as Anthropic.Tool[];
@@ -178,15 +214,28 @@ export class AgentCore {
     // model understands who sent each turn.
     const messageContent = author ? `[${author}]: ${userMessage}` : userMessage;
 
+    this.logger.debug('User turn received', {
+      sessionId,
+      author: author ?? 'anonymous',
+      messageLength: messageContent.length,
+      messagePreview: messageContent.slice(0, 100),
+    });
+
     // Append the user message to L1 and persist to L2.
     this.l1.push({ role: 'user', content: messageContent });
     await this.persistEntry(sessionId, 'user', messageContent);
 
     try {
       while (true) {
+        llmCalls++;
+        const toolNames = tools.map((t) => t.name);
         this.logger.debug('Sending request to LLM', {
           model: this.config.model,
           messageCount: this.l1.length,
+          tools: toolNames,
+          systemPromptPreview: this.systemPrompt.slice(0, 500),
+          systemPromptLength: this.systemPrompt.length,
+          llmCallNumber: llmCalls,
         });
 
         this.ctx.progress.onThinking();
@@ -207,14 +256,21 @@ export class AgentCore {
           messages: [...this.l1],
         });
 
+        // Trace: log full request payload
+        const params = buildParams();
+        this.traceLogger.llmRequest(params.messages, this.config.model, params.tools);
+
         let response: Anthropic.Message;
         try {
-          response = await this.callApi(buildParams());
+          response = await this.callApi(params);
         } catch (err) {
           if (!isExceedContextSizeError(err)) throw err;
           // The request exceeded the context window before the threshold check
           // could fire (e.g. injected history masked the true token count).
           // Compact now and retry once before giving up.
+          this.logger.warn('Context window exceeded during API call, triggering compaction', {
+            sessionId,
+          });
           const compacted = this.memoryManager
             ? await this.memoryManager.compact(
                 this.l1,
@@ -224,6 +280,10 @@ export class AgentCore {
               )
             : this.compactMessages(this.l1);
           if (compacted === null) {
+            this.logger.error('Context window exceeded and cannot compact further', {
+              sessionId,
+              messageCount: this.l1.length,
+            });
             throw new Error(`Context window exceeded and cannot be compacted further.`);
           }
           this.l1.splice(0, this.l1.length, ...compacted);
@@ -231,11 +291,21 @@ export class AgentCore {
           response = await this.callApi(buildParams());
         }
 
+        // Trace: log full response
+        this.traceLogger.llmResponse(response);
+
         this.logger.debug('Received response from LLM', {
           model: response.model,
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
           stopReason: response.stop_reason,
+          contentBlocks: response.content.map((b) => ({
+            type: b.type,
+            ...(b.type === 'tool_use'
+              ? { id: b.id, name: b.name, inputPreview: JSON.stringify(b.input).slice(0, 200) }
+              : {}),
+            ...(b.type === 'text' ? { textPreview: b.text.slice(0, 200) } : {}),
+          })),
         });
         this.ctx.progress.onLlmResponse({
           inputTokens: response.usage.input_tokens,
@@ -254,6 +324,21 @@ export class AgentCore {
             name: block.name,
             input: block.input,
           }));
+          toolCallsTotal += toolCalls.length;
+
+          // Trace: log full tool call inputs
+          for (const call of toolCalls) {
+            this.traceLogger.toolCall(call.name, call.id, call.input);
+          }
+
+          this.logger.debug('Dispatching tool calls', {
+            count: toolCalls.length,
+            tools: toolCalls.map((tc) => ({
+              id: tc.id,
+              name: tc.name,
+              inputPreview: JSON.stringify(tc.input).slice(0, 300),
+            })),
+          });
 
           // Persist assistant turn (with tool_use blocks) before dispatching.
           await this.persistEntry(sessionId, 'assistant', response.content);
@@ -264,6 +349,25 @@ export class AgentCore {
           }
 
           const toolResults = await this.toolBus.dispatchAll(toolCalls, this.ctx);
+
+          // Trace: log full tool call results
+          for (const result of toolResults) {
+            this.traceLogger.toolResult(
+              toolCalls.find((tc) => tc.id === result.id)?.name ?? 'unknown',
+              result.id,
+              result.content,
+              result.is_error,
+            );
+          }
+
+          this.logger.debug('Tool call results', {
+            count: toolResults.length,
+            results: toolResults.map((tr) => ({
+              id: tr.id,
+              isError: tr.is_error ?? false,
+              contentPreview: tr.content.slice(0, 300),
+            })),
+          });
 
           // Persist each tool result after dispatch (before next LLM call).
           for (const result of toolResults) {
@@ -299,6 +403,14 @@ export class AgentCore {
             l1Fraction > this.config.memory.compactThreshold ||
             totalFraction > this.config.memory.compactThreshold
           ) {
+            this.logger.info('Context compaction triggered', {
+              sessionId,
+              l1Fraction: (l1Fraction * 100).toFixed(1) + '%',
+              totalFraction: (totalFraction * 100).toFixed(1) + '%',
+              threshold: (this.config.memory.compactThreshold * 100).toFixed(1) + '%',
+              messageCount: this.l1.length,
+              fallbackMode: !this.memoryManager,
+            });
             const compacted = this.memoryManager
               ? await this.memoryManager.compact(
                   this.l1,
@@ -308,6 +420,11 @@ export class AgentCore {
                 )
               : this.compactMessages(this.l1);
             if (compacted === null) {
+              this.logger.error('Context window exceeded and compaction returned null', {
+                sessionId,
+                messageCount: this.l1.length,
+                inputTokens: response.usage.input_tokens,
+              });
               throw new Error(
                 `Context window exceeded and cannot be compacted further ` +
                   `(${response.usage.input_tokens.toLocaleString()}/${MODEL_CONTEXT_WINDOW.toLocaleString()} tokens used).`,
@@ -317,6 +434,11 @@ export class AgentCore {
             // Injected history has been evicted — clear its token estimate so it
             // no longer artificially inflates the compaction headroom.
             this.injectedTokenEstimate = 0;
+            this.logger.info('Context compaction completed', {
+              sessionId,
+              messageCountBefore: this.l1.length + (compacted.length - this.l1.length),
+              messageCountAfter: compacted.length,
+            });
           }
         } else {
           // Covers 'end_turn', 'max_tokens', 'stop_sequence', and null.
@@ -326,6 +448,12 @@ export class AgentCore {
           );
           const text = textBlock?.text ?? '';
 
+          this.logger.debug('Assistant final response', {
+            textPreview: text.slice(0, 500),
+            textLength: text.length,
+            stopReason: response.stop_reason,
+          });
+
           // Persist final assistant response before delivering to the channel.
           await this.persistEntry(sessionId, 'assistant', text);
 
@@ -333,11 +461,28 @@ export class AgentCore {
           // sees the full conversation including this response.
           this.l1.push({ role: 'assistant', content: text });
 
+          const turnDuration = Date.now() - turnStart;
+          this.logger.info('Turn completed', {
+            sessionId,
+            turnDuration,
+            llmCalls,
+            toolCalls: toolCallsTotal,
+            totalOutputTokens: response.usage.output_tokens,
+          });
+
           await this.channel.send(text);
           break;
         }
       }
     } catch (err) {
+      const turnDuration = Date.now() - turnStart;
+      this.logger.error('Turn failed', {
+        sessionId,
+        turnDuration,
+        llmCalls,
+        toolCalls: toolCallsTotal,
+        error: getErrorMessage(err),
+      });
       await this.channel.send(`Error: ${getErrorMessage(err)}`);
     }
   }

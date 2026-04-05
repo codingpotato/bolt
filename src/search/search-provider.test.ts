@@ -354,6 +354,7 @@ describe('createSearchProvider', () => {
     model: 'claude-opus-4-6',
     dataDir: '.bolt',
     logLevel: 'info',
+    logTrace: false,
     workspace: { root: process.cwd() },
     auth: {},
     local: {},

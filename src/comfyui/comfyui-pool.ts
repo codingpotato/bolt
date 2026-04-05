@@ -80,6 +80,10 @@ export class ComfyUIPool {
    * If no servers are reachable, the pool is empty (tools will return ToolError when called).
    */
   async init(): Promise<void> {
+    this.logger.info('ComfyUI pool initialising', {
+      serverCount: this.config.servers.length,
+      servers: this.config.servers.map((s) => s.url),
+    });
     const results = await Promise.allSettled(
       this.config.servers.map(async (server) => {
         const url = `${server.url}/system_stats`;
@@ -155,6 +159,11 @@ export class ComfyUIPool {
     }
 
     if (best !== null) {
+      this.logger.debug('ComfyUI server selected', {
+        url: best.url,
+        score: bestScore,
+        activeJobs: this.activeServers.find((s) => s.url === best.url)?.activeJobs ?? 0,
+      });
       return best;
     }
 
@@ -210,6 +219,8 @@ export class ComfyUIPool {
   } {
     const workflowPath = this.resolveWorkflow(name);
     const patchmapPath = workflowPath.replace(/\.json$/, '.patchmap.json');
+
+    this.logger.debug('ComfyUI workflow resolved', { name, workflowPath, patchmapPath });
 
     let workflow: Record<string, ComfyUINode>;
     try {

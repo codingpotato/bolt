@@ -162,6 +162,7 @@ function makeChannel(
       workspaceRoot: opts.workspaceRoot,
       persistent: opts.persistent,
     },
+    undefined,
     server as unknown as Server,
   ) as WebChannel & { _onConnection: (ws: FakeWs, name?: string) => void };
 
@@ -734,6 +735,7 @@ describe('WebChannel', () => {
       const server = new FakeServer();
       const channel = new WebChannel(
         { port: 3000, host: '0.0.0.0', mode: 'websocket' },
+        undefined,
         server as unknown as Server,
       );
       await channel.listen();
@@ -751,6 +753,7 @@ describe('WebChannel', () => {
       };
       const channel = new WebChannel(
         { port: 3000, mode: 'websocket' },
+        undefined,
         server as unknown as Server,
       );
       await expect(channel.listen()).rejects.toThrow('Port 3000 is already in use');
@@ -766,6 +769,7 @@ describe('WebChannel', () => {
       };
       const channel = new WebChannel(
         { port: 3000, mode: 'websocket' },
+        undefined,
         server as unknown as Server,
       );
       await expect(channel.listen()).rejects.toThrow('EACCES');

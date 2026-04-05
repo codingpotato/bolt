@@ -82,3 +82,13 @@ Read these docs before making decisions in the relevant area:
 - All task and memory state must be serializable and survive process restarts
 - No `any` types — `"strict": true` is enforced in `tsconfig.json`
 - Default model: `claude-opus-4-6`
+
+## Logging Guidelines
+
+Read `docs/design/logging.md` for the full reference. Key rules:
+
+- **Levels**: `debug` (operational detail), `info` (lifecycle events), `warn` (recoverable issues), `error` (unrecoverable failures)
+- **Structured logger**: short message, detail in `meta`; never log credentials; use `Preview` suffix for truncated strings; `createNoopLogger()` as default
+- **Trace logger**: full payloads to `.bolt/trace.jsonl` (opt-in via `BOLT_LOG_TRACE=true`); `createNoopTraceLogger()` as default
+- **Constructor pattern**: `private readonly logger: Logger = createNoopLogger(), private readonly traceLogger: TraceLogger = createNoopTraceLogger()`
+- Always update callers in `src/cli/index.ts` to pass real loggers

@@ -4,6 +4,8 @@ import path from 'node:path';
 import { createReadStream } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Channel, UserTurn, UserReviewRequest, UserReviewResponse } from './channel';
+import type { Logger } from '../logger';
+import { createNoopLogger } from '../logger';
 
 const INDEX_HTML_PATH = path.join(__dirname, '../../public', 'index.html');
 
@@ -131,6 +133,7 @@ export class WebChannel implements Channel {
   private readonly opts: WebChannelOptions;
   private readonly httpServer: Server;
   private readonly wss: WebSocketServer;
+  private readonly logger: Logger;
 
   /** All connected WebSocket clients, keyed by socket, value is the user's display name. */
   private connections: Map<WebSocket, { userId: string }> = new Map();
@@ -155,8 +158,9 @@ export class WebChannel implements Channel {
   /** SSE response streams awaiting the next agent message (HTTP mode). */
   private sseStreams: ServerResponse[] = [];
 
-  constructor(opts: WebChannelOptions, server?: Server) {
+  constructor(opts: WebChannelOptions, logger: Logger = createNoopLogger(), server?: Server) {
     this.opts = opts;
+    this.logger = logger;
     this.httpServer = server ?? createServer();
     this.wss = new WebSocketServer({ noServer: true });
 
@@ -183,7 +187,11 @@ export class WebChannel implements Channel {
     const { token } = this.opts;
     if (!token) return true; // no auth configured
     const cleaned = bearerOrToken.replace(/^Bearer\s+/i, '').split('?')[0];
-    return cleaned === token;
+    const ok = cleaned === token;
+    if (!ok) {
+      this.logger.warn('Authentication failure', { source: 'web-channel' });
+    }
+    return ok;
   }
 
   private authFromRequest(req: IncomingMessage): boolean {
@@ -201,6 +209,7 @@ export class WebChannel implements Channel {
   private onConnection(ws: WebSocket, requestedName?: string): void {
     const userId = requestedName ?? `User${++this.userCounter}`;
     this.connections.set(ws, { userId });
+    this.logger.info('WebSocket connected', { userId, total: this.connections.size });
 
     const statusMsg: ServerMessage = {
       type: 'status',
@@ -217,6 +226,7 @@ export class WebChannel implements Channel {
 
     ws.on('close', () => {
       this.connections.delete(ws);
+      this.logger.info('WebSocket disconnected', { userId, remaining: this.connections.size });
       if (this.connections.size === 0 && !this.opts.persistent) {
         this.signalClose();
       }
@@ -228,6 +238,7 @@ export class WebChannel implements Channel {
     try {
       parsed = JSON.parse(raw) as unknown;
     } catch {
+      this.logger.warn('Invalid client message', { raw: raw.slice(0, 100) });
       return;
     }
 
@@ -254,6 +265,8 @@ export class WebChannel implements Channel {
       if (pending) {
         this.pendingReviews.delete(parsed.reviewId);
         pending.resolve({ approved: parsed.approved, feedback: parsed.feedback });
+      } else {
+        this.logger.warn('Stale review rejected', { reviewId: parsed.reviewId });
       }
     }
   }
@@ -326,6 +339,7 @@ export class WebChannel implements Channel {
         return;
       }
 
+      this.logger.info('HTTP chat request received', { contentLength: parsed.content.length });
       this.enqueueTurn({ content: parsed.content });
       res.writeHead(202, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));

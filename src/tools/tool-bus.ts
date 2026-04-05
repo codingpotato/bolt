@@ -1,5 +1,7 @@
 import { ToolError } from './tool';
 import type { Tool, ToolCall, ToolContext, ToolResult, JSONSchema } from './tool';
+import type { Logger } from '../logger';
+import { createNoopLogger } from '../logger';
 
 /** Hard ceiling on any single tool result sent to the LLM. */
 export const MAX_RESULT_CHARS = 100_000;
@@ -66,6 +68,8 @@ function validateRequired(schema: JSONSchema, input: unknown): string | null {
 export class ToolBus {
   private readonly registry = new Map<string, Tool>();
 
+  constructor(private readonly logger: Logger = createNoopLogger()) {}
+
   register(tool: Tool): void {
     this.registry.set(tool.name, tool);
   }
@@ -100,11 +104,18 @@ export class ToolBus {
    * All dispatches (success or failure) are written to the audit log.
    */
   async dispatch(call: ToolCall, ctx: ToolContext): Promise<ToolResult> {
+    this.logger.debug('ToolBus dispatch start', {
+      toolName: call.name,
+      callId: call.id,
+      inputPreview: JSON.stringify(call.input).slice(0, 300),
+    });
+
     // 1. Allowlist check
     if (ctx.allowedTools !== undefined && !ctx.allowedTools.includes(call.name)) {
       const errContent = JSON.stringify({
         error: `tool "${call.name}" is not allowed in this scope`,
       });
+      this.logger.debug('ToolBus dispatch blocked: not allowed', { toolName: call.name });
       await ctx.log.log(call.name, call.input, { error: 'not allowed' });
       return { id: call.id, content: errContent, is_error: true };
     }
@@ -113,6 +124,7 @@ export class ToolBus {
     const tool = this.registry.get(call.name);
     if (tool === undefined) {
       const errContent = JSON.stringify({ error: `unknown tool: "${call.name}"` });
+      this.logger.debug('ToolBus dispatch failed: unknown tool', { toolName: call.name });
       await ctx.log.log(call.name, call.input, { error: 'unknown tool' });
       return { id: call.id, content: errContent, is_error: true };
     }
@@ -121,6 +133,10 @@ export class ToolBus {
     const validationError = validateRequired(tool.inputSchema, call.input);
     if (validationError !== null) {
       const errContent = JSON.stringify({ error: `invalid input — ${validationError}` });
+      this.logger.debug('ToolBus dispatch failed: validation error', {
+        toolName: call.name,
+        validationError,
+      });
       await ctx.log.log(call.name, call.input, { error: validationError });
       return { id: call.id, content: errContent, is_error: true };
     }
@@ -134,6 +150,11 @@ export class ToolBus {
     } catch (err) {
       if (err instanceof ToolError) {
         const errContent = JSON.stringify({ error: err.message, retryable: err.retryable });
+        this.logger.debug('ToolBus dispatch completed with ToolError', {
+          toolName: call.name,
+          error: err.message,
+          retryable: err.retryable,
+        });
         await ctx.log.log(call.name, call.input, { error: err.message });
         ctx.progress.onToolResult(call.name, false, err.message);
         return { id: call.id, content: errContent, is_error: true };
@@ -141,6 +162,11 @@ export class ToolBus {
       throw err;
     }
 
+    this.logger.debug('ToolBus dispatch completed successfully', {
+      toolName: call.name,
+      resultPreview:
+        typeof result === 'string' ? result.slice(0, 300) : JSON.stringify(result).slice(0, 300),
+    });
     await ctx.log.log(call.name, call.input, result);
     let content = typeof result === 'string' ? result : JSON.stringify(result);
     if (content.length > MAX_RESULT_CHARS) {

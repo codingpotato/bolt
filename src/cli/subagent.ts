@@ -75,7 +75,7 @@ async function main(): Promise<void> {
   const log = createAuditLogger(dataDir);
   const logger = createLogger('warn', join(dataDir, 'bolt.log'));
 
-  const toolBus = new ToolBus();
+  const toolBus = new ToolBus(logger);
   const todoStore = new TodoStore();
 
   // Register basic tools — no memory for sub-agents.
@@ -94,6 +94,7 @@ async function main(): Promise<void> {
     model: payload.model,
     dataDir,
     logLevel: 'warn' as const,
+    logTrace: false,
     workspace: { root: cwd },
     memory: {
       compactThreshold: 0.8,

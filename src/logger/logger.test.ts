@@ -206,26 +206,40 @@ describe('createLogger', () => {
       expect(String(stderrSpy.mock.calls[0]![0])).toContain('something broke');
     });
 
-    it('stderr output includes the [bolt] ERROR prefix', async () => {
-      const logger = createLogger('debug', LOG_PATH);
+    it('stderr output includes the [bolt] ERROR prefix in production mode', async () => {
+      const logger = createLogger('info', LOG_PATH);
       logger.error('boom');
       expect(String(stderrSpy.mock.calls[0]![0])).toContain('[bolt] ERROR:');
     });
 
-    it('debug entries do not write to stderr', async () => {
+    it('debug entries write pretty output to stderr in debug mode', async () => {
       const logger = createLogger('debug', LOG_PATH);
       logger.debug('quiet');
-      expect(stderrSpy).not.toHaveBeenCalled();
+      expect(stderrSpy).toHaveBeenCalledOnce();
+      expect(String(stderrSpy.mock.calls[0]![0])).toContain('DBG');
+      expect(String(stderrSpy.mock.calls[0]![0])).toContain('quiet');
     });
 
-    it('info entries do not write to stderr', async () => {
+    it('info entries write pretty output to stderr in debug mode', async () => {
       const logger = createLogger('debug', LOG_PATH);
       logger.info('informational');
-      expect(stderrSpy).not.toHaveBeenCalled();
+      expect(stderrSpy).toHaveBeenCalledOnce();
+      expect(String(stderrSpy.mock.calls[0]![0])).toContain('INF');
+      expect(String(stderrSpy.mock.calls[0]![0])).toContain('informational');
     });
 
-    it('warn entries do not write to stderr', async () => {
+    it('warn entries write pretty output to stderr in debug mode', async () => {
       const logger = createLogger('debug', LOG_PATH);
+      logger.warn('warning');
+      expect(stderrSpy).toHaveBeenCalledOnce();
+      expect(String(stderrSpy.mock.calls[0]![0])).toContain('WRN');
+      expect(String(stderrSpy.mock.calls[0]![0])).toContain('warning');
+    });
+
+    it('production mode only writes error to stderr', async () => {
+      const logger = createLogger('info', LOG_PATH);
+      logger.debug('quiet');
+      logger.info('informational');
       logger.warn('warning');
       expect(stderrSpy).not.toHaveBeenCalled();
     });

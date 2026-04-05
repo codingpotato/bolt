@@ -1,6 +1,10 @@
 import type { Tool, ToolContext } from './tool';
 import type { AuthConfig } from '../auth/auth';
 import type { SubagentPayload, SubagentRunner } from '../subagent/subagent-runner';
+import type { Logger } from '../logger';
+import { createNoopLogger } from '../logger';
+import type { TraceLogger } from '../logger/trace-logger';
+import { createNoopTraceLogger } from '../logger/trace-logger';
 import { extractPromptSections } from '../agent-prompt/agent-prompt';
 
 export interface SubagentRunInput {
@@ -36,6 +40,8 @@ export function createSubagentRunTool(
   execPath: string,
   runner: SubagentRunner,
   getSystemPrompt: () => string,
+  logger: Logger = createNoopLogger(),
+  traceLogger: TraceLogger = createNoopTraceLogger(),
 ): Tool<SubagentRunInput, SubagentRunOutput> {
   return {
     name: 'subagent_run',
@@ -81,11 +87,25 @@ export function createSubagentRunTool(
         ...(inheritedRules.length > 0 ? { inheritedRules } : {}),
       };
 
+      logger.debug('Sub-agent dispatched', {
+        promptPreview: input.prompt.slice(0, 300),
+        allowedTools,
+        inheritedRulesPreview: inheritedRules.slice(0, 200),
+      });
+
+      // Trace: log full sub-agent dispatch
+      traceLogger.subagentDispatch(input.prompt, model, allowedTools);
+
       try {
         const result = await runner(payload, scriptPath, execPath);
+        logger.debug('Sub-agent completed', {
+          outputPreview: result.output.slice(0, 300),
+        });
+
         return { output: result.output };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        logger.debug('Sub-agent failed', { error: message.slice(0, 500) });
         return { output: `Sub-agent failed: ${message}`, error: true };
       }
     },

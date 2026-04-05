@@ -47,6 +47,7 @@ All configuration can be set via environment variables. This enables Docker and 
 | `BOLT_WORKSPACE_ROOT` | No       | `process.cwd()`   | Absolute path to the workspace root; all file operations are confined to this directory |
 | `BOLT_DATA_DIR`       | No       | `.bolt`           | Runtime data directory (relative to workspace root if not absolute)                     |
 | `BOLT_LOG_LEVEL`      | No       | `info`            | Log verbosity: `debug` \| `info` \| `warn` \| `error`                                   |
+| `BOLT_LOG_TRACE`      | No       | `false`           | Enable full LLM payload tracing to `.bolt/trace.jsonl` (`true` \| `false`)              |
 
 ### Web Search
 

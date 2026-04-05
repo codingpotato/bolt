@@ -3,6 +3,10 @@ import type { Tool, ToolContext, JSONSchema } from './tool';
 import type { Skill } from '../skills/skill-loader';
 import type { AuthConfig } from '../auth/auth';
 import type { SubagentPayload, SubagentRunner } from '../subagent/subagent-runner';
+import type { Logger } from '../logger';
+import { createNoopLogger } from '../logger';
+import type { TraceLogger } from '../logger/trace-logger';
+import { createNoopTraceLogger } from '../logger/trace-logger';
 
 export interface SkillRunInput {
   name: string;
@@ -82,6 +86,8 @@ export function createSkillRunTool(
   execPath: string,
   runner: SubagentRunner,
   inheritedRules: string,
+  logger: Logger = createNoopLogger(),
+  traceLogger: TraceLogger = createNoopTraceLogger(),
 ): Tool<SkillRunInput, SkillRunOutput> {
   const skillMap = new Map<string, Skill>(skills.map((s) => [s.name, s]));
 
@@ -120,6 +126,13 @@ export function createSkillRunTool(
       const effectiveTools = resolveAllowedTools(ctx.allowedTools, skill.allowedTools);
       const prompt = buildSkillPrompt(input.name, input.args, skill.outputSchema);
 
+      logger.debug('Skill dispatched', {
+        skillName: input.name,
+        argsPreview: JSON.stringify(input.args).slice(0, 300),
+        allowedTools: effectiveTools,
+        systemPromptPreview: skill.systemPrompt.slice(0, 200),
+      });
+
       const payload: SubagentPayload = {
         prompt,
         authConfig,
@@ -129,12 +142,26 @@ export function createSkillRunTool(
         ...(inheritedRules.length > 0 ? { inheritedRules } : {}),
       };
 
+      // Trace: log full skill dispatch
+      traceLogger.subagentDispatch(prompt, model, effectiveTools);
+
       let subagentOutput: string;
       try {
         const result = await runner(payload, scriptPath, execPath);
         subagentOutput = result.output;
+        logger.debug('Skill completed', {
+          skillName: input.name,
+          outputPreview: subagentOutput.slice(0, 300),
+        });
+
+        // Trace: log full skill result
+        traceLogger.subagentResult(subagentOutput, 0);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        logger.debug('Skill failed', {
+          skillName: input.name,
+          error: message.slice(0, 500),
+        });
         throw new ToolError(`skill "${input.name}" failed: ${message}`, true);
       }
 

@@ -72,6 +72,7 @@ function resolveSubagentScript(): { scriptPath: string; execPath: string } {
     return { scriptPath: jsPath, execPath: process.execPath };
   }
   if (existsSync(tsPath)) {
+    // In development mode, use tsx to run TypeScript directly
     return { scriptPath: tsPath, execPath: 'tsx' };
   }
   throw new Error(
@@ -90,6 +91,7 @@ function buildInheritedRules(systemPrompt: string): string {
 async function serve(serveArgs: string[]): Promise<void> {
   const config = resolveConfig();
 
+  // Parse --port and --token overrides
   const portFlagIndex = serveArgs.indexOf('--port');
   const port =
     portFlagIndex !== -1
@@ -203,6 +205,7 @@ async function serve(serveArgs: string[]): Promise<void> {
       runSubagent,
       inheritedRules,
       logger,
+      traceLogger,
     ),
   );
   const slashRegistry = createSlashCommandRegistry();
@@ -346,6 +349,8 @@ async function main(): Promise<void> {
   const client = createAnthropicClient(auth);
 
   const cwd = process.cwd();
+  // Resolve dataDir to an absolute path so audit logger and future components
+  // are not sensitive to cwd changes after startup.
   const dataDir = resolve(cwd, config.dataDir);
 
   const log = createAuditLogger(dataDir);
@@ -445,6 +450,7 @@ async function main(): Promise<void> {
       runSubagent,
       inheritedRules,
       logger,
+      traceLogger,
     ),
   );
   const slashRegistry = createSlashCommandRegistry();

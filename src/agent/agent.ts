@@ -288,7 +288,10 @@ export class AgentCore {
           }
           this.l1.splice(0, this.l1.length, ...compacted);
           this.injectedTokenEstimate = 0;
-          response = await this.callApi(buildParams());
+          // Trace: log retried request after compaction
+          const retryParams = buildParams();
+          this.traceLogger.llmRequest(retryParams.messages, this.config.model, retryParams.tools);
+          response = await this.callApi(retryParams);
         }
 
         // Trace: log full response
@@ -430,13 +433,14 @@ export class AgentCore {
                   `(${response.usage.input_tokens.toLocaleString()}/${MODEL_CONTEXT_WINDOW.toLocaleString()} tokens used).`,
               );
             }
+            const messageCountBefore = this.l1.length;
             this.l1.splice(0, this.l1.length, ...compacted);
             // Injected history has been evicted — clear its token estimate so it
             // no longer artificially inflates the compaction headroom.
             this.injectedTokenEstimate = 0;
             this.logger.info('Context compaction completed', {
               sessionId,
-              messageCountBefore: this.l1.length + (compacted.length - this.l1.length),
+              messageCountBefore,
               messageCountAfter: compacted.length,
             });
           }

@@ -102,9 +102,6 @@ export function createSubagentRunTool(
           outputPreview: result.output.slice(0, 300),
         });
 
-        // Trace: log full sub-agent result
-        traceLogger.subagentResult(result.output, 0);
-
         return { output: result.output };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

@@ -101,7 +101,7 @@ export class CliProgressReporter implements ProgressReporter {
     // Replace the plain "Thinking…" line with context stats.
     this.eraseThinking();
     this.out.write(
-      `⟳ Thinking… [${info.messageCount} msgs · sys: ${fmt(info.systemTokens)} · usr: ${fmt(info.userTokens)} · inj: ${fmt(info.injectedTokens)}]\n`,
+      `⟳ Thinking… [${info.messageCount} msgs · sys: ${fmt(info.systemTokens)} tok · ctx: ${fmt(info.ctxTokens)} tok · inj: ${fmt(info.injectedTokens)} tok]\n`,
     );
     this.pendingThinking = true;
   }

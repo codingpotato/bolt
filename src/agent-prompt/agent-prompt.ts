@@ -127,13 +127,12 @@ export async function assembleSystemPrompt(
     total: { chars: withTools.length, tokens: totalTokens },
   });
 
-  logger.debug('System prompt base (AGENT.md)', { content: base });
-  logger.debug('System prompt skills section', {
-    content: withSkills.length > base.length ? withSkills.slice(base.length) : '',
-  });
-  logger.debug('System prompt tools section', {
-    content: withTools.length > withSkills.length ? withTools.slice(withSkills.length) : '',
-  });
+  if (skills.length === 0) {
+    logger.warn('No skills found for system prompt');
+  }
+  if (tools.length === 0) {
+    logger.warn('No tools found for system prompt');
+  }
 
   return withTools;
 }

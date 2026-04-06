@@ -11,6 +11,7 @@ import { createNoopTraceLogger } from '../logger/trace-logger';
 import type { SessionStore } from '../memory/session-store';
 import type { MemoryManager } from '../memory/memory-manager';
 import { estimateTokens } from '../memory/memory-manager';
+import { estimateTokenCount } from '../agent-prompt/agent-prompt';
 import {
   createSlashCommandRegistry,
   type SlashCommandRegistry,
@@ -239,15 +240,15 @@ export class AgentCore {
 
         this.ctx.progress.onThinking();
 
-        // Estimate tokens for system prompt and user messages
-        const systemTokens = Math.ceil(this.systemPrompt.length / 4);
-        const userTokens = this.l1.reduce((sum, msg) => sum + estimateTokens(msg), 0);
+        // Estimate tokens for system prompt and L1 context
+        const systemTokens = estimateTokenCount(this.systemPrompt);
+        const ctxTokens = this.l1.reduce((sum, msg) => sum + estimateTokens(msg), 0);
 
         this.ctx.progress.onLlmCall({
           messageCount: this.l1.length,
           injectedTokens: this.injectedTokenEstimate,
           systemTokens,
-          userTokens,
+          ctxTokens,
         });
 
         // Build stable params (messages snapshot is taken fresh each attempt).

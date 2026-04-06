@@ -517,7 +517,7 @@ describe('createTraceLogger', () => {
       expect(output).toContain('model=test-model');
       expect(output).toContain('messages=5');
       expect(output).toContain('tools=12');
-      expect(output).toContain('window=1000 / 200000 (0.5%)');
+      expect(output).toContain('window=1700 / 200000 (0.9%)');
     });
 
     it('shows system and context tokens separately', () => {
@@ -533,7 +533,7 @@ describe('createTraceLogger', () => {
 
       const output = stderrSpy.mock.calls.map((call) => String(call[0])).join('');
       expect(output).toContain('system=1000tok');
-      expect(output).toContain('context=800tok');
+      expect(output).toContain('messages=800tok');
     });
 
     it('includes the last message content', () => {

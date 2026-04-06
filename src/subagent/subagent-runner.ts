@@ -2,8 +2,6 @@ import { spawn } from 'node:child_process';
 import type { AuthConfig } from '../auth/auth';
 import type { Logger } from '../logger';
 import { createNoopLogger } from '../logger';
-import type { TraceLogger } from '../logger/trace-logger';
-import { createNoopTraceLogger } from '../logger/trace-logger';
 
 export interface SubagentPayload {
   prompt: string;
@@ -45,7 +43,6 @@ export async function runSubagent(
   scriptPath: string,
   execPath: string = process.execPath,
   logger: Logger = createNoopLogger(),
-  traceLogger: TraceLogger = createNoopTraceLogger(),
 ): Promise<SubagentResult> {
   const startTime = Date.now();
   const payloadBytes = Buffer.byteLength(JSON.stringify(payload));
@@ -58,9 +55,6 @@ export async function runSubagent(
     allowedTools: payload.allowedTools,
     hasSystemPrompt: !!payload.systemPrompt,
   });
-
-  // Trace: log full sub-agent dispatch
-  traceLogger.subagentDispatch(payload.prompt, payload.model, payload.allowedTools);
 
   return new Promise((resolve, reject) => {
     let child;
@@ -119,9 +113,6 @@ export async function runSubagent(
           outputLength: result.output.length,
           outputPreview: result.output.slice(0, 300),
         });
-
-        // Trace: log full sub-agent result
-        traceLogger.subagentResult(result.output, duration);
 
         resolve(result);
       } catch {

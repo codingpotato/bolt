@@ -83,7 +83,7 @@ Fields:
 
 ### Debug mode (`BOLT_LOG_LEVEL=debug`)
 
-All levels are written to stderr in a **pretty, human-readable format** with ANSI colors:
+All levels are written to stderr in a **pretty, human-readable format** with ANSI colors and timestamps:
 
 ```
 2026-03-21 10:00:00 DBG Sending request to LLM │ model=claude-opus-4-6 messageCount=3
@@ -92,7 +92,11 @@ All levels are written to stderr in a **pretty, human-readable format** with ANS
 2026-03-21 10:00:03 ERR Context window exceeded
 ```
 
-Priority metadata fields (model, toolName, sessionId, error, etc.) are shown inline. String values are truncated to 80 chars; object/array values are JSON-stringified and truncated to 80 chars.
+Format:
+- **Timestamp**: `YYYY-MM-DD HH:MM:SS` (local time)
+- **Level label**: `DBG` (gray), `INF` (cyan), `WRN` (yellow), `ERR` (red)
+- **Separator**: ` │ ` between message and metadata
+- **Metadata**: Priority fields shown inline, truncated to 80 chars
 
 ### Production mode (any other level)
 
@@ -121,66 +125,53 @@ All other levels (`debug`, `info`, `warn`) are file-only JSON.
 
 ### Trace mode (opt-in)
 
-`BOLT_LOG_TRACE` (or `logTrace` in `.bolt/config.json`) enables the **trace logger** which writes pretty colored blocks to stderr for every LLM interaction. Default: `false`.
+`BOLT_LOG_TRACE` (or `logTrace` in `.bolt/config.json`) enables the **trace logger** which writes rich bordered blocks to stderr showing system prompt content and LLM interaction details. Default: `false`.
 
 ```sh
-BOLT_LOG_TRACE=true bolt
-# combine with debug for both structured metadata and rich trace blocks:
-BOLT_LOG_LEVEL=debug BOLT_LOG_TRACE=true bolt
+# Emit trace blocks for system prompt, LLM requests, and LLM responses
+BOLT_LOG_TRACE=true npm run dev
+
+# Combine with debug for both structured metadata and trace blocks:
+BOLT_LOG_LEVEL=debug BOLT_LOG_TRACE=true npm run dev
 ```
 
-When enabled, each event is rendered as a bordered block on stderr:
+When enabled, bordered blocks are emitted to stderr for key LLM interaction events:
 
 ```
-╔══ SYSTEM PROMPT ════════════════════════════════════════════════════╗
-║ model=claude-opus-4-6  length=5432                                  ║
-╟─────────────────────────────────────────────────────────────────────╢
-║ You are bolt, an autonomous AI agent for social media content       ║
-║ creators. Your goal is to help bloggers automate the content...     ║
-╚═════════════════════════════════════════════════════════════════════╝
+╔══ SYSTEM PROMPT ═══════════════════════════════════════════════════╗
+║ model=qwen3.5-27B  chars=6534  tokens=1406                         ║
+║ base=3115ch/662tok  skills=10×1272ch/265tok  tools=17×2147ch/479tok║
+╟────────────────────────────────────────────────────────────────────╢
+║ You are bolt, an autonomous AI agent for social media content      ║
+║ creators. Your goal is to help bloggers automate the content...    ║
+║ [truncated to 60 lines]                                            ║
+╚════════════════════════════════════════════════════════════════════╝
 
-╔══ LLM REQUEST ══════════════════════════════════════════════════════╗
-║ model=claude-opus-4-6  messages=3  tools=14                         ║
-╟─────────────────────────────────────────────────────────────────────╢
-║ [user]                                                              ║
-║ What are the trending topics I should write about today?            ║
-╚═════════════════════════════════════════════════════════════════════╝
+╔══ LLM REQUEST ═════════════════════════════════════════════════════╗
+║ model=qwen3.5-27B  messages=3  tools=14  window=578 / 200000 (0.3%)║
+║ system=662tok  context=578tok                                      ║
+╟────────────────────────────────────────────────────────────────────╢
+║ {"role":"user","content":"What trending topics should I write about?"}│
+╚════════════════════════════════════════════════════════════════════╝
 
-╔══ TOOL CALL: bash ══════════════════════════════════════════════════╗
-║ id=toolu_abc123                                                     ║
-╟─────────────────────────────────────────────────────────────────────╢
-║ {                                                                   ║
-║   "command": "trend_analyzer --region US --limit 10"               ║
-║ }                                                                   ║
-╚═════════════════════════════════════════════════════════════════════╝
-
-╔══ TOOL RESULT ✓: bash ══════════════════════════════════════════════╗
-║ id=toolu_abc123                                                     ║
-╟─────────────────────────────────────────────────────────────────────╢
-║ 1. AI productivity tools                                            ║
-║ 2. Creator economy news                                             ║
-╚═════════════════════════════════════════════════════════════════════╝
-
-╔══ SUBAGENT DISPATCH ════════════════════════════════════════════════╗
-║ model=claude-opus-4-6  tools=[bash, write_file]                     ║
-╟─────────────────────────────────────────────────────────────────────╢
-║ Write a viral LinkedIn post about AI productivity tools...          ║
-╚═════════════════════════════════════════════════════════════════════╝
+╔══ LLM RESPONSE ════════════════════════════════════════════════════╗
+║ model=qwen3.5-27B  inputTokens=1240 / 200000 (0.6%)  outputTokens=312║
+╟────────────────────────────────────────────────────────────────────╢
+║ Here are some trending topics you could write about:               ║
+║ 1. AI productivity tools in 2026                                   ║
+║ 2. Creator economy shift towards video                             ║
+╚════════════════════════════════════════════════════════════════════╝
 ```
 
-Trace events:
+Trace blocks emitted:
 
-| Block header             | What it shows                                            |
-| ------------------------ | -------------------------------------------------------- |
-| `SYSTEM PROMPT`          | Full system prompt (truncated at 60 lines), logged once  |
-| `LLM REQUEST`            | Last message in the conversation + message/tool counts   |
-| `LLM RESPONSE`           | Text content and tool calls in the response              |
-| `TOOL CALL: <name>`      | Full tool input (JSON)                                   |
-| `TOOL RESULT ✓/✗: <name>`| Full tool output, green (success) or red (error)         |
-| `SUBAGENT DISPATCH`      | Full sub-agent/skill prompt + allowed tools              |
-| `SUBAGENT RESULT`        | Full sub-agent output + duration                         |
+| Block header   | When                                         | What it shows                                                                   |
+| -------------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
+| `SYSTEM PROMPT`| Once at session start (after prompt assembly)| Full system prompt (first 60 lines) + base/skills/tools char/token breakdown   |
+| `LLM REQUEST`  | Before each LLM API call                     | Last message in conversation + message count, tool count, context window usage  |
+| `LLM RESPONSE` | After each LLM API call                      | Model text output and/or tool calls + input/output tokens, context window usage|
 
-**Note**: Trace output goes to stderr only — no file is written. Long bodies are truncated after ~30–60 lines on screen; the structured log file (`bolt.log` at `debug` level) retains full content.
+**Note**: Trace output goes to stderr only — no file is written. Long bodies are truncated after ~60 lines on screen; the structured log file (`bolt.log` at `debug` level) retains full content. Each trace block includes a header line with key metrics (model, token counts, window capacity).
 
 ---
 
@@ -197,28 +188,32 @@ Files and their parent directories are created lazily on the first write — no 
 
 ## Dependency Injection
 
-The logger is created once in `src/cli/index.ts` and threaded through the system:
+The logger and trace logger are created once in `src/cli/index.ts` and threaded through the system:
 
 ```
 createLogger(config.logLevel, '.bolt/bolt.log')
   │
-  ├─► AgentCore constructor (logger argument)
+  ├─► AgentCore (logger argument)
   │
-  └─► ToolContext.logger (required field — pass createNoopLogger() in tests)
+  └─► ToolContext.logger (required field)
 
-createTraceLogger()   // only if logTrace=true, else createNoopTraceLogger()
+createTraceLogger() || createNoopTraceLogger()   // based on config.logTrace
   │
-  └─► AgentCore constructor (traceLogger argument)
+  ├─► AgentCore (traceLogger argument)
+  │
+  ├─► assembleSystemPrompt() (optional parameter)
+  │
+  └─► AgentCore emits LLM REQUEST/RESPONSE blocks during handleTurn
 ```
 
-`createNoopLogger()` and `createNoopTraceLogger()` are exported from `src/logger/index.ts` and used wherever a real logger is not needed (tests, stubs).
+`createNoopLogger()` and `createNoopTraceLogger()` are exported from `src/logger/index.ts` for use in tests and optional contexts where logging is not needed.
 
 ---
 
 ## Separation of Concerns
 
-| Logger                | Writes to                | Controls         | Credential scrubbing                           |
-| --------------------- | ------------------------ | ---------------- | ---------------------------------------------- |
-| Structured (`Logger`) | `.bolt/bolt.log`         | `BOLT_LOG_LEVEL` | Not applicable (no tool inputs/outputs)        |
-| Trace (`TraceLogger`) | stderr (pretty blocks)   | `BOLT_LOG_TRACE` | No — contains full payloads (use with caution) |
-| Audit (`ToolLogger`)  | `.bolt/tool-audit.jsonl` | Always on        | Yes — credential fields redacted               |
+| Logger                | Writes to                      | Controls          | Purpose                                                                  |
+| --------------------- | ------------------------------ | ----------------- | ---------------------------------------------------------------------- |
+| Structured (`Logger`) | `.bolt/bolt.log` (JSON)        | `BOLT_LOG_LEVEL`  | Operational & debug events: agent lifecycle, LLM calls, token usage    |
+| Trace (`TraceLogger`) | stderr (bordered blocks)       | `BOLT_LOG_TRACE`  | Rich context for debugging: system prompt, LLM messages, token windows |
+| Audit (`ToolLogger`)  | `.bolt/tool-audit.jsonl` (JSON)| Always on         | Security record: tool calls with credential fields redacted             |

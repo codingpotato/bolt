@@ -1,2 +1,2 @@
-export type { Logger, LogLevel } from './logger';
-export { createLogger, createNoopLogger } from './logger';
+export type { Logger, LogLevel, TraceLogger } from './logger';
+export { createLogger, createNoopLogger, createTraceLogger, createNoopTraceLogger } from './logger';

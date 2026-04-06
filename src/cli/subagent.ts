@@ -94,6 +94,7 @@ async function main(): Promise<void> {
     model: payload.model,
     dataDir,
     logLevel: 'warn' as const,
+    logTrace: false,
     workspace: { root: cwd },
     memory: {
       compactThreshold: 0.8,

@@ -19,6 +19,7 @@ function makeConfig(model = 'claude-test'): Config {
     model,
     dataDir: '.bolt',
     logLevel: 'info',
+    logTrace: false,
     workspace: { root: process.cwd() },
     auth: {},
     local: {},
@@ -1114,6 +1115,7 @@ describe('AgentCore', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         mockMemoryManager as unknown as import('../memory/memory-manager').MemoryManager,
       );
       await agent.run();
@@ -1191,6 +1193,7 @@ describe('AgentCore', () => {
         makeOverflowConfig(),
         undefined,
         noopSleep,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -1281,6 +1284,7 @@ describe('AgentCore', () => {
         undefined,
         noopSleep,
         createNoopLogger(),
+        undefined,
         store as never,
       );
       await agent.run();
@@ -1306,6 +1310,7 @@ describe('AgentCore', () => {
         undefined,
         noopSleep,
         createNoopLogger(),
+        undefined,
         store as never,
       );
       await agent.run();
@@ -1333,6 +1338,7 @@ describe('AgentCore', () => {
         undefined,
         noopSleep,
         createNoopLogger(),
+        undefined,
         store as never,
       );
       await agent.run();
@@ -1358,6 +1364,7 @@ describe('AgentCore', () => {
         undefined,
         noopSleep,
         createNoopLogger(),
+        undefined,
         store as never,
       );
       await agent.run();
@@ -1384,6 +1391,7 @@ describe('AgentCore', () => {
         undefined,
         noopSleep,
         createNoopLogger(),
+        undefined,
         store as never,
         resumedId,
       );
@@ -1629,6 +1637,7 @@ describe('AgentCore', () => {
         makeConfig(),
         undefined,
         noopSleep,
+        undefined,
         undefined,
         undefined,
         undefined,

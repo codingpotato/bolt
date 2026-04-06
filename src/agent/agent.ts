@@ -4,8 +4,8 @@ import type { Channel } from '../channels';
 import type { ToolBus } from '../tools/tool-bus';
 import type { ToolContext } from '../tools/tool';
 import type { Config } from '../config/config';
-import type { Logger } from '../logger';
-import { createNoopLogger } from '../logger';
+import type { Logger, TraceLogger } from '../logger';
+import { createNoopLogger, createNoopTraceLogger } from '../logger';
 import type { SessionStore } from '../memory/session-store';
 import type { MemoryManager } from '../memory/memory-manager';
 import { estimateTokens } from '../memory/memory-manager';
@@ -104,6 +104,7 @@ export class AgentCore {
     private readonly sleep: (ms: number) => Promise<void> = (ms) =>
       new Promise<void>((resolve) => setTimeout(resolve, ms)),
     private readonly logger: Logger = createNoopLogger(),
+    private readonly traceLogger: TraceLogger = createNoopTraceLogger(),
     private readonly sessionStore: SessionStore | null = null,
     private readonly initialSessionId?: string,
     private readonly memoryManager: MemoryManager | null = null,
@@ -247,6 +248,18 @@ export class AgentCore {
           ctxTokens,
         });
 
+        // Emit LLM REQUEST trace block
+        const lastMsg = this.l1[this.l1.length - 1];
+        const lastMsgText = lastMsg ? JSON.stringify(lastMsg).slice(0, 2000) : '';
+        this.traceLogger.llmRequest(lastMsgText, {
+          model: this.config.model,
+          messages: this.l1.length,
+          tools: tools.length,
+          systemTokens,
+          ctxTokens,
+          windowCapacity: MODEL_CONTEXT_WINDOW,
+        });
+
         // Build stable params (messages snapshot is taken fresh each attempt).
         const buildParams = () => ({
           model: this.config.model,
@@ -304,6 +317,22 @@ export class AgentCore {
           })),
         });
         this.ctx.progress.onLlmResponse({
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          stopReason: response.stop_reason ?? 'end_turn',
+          windowCapacity: MODEL_CONTEXT_WINDOW,
+        });
+
+        // Emit LLM RESPONSE trace block
+        const responseText = response.content
+          .map((b) =>
+            b.type === 'text'
+              ? b.text
+              : `[${b.type}${b.type === 'tool_use' ? `: ${b.name}` : ''}]`,
+          )
+          .join('\n');
+        this.traceLogger.llmResponse(responseText, {
+          model: response.model,
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
           stopReason: response.stop_reason ?? 'end_turn',

@@ -5,8 +5,8 @@ import type { Config } from '../config/config';
 import type { Skill } from '../skills/skill-loader';
 import type { Tool } from '../tools/tool';
 import { BUILTIN_AGENT_MD } from '../assets';
-import type { Logger } from '../logger';
-import { createNoopLogger } from '../logger';
+import type { Logger, TraceLogger } from '../logger';
+import { createNoopLogger, createNoopTraceLogger } from '../logger';
 
 /**
  * Assembles the system prompt from a single .bolt/AGENT.md file,
@@ -110,6 +110,7 @@ export async function assembleSystemPrompt(
   skills: Skill[],
   tools: Tool[],
   logger: Logger = createNoopLogger(),
+  traceLogger: TraceLogger = createNoopTraceLogger(),
 ): Promise<string> {
   const base = await loadAgentPrompt(config);
   const withSkills = appendSkillsCatalog(base, skills);
@@ -125,6 +126,15 @@ export async function assembleSystemPrompt(
     skills: { count: skills.length, chars: withSkills.length - base.length, tokens: skillsTokens },
     tools: { count: tools.length, chars: withTools.length - withSkills.length, tokens: toolsTokens },
     total: { chars: withTools.length, tokens: totalTokens },
+  });
+
+  traceLogger.systemPrompt(withTools, {
+    model: config.model,
+    chars: withTools.length,
+    tokens: totalTokens,
+    base: { chars: base.length, tokens: baseTokens },
+    skills: { chars: withSkills.length - base.length, tokens: skillsTokens, count: skills.length },
+    tools: { chars: withTools.length - withSkills.length, tokens: toolsTokens, count: tools.length },
   });
 
   if (skills.length === 0) {

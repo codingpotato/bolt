@@ -195,11 +195,11 @@ export function createTraceLogger(): TraceLogger {
 
     process.stderr.write(`╔══ ${title}${padding}╗\n`);
     process.stderr.write(`║ ${headerLine.padEnd(maxWidth - 2)} ║\n`);
-    process.stderr.write(`╟${'─'.repeat(maxWidth)}╢\n`);
+    process.stderr.write(`╟${'─'.repeat(maxWidth - 2)}╢\n`);
     for (const line of lines) {
       process.stderr.write(`║ ${line.slice(0, maxWidth - 2).padEnd(maxWidth - 2)} ║\n`);
     }
-    process.stderr.write(`╚${'═'.repeat(maxWidth)}╝\n`);
+    process.stderr.write(`╚${'═'.repeat(maxWidth - 2)}╝\n`);
   }
 
   return {
@@ -211,10 +211,11 @@ export function createTraceLogger(): TraceLogger {
     },
 
     llmRequest(lastMessage, meta) {
-      const windowUsage = `${meta.ctxTokens} / ${meta.windowCapacity} (${((meta.ctxTokens / meta.windowCapacity) * 100).toFixed(1)}%)`;
+      const totalTokens = meta.systemTokens + meta.ctxTokens;
+      const windowUsage = `${totalTokens} / ${meta.windowCapacity} (${((totalTokens / meta.windowCapacity) * 100).toFixed(1)}%)`;
       const headerLine = `model=${meta.model}  messages=${meta.messages}  tools=${meta.tools}  window=${windowUsage}`;
-      const systemLine = `system=${meta.systemTokens}tok  context=${meta.ctxTokens}tok`;
-      const fullHeader = `${headerLine}\n║ ${systemLine}`;
+      const breakdown = `system=${meta.systemTokens}tok  messages=${meta.ctxTokens}tok`;
+      const fullHeader = `${headerLine}\n║ ${breakdown}`;
       writeBlock('LLM REQUEST', fullHeader, lastMessage.slice(0, 2000));
     },
 

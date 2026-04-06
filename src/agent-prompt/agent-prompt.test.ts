@@ -26,6 +26,7 @@ function makeConfig(overrides: Partial<Config['agentPrompt']> = {}): Config {
     model: 'claude-test',
     dataDir: '.bolt',
     logLevel: 'info',
+    logTrace: false,
     workspace: { root: '/workspace' },
     auth: {},
     local: {},

@@ -16,7 +16,7 @@ import { globTool } from '../tools/glob';
 import { fileInsertTool } from '../tools/file-insert';
 import { webFetchTool } from '../tools/web-fetch';
 import { createAuditLogger } from '../audit/audit-logger';
-import { createLogger } from '../logger';
+import { createLogger, createTraceLogger, createNoopTraceLogger } from '../logger';
 import { AgentCore } from '../agent/agent';
 import { TodoStore } from '../todo/todo-store';
 import { createTodoTools } from '../todo/todo-tools';
@@ -118,6 +118,7 @@ async function serve(serveArgs: string[]): Promise<void> {
 
   const log = createAuditLogger(dataDir);
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
+  const traceLogger = config.logTrace ? createTraceLogger() : createNoopTraceLogger();
 
   const todoStore = new TodoStore();
   const taskStore = new TaskStore(dataDir);
@@ -165,7 +166,7 @@ async function serve(serveArgs: string[]): Promise<void> {
   );
 
   const allTools = toolBus.list();
-  const systemPrompt = await assembleSystemPrompt(config, skills, allTools, logger);
+  const systemPrompt = await assembleSystemPrompt(config, skills, allTools, logger, traceLogger);
 
   const estimatedTokens = estimateTokenCount(systemPrompt);
   if (estimatedTokens > config.agentPrompt.maxTokens) {
@@ -255,6 +256,7 @@ async function serve(serveArgs: string[]): Promise<void> {
     systemPrompt,
     undefined,
     logger,
+    traceLogger,
     sessionStore,
     undefined,
     memoryManager,
@@ -351,6 +353,7 @@ async function main(): Promise<void> {
 
   const log = createAuditLogger(dataDir);
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
+  const traceLogger = config.logTrace ? createTraceLogger() : createNoopTraceLogger();
 
   const verbose = args.includes('--verbose') || config.cli.verbose;
   const quiet = args.includes('--quiet') || !config.cli.progress;
@@ -406,7 +409,7 @@ async function main(): Promise<void> {
   );
 
   const allTools = toolBus.list();
-  const systemPrompt = await assembleSystemPrompt(config, skills, allTools, logger);
+  const systemPrompt = await assembleSystemPrompt(config, skills, allTools, logger, traceLogger);
 
   const estimatedTokens = estimateTokenCount(systemPrompt);
   if (estimatedTokens > config.agentPrompt.maxTokens) {
@@ -480,6 +483,7 @@ async function main(): Promise<void> {
     systemPrompt,
     undefined,
     logger,
+    traceLogger,
     sessionStore,
     sessionId,
     memoryManager,

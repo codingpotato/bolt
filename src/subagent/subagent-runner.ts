@@ -35,7 +35,6 @@ export type SubagentRunner = (
  * @param scriptPath - Path to the subagent script (JS or TS)
  * @param execPath - Optional Node.js executable path (defaults to process.execPath)
  * @param logger - Logger for sub-agent lifecycle events
- * @param traceLogger - Trace logger for full payload capture
  * @throws if the child exits with a non-zero code (includes captured stderr)
  */
 export async function runSubagent(

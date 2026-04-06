@@ -12,7 +12,6 @@ export interface Config {
   model: string;
   dataDir: string;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
-  logTrace: boolean;
   workspace: {
     root: string;
   };
@@ -98,7 +97,6 @@ const DEFAULTS: Config = {
   model: 'claude-opus-4-6',
   dataDir: '.bolt',
   logLevel: 'info',
-  logTrace: false,
   workspace: {
     root: process.cwd(),
   },
@@ -312,9 +310,6 @@ function applyEnvOverrides(config: Config): Config {
   }
   if (process.env['BOLT_LOG_LEVEL']) {
     result.logLevel = process.env['BOLT_LOG_LEVEL'] as Config['logLevel'];
-  }
-  if (process.env['BOLT_LOG_TRACE'] !== undefined) {
-    result.logTrace = process.env['BOLT_LOG_TRACE'] === 'true';
   }
 
   // Local inference

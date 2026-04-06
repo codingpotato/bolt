@@ -19,7 +19,6 @@ function makeConfig(model = 'claude-test'): Config {
     model,
     dataDir: '.bolt',
     logLevel: 'info',
-    logTrace: false,
     workspace: { root: process.cwd() },
     auth: {},
     local: {},

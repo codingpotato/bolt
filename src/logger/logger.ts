@@ -19,144 +19,45 @@ const SEVERITY: Record<LogLevel, number> = {
   error: 3,
 };
 
-/** ANSI colour codes for pretty output. */
-const RESET = '\x1b[0m';
-const DIM = '\x1b[2m';
-const CYAN = '\x1b[36m';
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
-const BOLD = '\x1b[1m';
-
-const LEVEL_COLOURS: Record<LogLevel, { fg: string; label: string }> = {
-  debug: { fg: DIM, label: 'DBG' },
-  info: { fg: GREEN, label: 'INF' },
-  warn: { fg: YELLOW, label: 'WRN' },
-  error: { fg: RED, label: 'ERR' },
+/** Level labels. */
+const LEVEL_LABELS: Record<LogLevel, string> = {
+  debug: '[DBG]',
+  info: '[INF]',
+  warn: '[WRN]',
+  error: '[ERR]',
 };
 
-/** Shape of each line written to the log file. */
-interface LogEntry {
-  ts: string;
-  level: LogLevel;
-  message: string;
-  [key: string]: unknown;
-}
-
-/**
- * Formats a pretty stderr line for debug mode.
- * Shows timestamp, level, message, and key metadata in a human-readable format.
- * Object values are displayed on separate lines with indentation.
- */
-function formatPretty(level: LogLevel, message: string, meta?: Record<string, unknown>): string {
-  const colour = LEVEL_COLOURS[level];
-  const ts = new Date()
-    .toISOString()
-    .replace('T', ' ')
-    .replace(/\.\d{3}Z$/, '');
-  const levelLabel = `${colour.fg}${BOLD}${colour.label}${RESET}`;
-  const tsLabel = `${DIM}${ts}${RESET}`;
-  const msgLabel = level === 'error' ? `${RED}${BOLD}${message}${RESET}` : message;
-
-  // Separate inline vs multi-line metadata
-  const inlineParts: string[] = [];
-  const multiLineParts: string[] = [];
-
-  if (meta) {
-    const priorityKeys = [
-      'model',
-      'toolName',
-      'skillName',
-      'sessionId',
-      'taskId',
-      'exitCode',
-      'messageCount',
-      'inputTokens',
-      'outputTokens',
-      'stopReason',
-      'error',
-      'duration',
-      'port',
-      'host',
-      'auth',
-      'promptId',
-      'workflow',
-      'server',
-    ];
-
-    const processEntry = (key: string, val: unknown) => {
-      if (typeof val === 'object' && val !== null) {
-        // Object values go on separate lines
-        const formatted = JSON.stringify(val, null, 2);
-        const indented = formatted.split('\n').join('\n    ');
-        multiLineParts.push(`  ${DIM}${key}:${RESET}\n    ${CYAN}${indented}${RESET}`);
-      } else {
-        // Simple values inline
-        inlineParts.push(`${DIM}${key}${RESET}=${CYAN}${formatValue(val)}${RESET}`);
-      }
-    };
-
-    // Show priority keys first
-    for (const key of priorityKeys) {
-      if (key in meta) {
-        processEntry(key, meta[key]);
-      }
-    }
-
-    // Show remaining keys
-    const shownKeys = new Set(priorityKeys);
-    for (const [key, val] of Object.entries(meta)) {
-      if (!shownKeys.has(key)) {
-        processEntry(key, val);
-      }
-    }
-  }
-
-  const inlineStr = inlineParts.length > 0 ? ` ${DIM}│${RESET} ${inlineParts.join(' ')}` : '';
-  const multiLineStr = multiLineParts.length > 0 ? '\n' + multiLineParts.join('\n') : '';
-
-  return `${tsLabel} ${levelLabel} ${msgLabel}${inlineStr}${multiLineStr}`;
-}
-
-/** Formats a simple value for inline display (strings are truncated). */
+/** Format a value for display in metadata. */
 function formatValue(val: unknown): string {
   if (typeof val === 'string') {
-    return val.length > 80 ? val.slice(0, 77) + '...' : val;
+    // Escape newlines for single-line display
+    return val.replace(/\n/g, '\\n').slice(0, 60);
+  }
+  if (typeof val === 'object' && val !== null && !Array.isArray(val) && Object.keys(val).length === 0) {
+    return '{}';
+  }
+  if (typeof val === 'object' && val !== null) {
+    return JSON.stringify(val).slice(0, 60);
   }
   return String(val);
 }
 
 /**
- * Formats a compact JSON line for production mode.
- * Only includes essential fields to keep log files small.
- */
-function formatCompact(level: LogLevel, message: string, meta?: Record<string, unknown>): string {
-  const entry: LogEntry = {
-    ts: new Date().toISOString(),
-    level,
-    message,
-    ...meta,
-  };
-  return JSON.stringify(entry);
-}
-
-/**
- * Creates a structured logger that writes to `logFilePath`.
+ * Creates a structured logger that writes to `logFilePath` in JSON format
+ * and optionally to stderr for visibility.
  *
- * - **Debug mode** (`logLevel === 'debug'`): Pretty human-readable format on stderr,
- *   full structured JSON in the log file.
- * - **Production mode** (`logLevel !== 'debug'`): Compact single-line JSON in the log file,
- *   errors only on stderr.
+ * - In debug mode (logLevel: 'debug'): writes all logs to stderr with pretty formatting
+ * - In production mode (logLevel >= 'info'): writes only errors to stderr
+ * - Always writes JSON format to file for structured logging
  *
- * Entries below `logLevel` are silently dropped.
- * `error`-level entries are additionally written to stderr in both modes.
+ * All entries below `logLevel` are silently dropped.
  * File writes are fire-and-forget: errors never propagate to the caller.
  * The log directory is created lazily on the first write.
  */
 export function createLogger(logLevel: LogLevel, logFilePath: string): Logger {
   const minSeverity = SEVERITY[logLevel];
   const logDir = dirname(logFilePath);
-  const isDebug = logLevel === 'debug';
+  const isDebugMode = logLevel === 'debug';
 
   let initPromise: Promise<void> | null = null;
   function ensureDir(): Promise<void> {
@@ -166,39 +67,51 @@ export function createLogger(logLevel: LogLevel, logFilePath: string): Logger {
     return initPromise;
   }
 
-  function write(level: LogLevel, message: string, meta?: Record<string, unknown>): void {
+  function writeFile(jsonLine: string): void {
+    void ensureDir()
+      .then(() => appendFile(logFilePath, jsonLine + '\n'))
+      .catch(() => undefined);
+  }
+
+  function writeStderr(prettyLine: string): void {
+    process.stderr.write(prettyLine + '\n');
+  }
+
+  function log(level: LogLevel, message: string, meta?: Record<string, unknown>): void {
     if (SEVERITY[level] < minSeverity) return;
 
-    // Always write structured JSON to the log file
-    const fileLine = formatCompact(level, message, meta) + '\n';
-    void ensureDir()
-      .then(() => appendFile(logFilePath, fileLine))
-      .catch(() => undefined);
+    const ts = new Date().toISOString();
 
-    // Debug mode: pretty output to stderr for all levels
-    if (isDebug) {
-      const prettyLine = formatPretty(level, message, meta);
-      process.stderr.write(prettyLine + '\n');
-    }
+    // Write JSON format to file - spread meta fields at top level
+    const entry = { ts, level, message, ...(meta ?? {}) };
+    writeFile(JSON.stringify(entry));
 
-    // Production mode: errors only to stderr
-    if (!isDebug && level === 'error') {
-      process.stderr.write(`[bolt] ERROR: ${message}\n`);
+    // Write pretty format to stderr based on level and mode
+    const shouldWriteStderr = isDebugMode || level === 'error';
+    if (shouldWriteStderr) {
+      const prefix = level === 'error' ? '[bolt] ERROR:' : LEVEL_LABELS[level];
+      const metaPart = meta && Object.keys(meta).length > 0
+        ? ' ' + Object.entries(meta)
+            .map(([k, v]) => `${k}=${formatValue(v)}`)
+            .join(' ')
+        : '';
+      const prettyLine = `${prefix} ${message}${metaPart}`;
+      writeStderr(prettyLine);
     }
   }
 
   return {
     debug(message, meta) {
-      write('debug', message, meta);
+      log('debug', message, meta);
     },
     info(message, meta) {
-      write('info', message, meta);
+      log('info', message, meta);
     },
     warn(message, meta) {
-      write('warn', message, meta);
+      log('warn', message, meta);
     },
     error(message, meta) {
-      write('error', message, meta);
+      log('error', message, meta);
     },
   };
 }
@@ -206,17 +119,9 @@ export function createLogger(logLevel: LogLevel, logFilePath: string): Logger {
 /** A no-op logger that discards all entries — used as the default in tests and optional parameters. */
 export function createNoopLogger(): Logger {
   return {
-    debug() {
-      /* noop */
-    },
-    info() {
-      /* noop */
-    },
-    warn() {
-      /* noop */
-    },
-    error() {
-      /* noop */
-    },
+    debug() {},
+    info() {},
+    warn() {},
+    error() {},
   };
 }

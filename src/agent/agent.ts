@@ -6,8 +6,6 @@ import type { ToolContext } from '../tools/tool';
 import type { Config } from '../config/config';
 import type { Logger } from '../logger';
 import { createNoopLogger } from '../logger';
-import type { TraceLogger } from '../logger/trace-logger';
-import { createNoopTraceLogger } from '../logger/trace-logger';
 import type { SessionStore } from '../memory/session-store';
 import type { MemoryManager } from '../memory/memory-manager';
 import { estimateTokens } from '../memory/memory-manager';
@@ -110,7 +108,6 @@ export class AgentCore {
     private readonly initialSessionId?: string,
     private readonly memoryManager: MemoryManager | null = null,
     private readonly slashRegistry: SlashCommandRegistry = createSlashCommandRegistry(),
-    private readonly traceLogger: TraceLogger = createNoopTraceLogger(),
   ) {}
 
   /** Update the system prompt at runtime (e.g. after AGENT.md hot-reload). */
@@ -129,11 +126,10 @@ export class AgentCore {
     this.logger.info('Session started', {
       sessionId,
       resumed: this.initialSessionId !== undefined,
+      model: this.config.model,
+      systemPromptLength: this.systemPrompt.length,
       ...(this.initialSessionId ? { resumedSessionId: this.initialSessionId } : {}),
     });
-
-    // Trace: log the full system prompt once per session
-    this.traceLogger.systemPrompt(this.systemPrompt, this.config.model);
 
     const sessionStart = Date.now();
     let turnCount = 0;
@@ -263,10 +259,7 @@ export class AgentCore {
           messages: [...this.l1],
         });
 
-        // Trace: log full request payload
         const params = buildParams();
-        this.traceLogger.llmRequest(params.messages, this.config.model, params.tools);
-
         let response: Anthropic.Message;
         try {
           response = await this.callApi(params);
@@ -295,14 +288,9 @@ export class AgentCore {
           }
           this.l1.splice(0, this.l1.length, ...compacted);
           this.injectedTokenEstimate = 0;
-          // Trace: log retried request after compaction
           const retryParams = buildParams();
-          this.traceLogger.llmRequest(retryParams.messages, this.config.model, retryParams.tools);
           response = await this.callApi(retryParams);
         }
-
-        // Trace: log full response
-        this.traceLogger.llmResponse(response);
 
         this.logger.debug('Received response from LLM', {
           model: response.model,
@@ -334,11 +322,6 @@ export class AgentCore {
           }));
           toolCallsTotal += toolCalls.length;
 
-          // Trace: log full tool call inputs
-          for (const call of toolCalls) {
-            this.traceLogger.toolCall(call.name, call.id, call.input);
-          }
-
           this.logger.debug('Dispatching tool calls', {
             count: toolCalls.length,
             tools: toolCalls.map((tc) => ({
@@ -357,16 +340,6 @@ export class AgentCore {
           }
 
           const toolResults = await this.toolBus.dispatchAll(toolCalls, this.ctx);
-
-          // Trace: log full tool call results
-          for (const result of toolResults) {
-            this.traceLogger.toolResult(
-              toolCalls.find((tc) => tc.id === result.id)?.name ?? 'unknown',
-              result.id,
-              result.content,
-              result.is_error,
-            );
-          }
 
           this.logger.debug('Tool call results', {
             count: toolResults.length,

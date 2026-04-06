@@ -17,7 +17,6 @@ import { fileInsertTool } from '../tools/file-insert';
 import { webFetchTool } from '../tools/web-fetch';
 import { createAuditLogger } from '../audit/audit-logger';
 import { createLogger } from '../logger';
-import { createTraceLogger, createNoopTraceLogger } from '../logger/trace-logger';
 import { AgentCore } from '../agent/agent';
 import { TodoStore } from '../todo/todo-store';
 import { createTodoTools } from '../todo/todo-tools';
@@ -119,7 +118,6 @@ async function serve(serveArgs: string[]): Promise<void> {
 
   const log = createAuditLogger(dataDir);
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
-  const traceLogger = config.logTrace ? createTraceLogger() : createNoopTraceLogger();
 
   const todoStore = new TodoStore();
   const taskStore = new TaskStore(dataDir);
@@ -191,7 +189,6 @@ async function serve(serveArgs: string[]): Promise<void> {
       runSubagent,
       () => systemPrompt,
       logger,
-      traceLogger,
     ),
   );
   toolBus.register(
@@ -204,7 +201,6 @@ async function serve(serveArgs: string[]): Promise<void> {
       runSubagent,
       inheritedRules,
       logger,
-      traceLogger,
     ),
   );
   const slashRegistry = createSlashCommandRegistry();
@@ -263,7 +259,6 @@ async function serve(serveArgs: string[]): Promise<void> {
     undefined,
     memoryManager,
     slashRegistry,
-    traceLogger,
   );
 
   const searchProvider = createSearchProvider(config);
@@ -356,7 +351,6 @@ async function main(): Promise<void> {
 
   const log = createAuditLogger(dataDir);
   const logger = createLogger(config.logLevel, join(dataDir, 'bolt.log'));
-  const traceLogger = config.logTrace ? createTraceLogger() : createNoopTraceLogger();
 
   const verbose = args.includes('--verbose') || config.cli.verbose;
   const quiet = args.includes('--quiet') || !config.cli.progress;
@@ -436,7 +430,6 @@ async function main(): Promise<void> {
       runSubagent,
       () => systemPrompt,
       logger,
-      traceLogger,
     ),
   );
   toolBus.register(
@@ -449,7 +442,6 @@ async function main(): Promise<void> {
       runSubagent,
       inheritedRules,
       logger,
-      traceLogger,
     ),
   );
   const slashRegistry = createSlashCommandRegistry();
@@ -492,7 +484,6 @@ async function main(): Promise<void> {
     sessionId,
     memoryManager,
     slashRegistry,
-    traceLogger,
   );
 
   let _cleanupWatcher: (() => void) | null = null;

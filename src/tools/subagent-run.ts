@@ -3,8 +3,6 @@ import type { AuthConfig } from '../auth/auth';
 import type { SubagentPayload, SubagentRunner } from '../subagent/subagent-runner';
 import type { Logger } from '../logger';
 import { createNoopLogger } from '../logger';
-import type { TraceLogger } from '../logger/trace-logger';
-import { createNoopTraceLogger } from '../logger/trace-logger';
 import { extractPromptSections } from '../agent-prompt/agent-prompt';
 
 export interface SubagentRunInput {
@@ -41,7 +39,6 @@ export function createSubagentRunTool(
   runner: SubagentRunner,
   getSystemPrompt: () => string,
   logger: Logger = createNoopLogger(),
-  traceLogger: TraceLogger = createNoopTraceLogger(),
 ): Tool<SubagentRunInput, SubagentRunOutput> {
   return {
     name: 'subagent_run',
@@ -92,9 +89,6 @@ export function createSubagentRunTool(
         allowedTools,
         inheritedRulesPreview: inheritedRules.slice(0, 200),
       });
-
-      // Trace: log full sub-agent dispatch
-      traceLogger.subagentDispatch(input.prompt, model, allowedTools);
 
       try {
         const result = await runner(payload, scriptPath, execPath);

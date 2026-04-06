@@ -184,6 +184,56 @@ describe('createLogger', () => {
     });
   });
 
+  // ── metadata formatting ───────────────────────────────────────────────────
+
+  describe('metadata formatting in stderr', () => {
+    let stderrSpy: { mockRestore(): void; mock: { calls: unknown[][] } };
+
+    beforeEach(() => {
+      stderrSpy = vi
+        .spyOn(process.stderr, 'write')
+        .mockImplementation(() => true) as unknown as typeof stderrSpy;
+    });
+
+    afterEach(() => {
+      stderrSpy.mockRestore();
+    });
+
+    it('formats empty objects as {}', () => {
+      const logger = createLogger('debug', LOG_PATH);
+      logger.debug('test', { empty: {} });
+      expect(String(stderrSpy.mock.calls[0]![0])).toContain('empty={}');
+    });
+
+    it('formats non-empty objects as stringified JSON', () => {
+      const logger = createLogger('debug', LOG_PATH);
+      logger.debug('test', { data: { key: 'value' } });
+      const output = String(stderrSpy.mock.calls[0]![0]);
+      expect(output).toContain('data=');
+      expect(output).toContain('key');
+    });
+
+    it('formats arrays as stringified JSON', () => {
+      const logger = createLogger('debug', LOG_PATH);
+      logger.debug('test', { items: [1, 2, 3] });
+      const output = String(stderrSpy.mock.calls[0]![0]);
+      expect(output).toContain('items=');
+      expect(output).toContain('[');
+    });
+
+    it('formats numbers correctly', () => {
+      const logger = createLogger('debug', LOG_PATH);
+      logger.debug('test', { count: 42 });
+      expect(String(stderrSpy.mock.calls[0]![0])).toContain('count=42');
+    });
+
+    it('formats booleans correctly', () => {
+      const logger = createLogger('debug', LOG_PATH);
+      logger.debug('test', { enabled: true });
+      expect(String(stderrSpy.mock.calls[0]![0])).toContain('enabled=true');
+    });
+  });
+
   // ── stderr routing ────────────────────────────────────────────────────────
 
   describe('stderr routing', () => {

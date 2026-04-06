@@ -70,8 +70,13 @@ describe('WebChannelProgressReporter', () => {
 
   it('onLlmCall emits context stats', () => {
     const { reporter, sent } = makeReporter();
-    reporter.onLlmCall({ messageCount: 23, injectedTokens: 4200 });
+    reporter.onLlmCall({ messageCount: 23, injectedTokens: 4200, systemTokens: 4000, ctxTokens: 5000 });
     expect(sent[0]).toContain('23 msgs');
+    expect(sent[0]).toContain('sys:');
+    expect(sent[0]).toContain('ctx:');
+    expect(sent[0]).toContain('inj:');
+    expect(sent[0]).toContain('4,000');
+    expect(sent[0]).toContain('5,000');
     expect(sent[0]).toContain('4,200');
   });
 

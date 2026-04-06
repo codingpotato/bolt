@@ -4,6 +4,10 @@ export interface LlmCallInfo {
   messageCount: number;
   /** Token estimate for messages injected at session start (may be 0 after compaction). */
   injectedTokens: number;
+  /** Token estimate for system prompt. */
+  systemTokens: number;
+  /** Token estimate for all messages in L1 context (user + assistant + tool results). */
+  ctxTokens: number;
 }
 
 /** Token usage emitted immediately after each LLM API response. */

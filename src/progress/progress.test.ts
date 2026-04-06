@@ -34,7 +34,7 @@ describe('NoopProgressReporter', () => {
       r.onTaskStatusChange('t1', 'My task', 'completed');
       r.onContextInjection('task', 5, 't1');
       r.onContextInjection('chat', 3);
-      r.onLlmCall({ messageCount: 5, injectedTokens: 1000 });
+      r.onLlmCall({ messageCount: 5, injectedTokens: 1000, systemTokens: 4000, ctxTokens: 5000 });
       r.onLlmResponse({
         inputTokens: 5000,
         outputTokens: 200,
@@ -81,11 +81,16 @@ describe('CliProgressReporter', () => {
       const fake = makeFakeStream(true);
       reporter = new CliProgressReporter(fake.stream);
       reporter.onThinking();
-      reporter.onLlmCall({ messageCount: 23, injectedTokens: 4200 });
+      reporter.onLlmCall({ messageCount: 23, injectedTokens: 4200, systemTokens: 4000, ctxTokens: 5000 });
       const out = fake.output();
       expect(out).toContain('\x1b[1A\x1b[2K');
       expect(out).toContain('⟳ Thinking…');
       expect(out).toContain('23 msgs');
+      expect(out).toContain('sys:');
+      expect(out).toContain('ctx:');
+      expect(out).toContain('inj:');
+      expect(out).toContain('4,000');
+      expect(out).toContain('5,000');
       expect(out).toContain('4,200');
     });
 
@@ -216,7 +221,7 @@ describe('CliProgressReporter', () => {
 
       reporter.onSessionStart('abc', false);
       reporter.onThinking();
-      reporter.onLlmCall({ messageCount: 5, injectedTokens: 1000 });
+      reporter.onLlmCall({ messageCount: 5, injectedTokens: 1000, systemTokens: 4000, ctxTokens: 5000 });
       reporter.onLlmResponse({
         inputTokens: 5000,
         outputTokens: 100,

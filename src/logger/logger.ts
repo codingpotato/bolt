@@ -46,6 +46,7 @@ interface LogEntry {
 /**
  * Formats a pretty stderr line for debug mode.
  * Shows timestamp, level, message, and key metadata in a human-readable format.
+ * Object values are displayed on separate lines with indentation.
  */
 function formatPretty(level: LogLevel, message: string, meta?: Record<string, unknown>): string {
   const colour = LEVEL_COLOURS[level];
@@ -57,8 +58,10 @@ function formatPretty(level: LogLevel, message: string, meta?: Record<string, un
   const tsLabel = `${DIM}${ts}${RESET}`;
   const msgLabel = level === 'error' ? `${RED}${BOLD}${message}${RESET}` : message;
 
-  // Build metadata string: pick the most important fields for display
-  const metaParts: string[] = [];
+  // Separate inline vs multi-line metadata
+  const inlineParts: string[] = [];
+  const multiLineParts: string[] = [];
+
   if (meta) {
     const priorityKeys = [
       'model',
@@ -81,11 +84,22 @@ function formatPretty(level: LogLevel, message: string, meta?: Record<string, un
       'server',
     ];
 
+    const processEntry = (key: string, val: unknown) => {
+      if (typeof val === 'object' && val !== null) {
+        // Object values go on separate lines
+        const formatted = JSON.stringify(val, null, 2);
+        const indented = formatted.split('\n').join('\n    ');
+        multiLineParts.push(`  ${DIM}${key}:${RESET}\n    ${CYAN}${indented}${RESET}`);
+      } else {
+        // Simple values inline
+        inlineParts.push(`${DIM}${key}${RESET}=${CYAN}${formatValue(val)}${RESET}`);
+      }
+    };
+
     // Show priority keys first
     for (const key of priorityKeys) {
       if (key in meta) {
-        const val = meta[key];
-        metaParts.push(`${DIM}${key}${RESET}=${CYAN}${formatValue(val)}${RESET}`);
+        processEntry(key, meta[key]);
       }
     }
 
@@ -93,23 +107,21 @@ function formatPretty(level: LogLevel, message: string, meta?: Record<string, un
     const shownKeys = new Set(priorityKeys);
     for (const [key, val] of Object.entries(meta)) {
       if (!shownKeys.has(key)) {
-        metaParts.push(`${DIM}${key}${RESET}=${CYAN}${formatValue(val)}${RESET}`);
+        processEntry(key, val);
       }
     }
   }
 
-  const metaStr = metaParts.length > 0 ? ` ${DIM}│${RESET} ${metaParts.join(' ')}` : '';
-  return `${tsLabel} ${levelLabel} ${msgLabel}${metaStr}`;
+  const inlineStr = inlineParts.length > 0 ? ` ${DIM}│${RESET} ${inlineParts.join(' ')}` : '';
+  const multiLineStr = multiLineParts.length > 0 ? '\n' + multiLineParts.join('\n') : '';
+
+  return `${tsLabel} ${levelLabel} ${msgLabel}${inlineStr}${multiLineStr}`;
 }
 
-/** Formats a value for display, truncating long strings/objects to 80 chars. */
+/** Formats a simple value for inline display (strings are truncated). */
 function formatValue(val: unknown): string {
   if (typeof val === 'string') {
     return val.length > 80 ? val.slice(0, 77) + '...' : val;
-  }
-  if (typeof val === 'object' && val !== null) {
-    const s = JSON.stringify(val);
-    return s.length > 80 ? s.slice(0, 77) + '...' : s;
   }
   return String(val);
 }

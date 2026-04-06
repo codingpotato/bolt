@@ -89,7 +89,9 @@ For each pipeline step:
 1. `task_update({ id, status: "in_progress" })`
 2. Read the project manifest via `content_project_read` to locate input artifacts.
 3. Do the work (run the sub-skill, call tools, write output files using `file_write`).
+   - **For video tools (merge, add_audio, add_subtitles):** Always pass full `outputPath` including the `final/` folder.
 4. Call `content_project_update_artifact({ projectId, artifactPath, status: "draft" })`.
+   - **Check:** artifactPath must start with `final/` for post-production outputs (e.g., `final/raw.mp4`, `final/video.mp4`).
 5. Present the output to the user via `user_review({ content, contentType, question })`.
 6. **If approved:** call `content_project_update_artifact({ ..., status: "approved" })`, then `task_update({ id, status: "completed", result: JSON.stringify({ projectId, manifestPath }) })`.
 7. **If rejected:** revise based on feedback, repeat from step 4.
@@ -110,6 +112,8 @@ For each pipeline step:
 | Final video | `projects/<id>/final/video.mp4` |
 
 Use zero-padded scene numbers: `scene-01`, `scene-02`, etc.
+
+**⚠️ CRITICAL:** All post-production outputs (merged, audio, final) MUST be saved to the `final/` subdirectory. Never save videos to the project root or scenes folder. Tools like `video_merge`, `video_add_audio`, and `video_add_subtitles` require explicit `outputPath` — always specify `projects/<id>/final/<filename>`.
 
 ## Step-by-Step Details
 
@@ -162,7 +166,10 @@ For each scene:
 
 ## Final Response
 
-When all steps complete, respond with:
+When all steps complete:
+
+1. **Verify** the final video exists at `projects/<id>/final/video.mp4` (or `final/audio.mp4` if subtitles were skipped).
+2. Respond with:
 
 ```json
 {
@@ -173,3 +180,5 @@ When all steps complete, respond with:
 ```
 
 If the session ends before completion, still respond with `{ "projectId": "<id>", "manifestPath": "...", "finalVideoPath": "" }` so the user can resume with `projectId`.
+
+**NOTE:** The `finalVideoPath` MUST always start with `projects/<id>/final/` — never the project root.

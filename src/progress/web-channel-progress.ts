@@ -32,7 +32,7 @@ export class WebChannelProgressReporter implements ProgressReporter {
   }
 
   onLlmCall(info: LlmCallInfo): void {
-    this.emit(`⟳ Thinking… [${info.messageCount} msgs · inj: ${fmt(info.injectedTokens)} tokens]`);
+    this.emit(`⟳ Thinking… [${info.messageCount} msgs · sys: ${fmt(info.systemTokens)} · usr: ${fmt(info.userTokens)} · inj: ${fmt(info.injectedTokens)}]`);
   }
 
   onLlmResponse(info: LlmResponseInfo): void {

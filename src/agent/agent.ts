@@ -238,9 +238,16 @@ export class AgentCore {
         });
 
         this.ctx.progress.onThinking();
+
+        // Estimate tokens for system prompt and user messages
+        const systemTokens = Math.ceil(this.systemPrompt.length / 4);
+        const userTokens = this.l1.reduce((sum, msg) => sum + estimateTokens(msg), 0);
+
         this.ctx.progress.onLlmCall({
           messageCount: this.l1.length,
           injectedTokens: this.injectedTokenEstimate,
+          systemTokens,
+          userTokens,
         });
 
         // Build stable params (messages snapshot is taken fresh each attempt).

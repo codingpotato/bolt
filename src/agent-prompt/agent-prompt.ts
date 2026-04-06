@@ -115,20 +115,25 @@ export async function assembleSystemPrompt(
   const withSkills = appendSkillsCatalog(base, skills);
   const withTools = appendToolsReference(withSkills, tools);
 
-  const estimatedTokens = estimateTokenCount(withTools);
+  const baseTokens = estimateTokenCount(base);
+  const skillsTokens = estimateTokenCount(withSkills) - baseTokens;
+  const toolsTokens = estimateTokenCount(withTools) - baseTokens - skillsTokens;
+  const totalTokens = baseTokens + skillsTokens + toolsTokens;
+
   logger.info('System prompt assembled', {
-    baseSize: base.length,
-    skillsCount: skills.length,
-    toolsCount: tools.length,
-    estimatedTokens,
+    base: { chars: base.length, tokens: baseTokens },
+    skills: { count: skills.length, chars: withSkills.length - base.length, tokens: skillsTokens },
+    tools: { count: tools.length, chars: withTools.length - withSkills.length, tokens: toolsTokens },
+    total: { chars: withTools.length, tokens: totalTokens },
   });
 
-  if (skills.length === 0) {
-    logger.warn('No skills found for system prompt');
-  }
-  if (tools.length === 0) {
-    logger.warn('No tools found for system prompt');
-  }
+  logger.debug('System prompt base (AGENT.md)', { content: base });
+  logger.debug('System prompt skills section', {
+    content: withSkills.length > base.length ? withSkills.slice(base.length) : '',
+  });
+  logger.debug('System prompt tools section', {
+    content: withTools.length > withSkills.length ? withTools.slice(withSkills.length) : '',
+  });
 
   return withTools;
 }

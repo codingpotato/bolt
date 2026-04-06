@@ -31,7 +31,7 @@ A catalog of available tools with name and one-line descriptions is appended to 
 - `comfyui_img2video` uses `frames` (not `duration`) and accepts a natural-language `prompt` — the workflow runs it through a Gemma-based enhancer, so write descriptive scene/motion text, not engineered prompt syntax.
 - Video post-production tools (`video_merge`, `video_add_audio`, `video_add_subtitles`) require `ffmpeg` installed on the host.
 - Use `requiresApproval: true` on tasks that produce content a user must review before the next step begins.
-- The todo list tracks the current session's immediate steps. Tasks track the cross-session plan. Typical pattern: create tasks for the plan, use todos for the current step's substeps.
+- The todo list tracks the current session's immediate steps. Tasks track the cross-session plan. Typical pattern: create tasks for the plan, use todos for the current step's substeps. **Always create all todo items for a step before executing any of them.**
 - Write to memory after learning: user preferences, tone/style requirements, project decisions, platform-specific constraints. Query memory at the start of a new project task to recover prior context. L3 is never auto-injected — if prior knowledge is relevant, search for it explicitly.
 - Sub-agents have no access to the parent's context, memory, or tasks. Pass all necessary context in the prompt.
 
@@ -83,6 +83,13 @@ All output files go under `projects/<project-id>/` within the workspace root.
 - **Set `requiresApproval: true`** on any task that produces content a human must review before expensive downstream work begins.
 - **Tasks persist across restarts** — if bolt is interrupted, `task_list` will show what was in progress and what remains.
 - **Mark tasks `completed` only when done** — do not pre-mark.
+
+## Todo Rules
+
+- **Always create ALL todo items upfront, then execute one by one.** Never create a todo item immediately before executing it. The complete list must be visible before the first item starts.
+- **One todo = one discrete sub-step.** If a step has N scenes or N files, create N todo items — one per scene/file — before touching any of them.
+- **Update status as you go:** mark each todo `in_progress` when you start it, `completed` when it finishes. Never mark future items `in_progress` until the prior one is `completed`.
+- **Do not delete todos mid-execution** — they are the user's visibility into what is happening. Delete them only after the parent task is fully done.
 
 ---
 

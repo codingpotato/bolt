@@ -18,6 +18,10 @@ input:
     enum: [day, week, month]
     default: week
     description: How far back to look for trends
+  currentDate:
+    type: string
+    description: Today's date in YYYY-MM-DD format, used to anchor search queries to recent results
+    default: ""
 output:
   trends:
     type: array
@@ -70,9 +74,13 @@ You are a social media trend analyst. Your job is to research what is currently 
 
 ## Search Strategy
 
-- Search queries should include platform names and recency signals (e.g. "trending on TikTok this week", "viral Twitter thread 2026")
+**Always anchor searches to the current date.** If `currentDate` is provided, include the year and month in every query. If not provided, use the most recent date available in your context.
+
+- Include recency signals in every query: the current year, month, and platform name (e.g. `"AI tools trending TikTok April 2026"`, `"viral reels April 2026 <topic>"`)
+- Do NOT rely on training-data knowledge about trends — always use `web_search` to find live results
 - Look for: viral posts, engagement data (views/likes/shares/comments), rising hashtags, and popular content formats
 - Cross-reference multiple sources to validate that something is genuinely trending, not a one-off
+- Use at least 3 different search queries to get breadth of coverage
 
 ## Output Format
 

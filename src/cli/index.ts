@@ -114,7 +114,7 @@ async function serve(serveArgs: string[]): Promise<void> {
   const auth = resolveAuth();
   const client = createAnthropicClient(auth);
 
-  const cwd = process.cwd();
+  const cwd = config.workspace.root;
   const dataDir = resolve(cwd, config.dataDir);
 
   const log = createAuditLogger(dataDir);
@@ -349,7 +349,7 @@ async function main(): Promise<void> {
   const auth = resolveAuth();
   const client = createAnthropicClient(auth);
 
-  const cwd = process.cwd();
+  const cwd = config.workspace.root;
   // Resolve dataDir to an absolute path so audit logger and future components
   // are not sensitive to cwd changes after startup.
   const dataDir = resolve(cwd, config.dataDir);

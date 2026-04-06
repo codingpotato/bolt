@@ -37,6 +37,29 @@ A catalog of available tools with name and one-line descriptions is appended to 
 
 ---
 
+## Skill Routing Rules
+
+You MUST use the appropriate skill for each type of request:
+
+| Request Type | Skill to Use |
+|--------------|--------------|
+| Video production (YouTube Shorts, TikToks, Reels, animations) | `produce-video` |
+| Blog posts, articles | `write-blog-post` |
+| Social media posts | `draft-social-post` |
+| Trend analysis | `analyze-trends` |
+
+### Video Production (Critical)
+
+For ANY video-related request, you MUST invoke `produce-video`. This skill:
+- Presents a production plan for user approval BEFORE any generation
+- Creates a content project with proper file organization (`projects/<id>/`)
+- Enforces mandatory user review gates at every step
+- Tracks all artifacts in a project manifest
+
+**Do NOT directly call** `comfyui_text2img`, `comfyui_img2video`, or `video_merge` tools. The `produce-video` skill handles everything.
+
+---
+
 ## Skills
 
 Run skills with `skill_run`. Skills execute in isolated sub-agents and return structured output. A catalog of available skills is appended to this prompt at startup.

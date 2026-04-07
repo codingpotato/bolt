@@ -45,7 +45,7 @@ describe('glob tool', () => {
     ctx = {
       cwd: '/workspace',
       log: mockLogger,
-      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as import('../logger').Logger,
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as import('../logger').Logger,
       progress: {
         onSessionStart: vi.fn(),
         onThinking: vi.fn(),

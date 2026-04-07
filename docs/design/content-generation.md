@@ -54,9 +54,9 @@ Output:
 **What the skill does, step by step:**
 
 1. Calls `content_project_create({ topic, title })` → gets `{ projectId, manifestPath, projectDir }`
-2. Creates the full task DAG via `task_create` (all pipeline steps, with `dependsOn` and `requiresApproval: true`):
+2. Creates the full task DAG via `task_create` (all pipeline steps, with `dependsOn` and `requiresApproval: true`); tasks are serialized to `projects/<project-id>/tasks.json`:
    - `analyzeTrends` → `generateScript` → `generateImagePrompts` → `generateImages` → `generateVideoPrompts` → `generateVideos` → `mergeClips` → (optional `addAudio`) → (optional `addSubtitles`)
-3. Stores `{ projectId, manifestPath }` in the `analyzeTrends` task result so every subsequent task can locate the project
+3. Stores `{ projectId, manifestPath }` in the `analyzeTrends` task result so every subsequent task can locate the manifest
 4. Executes each task in order by invoking the matching sub-skill via `skill_run`, presenting results for `user_review`, and calling `content_project_update_artifact` to track status in `project.json`
 5. Returns `{ projectId, manifestPath, finalVideoPath }` on completion
 
@@ -214,11 +214,12 @@ Create a new content project directory and write the initial `project.json` mani
 {
   projectId: string;     // slug, e.g. "ai-coding-trends-2026-03-24"
   manifestPath: string;  // relative path to project.json
+  tasksPath: string;     // relative path to tasks.json
   projectDir: string;    // absolute path to project directory
 }
 ```
 
-Creates `<workspace>/projects/<project-id>/` with `scenes/` and `final/` subdirectories, writes the initial manifest, and returns the project reference. If a project with the same ID already exists, appends `-2`, `-3`, etc. to avoid overwriting.
+Creates `<workspace>/projects/<project-id>/` with `scenes/` and `final/` subdirectories, writes the initial `project.json` manifest and an empty `tasks.json`, registers the project in `.bolt/projects.json`, and returns the project reference. If a project with the same ID already exists, appends `-2`, `-3`, etc. to avoid overwriting.
 
 ### `content_project_read`
 
@@ -273,6 +274,7 @@ Every video production run is a **content project** — a self-contained directo
   projects/
     <project-id>/               ← one directory per production run
       project.json              ← manifest: tracks all artifacts and their status
+      tasks.json                ← all tasks for this project (see docs/design/task-system.md)
       01-trend-report.md        ← output of analyze-trends
       02-storyboard.json        ← structured storyboard from generate-video-script
       audio/                    ← user-supplied audio files (optional)
@@ -305,17 +307,6 @@ interface ContentProject {
   createdAt: string;           // ISO 8601
   updatedAt: string;
   dir: string;                 // absolute path to project directory
-  taskIds: {                   // maps workflow steps to task IDs
-    analyzeTrends?: string;
-    generateScript?: string;
-    generateImagePrompts?: string;
-    generateImages?: string;
-    generateVideoPrompts?: string;
-    generateVideos?: string;
-    mergeClips?: string;
-    addAudio?: string;
-    addSubtitles?: string;
-  };
   artifacts: {
     trendReport?: Artifact;
     storyboard?: Artifact;

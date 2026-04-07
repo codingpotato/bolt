@@ -32,7 +32,7 @@ describe('Video Production Workflow (S10-3)', () => {
     await mkdir(testDir, { recursive: true });
     await mkdir(dataDir, { recursive: true });
     projectManager = new ContentProjectManager(testDir);
-    taskStore = new TaskStore(dataDir);
+    taskStore = new TaskStore(join(dataDir, 'tasks.json'), dataDir);
   });
 
   afterEach(async () => {
@@ -656,7 +656,7 @@ describe('Post-production workflow (S10-8)', () => {
     await mkdir(testDir, { recursive: true });
     await mkdir(dataDir, { recursive: true });
     projectManager = new ContentProjectManager(testDir);
-    taskStore = new TaskStore(dataDir);
+    taskStore = new TaskStore(join(dataDir, 'tasks.json'), dataDir);
   });
 
   afterEach(async () => {
@@ -869,11 +869,6 @@ Thanks for watching`;
       [audioTaskId],
       true,
     );
-
-    // Record task IDs in manifest
-    await projectManager.setTaskId(project, 'mergeClips', mergeTaskId);
-    await projectManager.setTaskId(project, 'addAudio', audioTaskId);
-    await projectManager.setTaskId(project, 'addSubtitles', subtitlesTaskId);
 
     // Verify initial state: merge pending, others waiting
     const initialTasks = taskStore.list();

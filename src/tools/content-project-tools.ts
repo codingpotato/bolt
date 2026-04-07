@@ -5,6 +5,7 @@ import {
   type ContentProject,
   type ArtifactStatus,
 } from '../content/content-project';
+import type { TaskRegistry } from '../tasks/task-registry';
 
 interface ContentProjectCreateInput {
   topic: string;
@@ -15,6 +16,7 @@ interface ContentProjectCreateOutput {
   projectId: string;
   manifestPath: string;
   projectDir: string;
+  tasksPath: string;
 }
 
 interface ContentProjectReadInput {
@@ -31,11 +33,11 @@ interface ContentProjectUpdateArtifactOutput {
   updated: boolean;
 }
 
-export function createContentProjectTools(): Tool[] {
+export function createContentProjectTools(registry: TaskRegistry): Tool[] {
   const create: Tool<ContentProjectCreateInput, ContentProjectCreateOutput> = {
     name: 'content_project_create',
     description:
-      'Create a content project directory and initial project.json manifest inside the workspace. Returns the project ID, manifest path, and absolute project directory. If a project with the same topic and date already exists, a unique suffix (-2, -3, …) is appended.',
+      'Create a content project directory and initial project.json manifest inside the workspace. Also creates a tasks.json file for per-project task storage. Returns the project ID, manifest path, tasks path, and absolute project directory. If a project with the same topic and date already exists, a unique suffix (-2, -3, …) is appended.',
     sequential: true,
     inputSchema: {
       type: 'object',
@@ -58,10 +60,12 @@ export function createContentProjectTools(): Tool[] {
       const manager = new ContentProjectManager(ctx.cwd);
       try {
         const project = await manager.createProject(input.topic, input.title);
+        await registry.registerProject(project.id, project.dir);
         return {
           projectId: project.id,
           manifestPath: `projects/${project.id}/project.json`,
           projectDir: project.dir,
+          tasksPath: `projects/${project.id}/tasks.json`,
         };
       } catch (err) {
         throw new ToolError(err instanceof Error ? err.message : String(err));

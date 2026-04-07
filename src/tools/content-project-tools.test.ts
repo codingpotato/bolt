@@ -4,15 +4,18 @@ import { join } from 'node:path';
 import { createContentProjectTools } from './content-project-tools';
 import type { ToolContext } from './tool';
 import type { ContentProject } from '../content/content-project';
+import type { TaskRegistry } from '../tasks/task-registry';
 
 describe('createContentProjectTools', () => {
   const testDir = join(__dirname, '.test-content-project-tools');
   let ctx: ToolContext;
   let tools: ReturnType<typeof createContentProjectTools>;
+  let mockRegistry: TaskRegistry;
 
   beforeEach(async () => {
     await mkdir(testDir, { recursive: true });
-    tools = createContentProjectTools();
+    mockRegistry = { registerProject: vi.fn().mockResolvedValue(undefined) } as unknown as TaskRegistry;
+    tools = createContentProjectTools(mockRegistry);
     ctx = {
       cwd: testDir,
       log: { log: vi.fn().mockResolvedValue(undefined) },
@@ -56,11 +59,13 @@ describe('createContentProjectTools', () => {
       const result = (await tool.execute({ topic: 'AI Coding Trends' }, ctx)) as {
         projectId: string;
         manifestPath: string;
+        tasksPath: string;
         projectDir: string;
       };
 
       expect(result.projectId).toMatch(/^ai-coding-trends-\d{4}-\d{2}-\d{2}$/);
       expect(result.manifestPath).toBe(`projects/${result.projectId}/project.json`);
+      expect(result.tasksPath).toBe(`projects/${result.projectId}/tasks.json`);
       expect(result.projectDir).toBe(join(testDir, 'projects', result.projectId));
     });
 

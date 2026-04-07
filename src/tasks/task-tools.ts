@@ -1,12 +1,28 @@
 import { ToolError } from '../tools/tool';
 import type { Tool, ToolContext } from '../tools/tool';
-import type { Task, TaskStatus, TaskStore } from './task-store';
+import type { Task, TaskStatus } from './task-store';
+
+interface ITaskStore {
+  create(
+    title: string,
+    description: string,
+    dependsOn?: string[],
+    requiresApproval?: boolean,
+    projectId?: string,
+  ): Promise<string>;
+  update(
+    id: string,
+    changes: { status: TaskStatus; result?: string; error?: string; sessionId?: string },
+  ): Promise<void>;
+  list(): Task[];
+}
 
 interface TaskCreateInput {
   title: string;
   description: string;
   dependsOn?: string[];
   requiresApproval?: boolean;
+  projectId?: string;
 }
 
 interface TaskCreateOutput {
@@ -28,11 +44,11 @@ interface TaskListOutput {
   tasks: Task[];
 }
 
-export function createTaskTools(store: TaskStore): Tool[] {
+export function createTaskTools(store: ITaskStore): Tool[] {
   const taskCreate: Tool<TaskCreateInput, TaskCreateOutput> = {
     name: 'task_create',
     description:
-      'Create a structured task with a title and description. Returns the new task id. Writes to .bolt/tasks.json immediately.',
+      'Create a structured task with a title and description. Returns the new task id. Writes to the project\'s tasks.json if projectId is provided, otherwise to .bolt/tasks.json.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -52,6 +68,11 @@ export function createTaskTools(store: TaskStore): Tool[] {
           description:
             'If true, the agent must present output via user_review before marking the task completed.',
         },
+        projectId: {
+          type: 'string',
+          description:
+            'Content project ID to associate this task with. Tasks for a project are stored in projects/<id>/tasks.json.',
+        },
       },
       required: ['title', 'description'],
     },
@@ -62,6 +83,7 @@ export function createTaskTools(store: TaskStore): Tool[] {
           input.description,
           input.dependsOn,
           input.requiresApproval,
+          input.projectId,
         );
         return { id };
       } catch (err) {

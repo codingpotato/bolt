@@ -479,16 +479,19 @@ Acceptance Criteria:
 
 ```
 As an agent,
-I want tasks to be serialized to .bolt/tasks.json after every mutation,
+I want tasks to be serialized after every mutation,
 so that in-progress work survives process restarts.
 
 Acceptance Criteria:
 - [x] Task interface matches docs/design/task-system.md
-- [x] task_create({ title, description }) returns { id }; writes to .bolt/tasks.json immediately
-- [x] task_update({ id, status, result?, error? }) updates and re-serializes
-- [x] task_list() returns all tasks with current status
-- [x] On startup, existing .bolt/tasks.json is loaded and tasks resume from last status
-- [x] Corrupt .bolt/tasks.json is moved to .bolt/corrupted/ and a fresh state is used
+- [x] task_create({ title, description, projectId? }) returns { id }
+      - if projectId is provided: writes to projects/<project-id>/tasks.json immediately
+      - otherwise: writes to .bolt/tasks.json (global tasks)
+- [x] task_update({ id, status, result?, error? }) updates and re-serializes to the same file
+- [x] task_list() returns all tasks (global + all active projects) with current status
+- [x] On startup: .bolt/tasks.json is loaded, then projects/<id>/tasks.json is loaded for every
+      project in .bolt/projects.json with non-terminal status
+- [x] Corrupt task file is moved to .bolt/corrupted/ and a fresh state is used for that scope
 - [x] task_update is marked sequential: true
 ```
 
@@ -591,22 +594,28 @@ Acceptance Criteria:
       input summarisation for each built-in tool, NoopProgressReporter emits nothing
 ```
 
-**S5-3: Session Store (L2) — per-turn persistence**
+**S5-3: Session Store (L2) — per-turn persistence with daily rotation**
 
 ```
 As a developer,
-I want every turn written to disk immediately,
-so that no conversation history is lost on crash or clean exit.
+I want every turn written to disk immediately with daily log rotation,
+so that no conversation history is lost on crash or clean exit, and log files remain bounded
+for a 7×24 continuously running agent.
 
 Acceptance Criteria:
 - [x] A sessionId (UUID v4) is generated at process startup and passed through AgentCore
-- [x] --session <id> CLI flag resumes an existing session (loads prior sessionId)
+- [x] --session <id> CLI flag resumes an existing session (queries L2 by sessionId)
 - [x] SessionEntry interface matches docs/design/memory-system.md (sessionId, seq, ts, taskId?, date, role, content)
-- [x] Memory Manager appends a SessionEntry to .bolt/sessions/<session-id>.jsonl on every:
+- [x] Memory Manager appends a SessionEntry to .bolt/sessions/YYYY-MM-DD.jsonl (UTC date) on every:
       user turn, assistant response, tool call, and tool result
+- [x] The date file is determined at write time from the current UTC date — a new file is opened
+      automatically at midnight without restarting the process
 - [x] Write happens before the next LLM call — a crash mid-turn loses at most one in-flight entry
 - [x] Task model gains a sessionIds: string[] field; the current sessionId is appended when a task transitions to in_progress
-- [x] Corrupt session files are skipped with a warning during session resume
+- [x] Session resume (--session <id>) scans date files in reverse chronological order to find entries
+      matching the given sessionId
+- [x] Corrupt session files: partial entries at end of file are truncated; valid entries before the
+      corruption are loaded normally
 - [x] Unit tests use an in-memory filesystem mock; no real disk I/O
 ```
 
@@ -1086,11 +1095,13 @@ I want bolt to orchestrate the full video production pipeline,
 so that I can go from a topic to finished video clips with human-in-the-loop review.
 
 Acceptance Criteria:
-- [x] Agent creates a content project directory projects/<project-id>/ with project.json manifest at workflow start
-- [x] project.json manifest schema matches docs/design/content-generation.md (ContentProject interface)
+- [x] Agent creates a content project directory projects/<project-id>/ with project.json manifest and tasks.json at workflow start
+- [x] project.json manifest schema matches docs/design/content-generation.md (ContentProject interface — no taskIds field)
+- [x] Project is registered in .bolt/projects.json on creation
 - [x] Agent creates a task DAG for video production (analyze → script → image prompts → images → video prompts → videos)
+      using task_create with projectId; tasks are serialized to projects/<project-id>/tasks.json
 - [x] Each task has dependsOn linking to previous step; each task has requiresApproval: true
-- [x] First task result stores { projectId, manifestPath } as JSON so all downstream tasks can locate the project
+- [x] First task result stores { projectId, manifestPath } as JSON so all downstream tasks can locate the manifest
 - [x] Each task reads project.json via file_read to find input artifacts; writes outputs to the scene directory
 - [x] Manifest artifact status is updated to 'draft' after generation, 'approved' after user_review approval
 - [x] comfyui_text2img generates images saved to projects/<id>/scenes/scene-<NN>/image.png
@@ -1135,7 +1146,11 @@ files land inside the workspace.
 
 Acceptance Criteria:
 - [x] content_project_create({ topic, title? }) wraps ContentProjectManager.createProject()
-      and returns { projectId, manifestPath, projectDir }
+      and returns { projectId, manifestPath, tasksPath, projectDir }
+      - creates projects/<id>/ with scenes/ and final/ subdirectories
+      - writes initial project.json (no taskIds field — tasks live in tasks.json)
+      - creates empty projects/<id>/tasks.json
+      - registers project in .bolt/projects.json (appends { projectId, status: 'active', dir })
 - [x] content_project_read({ projectId }) wraps ContentProjectManager.readProject()
       and returns the full ContentProject manifest; ToolError if not found
 - [x] content_project_update_artifact({ projectId, artifactPath, status }) wraps
@@ -1144,8 +1159,9 @@ Acceptance Criteria:
 - [x] All three tools are registered as built-in tools
 - [x] All three tools are documented in docs/design/tools-system.md and
       docs/design/content-generation.md (Content Project Tools section)
-- [x] Unit tests cover: create project (directory + manifest written), read project
-      (returns manifest, error when missing), update artifact status (approved/failed/not-found)
+- [x] Unit tests cover: create project (directory + manifest + tasks.json + projects.json written),
+      read project (returns manifest, error when missing),
+      update artifact status (approved/failed/not-found)
 - [x] comfyui_text2img: outputPath is resolved against ctx.cwd; path containment check
       rejects any path outside workspace with non-retryable ToolError before pool.downloadOutput
 - [x] comfyui_img2video: outputPath and imagePath are both resolved against ctx.cwd;
@@ -1361,8 +1377,8 @@ I want bolt to recover gracefully from corrupt state files,
 so that a crash mid-write does not permanently break a user's installation.
 
 Acceptance Criteria:
-- [ ] Corrupt .bolt/tasks.json: moved to .bolt/corrupted/<timestamp>-tasks.json, fresh state used
-- [ ] Corrupt .bolt/sessions/<id>.jsonl: partial entries at end of file are truncated; valid entries before the corruption are loaded normally
+- [ ] Corrupt .bolt/tasks.json or projects/<id>/tasks.json: moved to .bolt/corrupted/<timestamp>-tasks.json, fresh state used for that scope
+- [ ] Corrupt .bolt/sessions/YYYY-MM-DD.jsonl: partial entries at end of file are truncated; valid entries before the corruption are loaded normally
 - [ ] Corrupt .bolt/memory/<id>.json entries: moved to .bolt/corrupted/ and skipped with a warning; rest of memory loads normally
 - [ ] Corrupt .bolt/config.json: exits with a descriptive error (not a silent default)
 - [ ] All recovery paths are unit tested with injected corrupt fixtures

@@ -17,13 +17,13 @@ const { join } = require('path');
 const root = join(__dirname, '..');
 
 // --- built-in AGENT.md ---
-const srcAgent = join(root, 'src', 'AGENT.md');
+const srcAgent = join(root, 'resources', 'AGENT.md');
 const distAgent = join(root, 'dist', 'AGENT.md');
 cpSync(srcAgent, distAgent);
 process.stdout.write('copied: dist/AGENT.md\n');
 
 // --- skills ---
-const srcSkills = join(root, 'src', 'skills');
+const srcSkills = join(root, 'resources', 'skills');
 const distSkills = join(root, 'dist', 'skills');
 mkdirSync(distSkills, { recursive: true });
 for (const file of readdirSync(srcSkills)) {
@@ -34,7 +34,7 @@ for (const file of readdirSync(srcSkills)) {
 }
 
 // --- workflow files and patchmaps ---
-const srcWorkflows = join(root, 'src', 'workflows');
+const srcWorkflows = join(root, 'resources', 'workflows');
 const distWorkflows = join(root, 'dist', 'workflows');
 mkdirSync(distWorkflows, { recursive: true });
 for (const file of readdirSync(srcWorkflows)) {

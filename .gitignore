@@ -13,7 +13,6 @@ dist/
 .bolt/bolt.log
 
 # The following .bolt/ entries ARE committed (project configuration):
-#   .bolt/AGENT.md      — project-level agent prompt
 #   .bolt/config.json   — project config (no credentials)
 #   .bolt/skills/       — custom skill overrides
 #   .bolt/workflows/    — ComfyUI workflow configs (site-specific, must be edited by user)

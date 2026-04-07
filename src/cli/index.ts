@@ -20,7 +20,7 @@ import { createLogger, createTraceLogger, createNoopTraceLogger } from '../logge
 import { AgentCore } from '../agent/agent';
 import { TodoStore } from '../todo/todo-store';
 import { createTodoTools } from '../todo/todo-tools';
-import { TaskStore } from '../tasks/task-store';
+import { TaskRegistry } from '../tasks/task-registry';
 import { createTaskTools } from '../tasks/task-tools';
 import {
   assembleSystemPrompt,
@@ -121,7 +121,8 @@ async function serve(serveArgs: string[]): Promise<void> {
   const traceLogger = config.logTrace ? createTraceLogger() : createNoopTraceLogger();
 
   const todoStore = new TodoStore();
-  const taskStore = new TaskStore(dataDir);
+  const taskRegistry = new TaskRegistry(dataDir);
+  await taskRegistry.loadActiveProjects();
 
   const sessionsDir = join(dataDir, config.memory.sessionPath);
   const sessionStore = new SessionStore(sessionsDir, logger);
@@ -148,7 +149,7 @@ async function serve(serveArgs: string[]): Promise<void> {
   toolBus.register(fileInsertTool);
   toolBus.register(webFetchTool);
   for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
-  for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
+  for (const tool of createTaskTools(taskRegistry)) toolBus.register(tool);
   toolBus.register(createMemorySearchTool(memoryStore));
   toolBus.register(createMemoryWriteTool(memoryStore));
   const { scriptPath: subagentScript, execPath: subagentExec } = resolveSubagentScript();
@@ -288,7 +289,7 @@ async function serve(serveArgs: string[]): Promise<void> {
   toolBus.register(createVideoAddAudioTool(ffmpegRunner));
   toolBus.register(createVideoAddSubtitlesTool(ffmpegRunner));
 
-  for (const tool of createContentProjectTools()) toolBus.register(tool);
+  for (const tool of createContentProjectTools(taskRegistry)) toolBus.register(tool);
 
   logger.info('Tools registered', {
     count: toolBus.list().length,
@@ -364,7 +365,8 @@ async function main(): Promise<void> {
   const progress = new CliProgressReporter(process.stdout, verbose, quiet);
 
   const todoStore = new TodoStore();
-  const taskStore = new TaskStore(dataDir);
+  const taskRegistry = new TaskRegistry(dataDir);
+  await taskRegistry.loadActiveProjects();
 
   const sessionsDir = join(dataDir, config.memory.sessionPath);
   const sessionStore = new SessionStore(sessionsDir, logger);
@@ -391,7 +393,7 @@ async function main(): Promise<void> {
   toolBus.register(fileInsertTool);
   toolBus.register(webFetchTool);
   for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
-  for (const tool of createTaskTools(taskStore)) toolBus.register(tool);
+  for (const tool of createTaskTools(taskRegistry)) toolBus.register(tool);
   toolBus.register(createMemorySearchTool(memoryStore));
   toolBus.register(createMemoryWriteTool(memoryStore));
   const { scriptPath: subagentScript, execPath: subagentExec } = resolveSubagentScript();
@@ -524,7 +526,7 @@ async function main(): Promise<void> {
   toolBus.register(createVideoAddAudioTool(ffmpegRunner));
   toolBus.register(createVideoAddSubtitlesTool(ffmpegRunner));
 
-  for (const tool of createContentProjectTools()) toolBus.register(tool);
+  for (const tool of createContentProjectTools(taskRegistry)) toolBus.register(tool);
 
   logger.info('Tools registered', {
     count: toolBus.list().length,

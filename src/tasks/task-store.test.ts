@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fsPromises from 'node:fs/promises';
 import * as fs from 'node:fs';
+import { join } from 'node:path';
 
 vi.mock('node:fs/promises');
 vi.mock('node:fs');
@@ -9,7 +10,7 @@ import { TaskStore } from './task-store';
 
 describe('TaskStore', () => {
   const dataDir = '/data';
-  const tasksPath = '/data/tasks.json';
+  const tasksPath = join(dataDir, 'tasks.json');
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -27,7 +28,7 @@ describe('TaskStore', () => {
 
   describe('startup loading', () => {
     it('starts with an empty task list when no file exists', () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       expect(store.list()).toEqual([]);
     });
 
@@ -46,7 +47,7 @@ describe('TaskStore', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ tasks: saved, counter: 1 }));
 
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       expect(store.list()).toHaveLength(1);
       expect(store.list()[0]?.title).toBe('loaded task');
 
@@ -59,7 +60,7 @@ describe('TaskStore', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue('not valid json {{{');
 
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       expect(store.list()).toEqual([]);
 
       // Moving corrupt file is async — trigger it via a mutation
@@ -74,7 +75,7 @@ describe('TaskStore', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ unexpected: true }));
 
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       expect(store.list()).toEqual([]);
     });
   });
@@ -83,7 +84,7 @@ describe('TaskStore', () => {
 
   describe('create', () => {
     it('returns a unique id', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id1 = await store.create('task 1', 'desc 1');
       const id2 = await store.create('task 2', 'desc 2');
       expect(id1).toBeTruthy();
@@ -92,7 +93,7 @@ describe('TaskStore', () => {
     });
 
     it('adds a task with pending status and correct fields', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('my task', 'my description');
       const tasks = store.list();
       expect(tasks).toHaveLength(1);
@@ -107,7 +108,7 @@ describe('TaskStore', () => {
     });
 
     it('sets createdAt and updatedAt as ISO strings', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       const task = store.list().find((t) => t.id === id);
       expect(task?.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -115,7 +116,7 @@ describe('TaskStore', () => {
     });
 
     it('writes to tasks.json immediately after creation', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       await store.create('task', 'desc');
       expect(vi.mocked(fsPromises.writeFile)).toHaveBeenCalledWith(
         tasksPath,
@@ -125,7 +126,7 @@ describe('TaskStore', () => {
     });
 
     it('serialized JSON contains the new task', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       const written = vi.mocked(fsPromises.writeFile).mock.calls[0]?.[1] as string;
       const parsed = JSON.parse(written) as { tasks: Array<{ id: string }> };
@@ -137,7 +138,7 @@ describe('TaskStore', () => {
 
   describe('update', () => {
     it('updates the status of a task', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       vi.mocked(fsPromises.writeFile).mockClear();
 
@@ -146,21 +147,21 @@ describe('TaskStore', () => {
     });
 
     it('updates result when provided', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       await store.update(id, { status: 'completed', result: 'done!' });
       expect(store.list().find((t) => t.id === id)?.result).toBe('done!');
     });
 
     it('updates error when provided', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       await store.update(id, { status: 'failed', error: 'something broke' });
       expect(store.list().find((t) => t.id === id)?.error).toBe('something broke');
     });
 
     it('updates updatedAt on every mutation', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       const before = store.list().find((t) => t.id === id)?.updatedAt;
       await store.update(id, { status: 'in_progress' });
@@ -171,14 +172,14 @@ describe('TaskStore', () => {
     });
 
     it('throws when id is not found', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       await expect(store.update('nonexistent', { status: 'completed' })).rejects.toThrow(
         'task not found',
       );
     });
 
     it('re-serializes to tasks.json after update', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       vi.mocked(fsPromises.writeFile).mockClear();
       await store.update(id, { status: 'in_progress' });
@@ -186,14 +187,14 @@ describe('TaskStore', () => {
     });
 
     it('appends sessionId when transitioning to in_progress', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       await store.update(id, { status: 'in_progress', sessionId: 'session-abc' });
       expect(store.list().find((t) => t.id === id)?.sessionIds).toEqual(['session-abc']);
     });
 
     it('appends multiple sessionIds across successive in_progress transitions', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       await store.update(id, { status: 'in_progress', sessionId: 'session-1' });
       await store.update(id, { status: 'completed' });
@@ -202,14 +203,14 @@ describe('TaskStore', () => {
     });
 
     it('does not modify sessionIds when transitioning to a non-in_progress status', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       await store.update(id, { status: 'completed', sessionId: 'session-x' });
       expect(store.list().find((t) => t.id === id)?.sessionIds).toEqual([]);
     });
 
     it('does not modify sessionIds when no sessionId is provided', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       await store.update(id, { status: 'in_progress' });
       expect(store.list().find((t) => t.id === id)?.sessionIds).toEqual([]);
@@ -220,20 +221,20 @@ describe('TaskStore', () => {
 
   describe('dependencies', () => {
     it('task with no deps starts as pending', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       expect(store.list().find((t) => t.id === id)?.status).toBe('pending');
     });
 
     it('task with deps starts as waiting', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const depId = await store.create('dep', 'desc');
       const id = await store.create('task', 'desc', [depId]);
       expect(store.list().find((t) => t.id === id)?.status).toBe('waiting');
     });
 
     it('task_list includes dependsOn field', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const depId = await store.create('dep', 'desc');
       await store.create('task', 'desc', [depId]);
       const tasks = store.list();
@@ -242,7 +243,7 @@ describe('TaskStore', () => {
     });
 
     it('linear chain: waiting task becomes pending when its dep completes', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const depId = await store.create('dep', 'desc');
       const taskId = await store.create('task', 'desc', [depId]);
 
@@ -252,7 +253,7 @@ describe('TaskStore', () => {
     });
 
     it('fan-in: task stays waiting until all deps complete', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const dep1 = await store.create('dep1', 'desc');
       const dep2 = await store.create('dep2', 'desc');
       const taskId = await store.create('task', 'desc', [dep1, dep2]);
@@ -265,7 +266,7 @@ describe('TaskStore', () => {
     });
 
     it('cascade failure: failing a dep auto-fails its waiting dependent', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const depId = await store.create('dep', 'desc');
       const taskId = await store.create('task', 'desc', [depId]);
 
@@ -277,7 +278,7 @@ describe('TaskStore', () => {
     });
 
     it('cascade failure propagates transitively', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const a = await store.create('a', 'desc');
       const b = await store.create('b', 'desc', [a]);
       const c = await store.create('c', 'desc', [b]);
@@ -312,19 +313,19 @@ describe('TaskStore', () => {
         }),
       );
 
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       await expect(store.create('B', 'desc', ['task-1'])).rejects.toThrow(/circular/i);
     });
 
     it('rejects deps referencing non-existent task IDs', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       await expect(store.create('task', 'desc', ['nonexistent'])).rejects.toThrow(
         /dependency not found/i,
       );
     });
 
     it('does not advance the counter when dep validation fails', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       await expect(store.create('bad', 'desc', ['nonexistent'])).rejects.toThrow();
       // Next successful create should still get task-1, not task-2
       const id = await store.create('good', 'desc');
@@ -351,7 +352,7 @@ describe('TaskStore', () => {
           counter: 1,
         }),
       );
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       await expect(store.create('B', 'desc', ['task-1'])).rejects.toThrow(/circular/i);
       // Next successful create should get task-2, not task-3
       const id = await store.create('C', 'desc');
@@ -363,19 +364,19 @@ describe('TaskStore', () => {
 
   describe('approval gates', () => {
     it('task created with requiresApproval:true has requiresApproval=true', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc', [], true);
       expect(store.list().find((t) => t.id === id)?.requiresApproval).toBe(true);
     });
 
     it('task created without requiresApproval has requiresApproval=false', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       expect(store.list().find((t) => t.id === id)?.requiresApproval).toBe(false);
     });
 
     it('allows awaiting_approval status when requiresApproval is true', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc', [], true);
       await store.update(id, { status: 'in_progress' });
       await expect(store.update(id, { status: 'awaiting_approval' })).resolves.toBeUndefined();
@@ -383,7 +384,7 @@ describe('TaskStore', () => {
     });
 
     it('rejects awaiting_approval status when requiresApproval is false', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc', [], false);
       await expect(store.update(id, { status: 'awaiting_approval' })).rejects.toThrow(
         /requiresApproval/,
@@ -391,7 +392,7 @@ describe('TaskStore', () => {
     });
 
     it('approval flow: awaiting_approval → completed', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc', [], true);
       await store.update(id, { status: 'in_progress' });
       await store.update(id, { status: 'awaiting_approval' });
@@ -402,7 +403,7 @@ describe('TaskStore', () => {
     });
 
     it('rejection flow: awaiting_approval → in_progress for revision', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc', [], true);
       await store.update(id, { status: 'in_progress' });
       await store.update(id, { status: 'awaiting_approval' });
@@ -411,7 +412,7 @@ describe('TaskStore', () => {
     });
 
     it('task_list includes requiresApproval field', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       await store.create('task', 'desc', [], true);
       const tasks = store.list();
       expect(tasks[0]).toHaveProperty('requiresApproval', true);
@@ -438,7 +439,7 @@ describe('TaskStore', () => {
           counter: 1,
         }),
       );
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       expect(store.list().find((t) => t.id === 'task-1')?.requiresApproval).toBe(true);
     });
 
@@ -462,7 +463,7 @@ describe('TaskStore', () => {
           counter: 1,
         }),
       );
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       expect(store.list().find((t) => t.id === 'task-1')?.requiresApproval).toBe(false);
     });
   });
@@ -471,16 +472,98 @@ describe('TaskStore', () => {
 
   describe('list', () => {
     it('returns empty array with no tasks', () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       expect(store.list()).toEqual([]);
     });
 
     it('returns copies — mutating a returned task does not affect the store', async () => {
-      const store = new TaskStore(dataDir);
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
       const id = await store.create('task', 'desc');
       const task = store.list().find((t) => t.id === id);
       if (task) task.status = 'completed';
       expect(store.list().find((t) => t.id === id)?.status).toBe('pending');
+    });
+  });
+
+  // ── has ───────────────────────────────────────────────────────────────────────
+
+  describe('has', () => {
+    it('returns false when task does not exist', () => {
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
+      expect(store.has('task-99')).toBe(false);
+    });
+
+    it('returns true when task exists', async () => {
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
+      const id = await store.create('task', 'desc');
+      expect(store.has(id)).toBe(true);
+    });
+  });
+
+  // ── createWithId ──────────────────────────────────────────────────────────────
+
+  describe('createWithId', () => {
+    it('creates a task with the given id', async () => {
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
+      await store.createWithId('task-42', 'external task', 'desc');
+      expect(store.has('task-42')).toBe(true);
+      const tasks = store.list();
+      expect(tasks[0]?.id).toBe('task-42');
+      expect(tasks[0]?.title).toBe('external task');
+    });
+
+    it('does not increment the counter', async () => {
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
+      const counterBefore = store.getCounter();
+      await store.createWithId('task-100', 'task', 'desc');
+      expect(store.getCounter()).toBe(counterBefore);
+    });
+
+    it('creates task with waiting status when dependsOn is provided', async () => {
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
+      await store.createWithId('task-1', 'dep', 'desc');
+      await store.createWithId('task-2', 'dependant', 'desc', ['task-1']);
+      expect(store.list().find((t) => t.id === 'task-2')?.status).toBe('waiting');
+    });
+
+    it('creates task with pending status when no deps', async () => {
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
+      await store.createWithId('task-5', 'task', 'desc', []);
+      expect(store.list().find((t) => t.id === 'task-5')?.status).toBe('pending');
+    });
+  });
+
+  // ── getCounter / setCounter ──────────────────────────────────────────────────
+
+  describe('getCounter', () => {
+    it('returns 0 initially', () => {
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
+      expect(store.getCounter()).toBe(0);
+    });
+
+    it('returns counter from loaded file', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ tasks: [], counter: 7 }));
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
+      expect(store.getCounter()).toBe(7);
+    });
+  });
+
+  describe('setCounter', () => {
+    it('sets the counter to the given value and persists', async () => {
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
+      await store.setCounter(10);
+      expect(store.getCounter()).toBe(10);
+      const written = vi.mocked(fsPromises.writeFile).mock.calls[0]?.[1] as string;
+      const parsed = JSON.parse(written) as { counter: number };
+      expect(parsed.counter).toBe(10);
+    });
+
+    it('subsequent create uses the updated counter', async () => {
+      const store = new TaskStore(join(dataDir, 'tasks.json'));
+      await store.setCounter(5);
+      const id = await store.create('task', 'desc');
+      expect(id).toBe('task-6');
     });
   });
 });

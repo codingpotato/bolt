@@ -91,7 +91,7 @@ describe('task tools', () => {
 
     it('passes title and description to store.create', async () => {
       await getTool('task_create').execute({ title: 'T', description: 'D' }, ctx);
-      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, undefined);
+      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, undefined, undefined);
     });
 
     it('passes dependsOn to store.create when provided', async () => {
@@ -99,7 +99,7 @@ describe('task tools', () => {
         { title: 'T', description: 'D', dependsOn: ['task-1'] },
         ctx,
       );
-      expect(store.create).toHaveBeenCalledWith('T', 'D', ['task-1'], undefined);
+      expect(store.create).toHaveBeenCalledWith('T', 'D', ['task-1'], undefined, undefined);
     });
 
     it('passes requiresApproval to store.create when provided', async () => {
@@ -107,7 +107,7 @@ describe('task tools', () => {
         { title: 'T', description: 'D', requiresApproval: true },
         ctx,
       );
-      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, true);
+      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, true, undefined);
     });
 
     it('passes requiresApproval=false to store.create when explicitly false', async () => {
@@ -115,7 +115,15 @@ describe('task tools', () => {
         { title: 'T', description: 'D', requiresApproval: false },
         ctx,
       );
-      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, false);
+      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, false, undefined);
+    });
+
+    it('passes projectId to store.create when provided', async () => {
+      await getTool('task_create').execute(
+        { title: 'T', description: 'D', projectId: 'my-project' },
+        ctx,
+      );
+      expect(store.create).toHaveBeenCalledWith('T', 'D', undefined, undefined, 'my-project');
     });
 
     it('is not marked sequential', () => {

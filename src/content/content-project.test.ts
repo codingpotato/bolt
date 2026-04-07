@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   generateProjectId,
@@ -52,8 +52,16 @@ describe('ContentProjectManager', () => {
       expect(project.title).toBe('AI Coding Trends');
       expect(project.topic).toBe('AI Coding Trends');
       expect(project.dir).toBe(join(testDir, 'projects', project.id));
-      expect(project.taskIds).toEqual({});
       expect(project.artifacts.scenes).toEqual([]);
+    });
+
+    it('creates a tasks.json file with empty tasks and counter 0', async () => {
+      const project = await manager.createProject('Task File Test');
+      const tasksPath = join(project.dir, 'tasks.json');
+      const raw = await readFile(tasksPath, 'utf-8');
+      const parsed = JSON.parse(raw) as { tasks: unknown[]; counter: number };
+      expect(parsed.tasks).toEqual([]);
+      expect(parsed.counter).toBe(0);
     });
 
     it('creates scenes and final subdirectories', async () => {
@@ -308,24 +316,6 @@ describe('ContentProjectManager', () => {
       expect(scene1).toBeDefined();
       expect(scene0!.sceneNumber).toBe(1);
       expect(scene1!.sceneNumber).toBe(2);
-    });
-  });
-
-  describe('setTaskId', () => {
-    it('sets a task ID for a workflow step', async () => {
-      const project = await manager.createProject('Test Topic');
-
-      await manager.setTaskId(project, 'analyzeTrends', 'task-1');
-
-      expect(project.taskIds.analyzeTrends).toBe('task-1');
-    });
-
-    it('persists the task ID to disk', async () => {
-      const project = await manager.createProject('Test Topic');
-      await manager.setTaskId(project, 'generateScript', 'task-2');
-
-      const read = await manager.readProject(project.id);
-      expect(read?.taskIds.generateScript).toBe('task-2');
     });
   });
 

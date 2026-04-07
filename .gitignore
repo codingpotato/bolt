@@ -32,3 +32,4 @@ coverage/
 .claude/settings.local.json
 
 workspace
+.claude/worktrees/

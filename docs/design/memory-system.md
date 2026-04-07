@@ -18,7 +18,7 @@ bolt is a task-driven agent. Memory is organised around tasks, not arbitrary tim
 | Level | Name | Storage | Written | Eviction |
 |-------|------|---------|---------|----------|
 | L1 | Active context | In-process array | Always (current turn) | Compacted to L3 on overflow |
-| L2 | Session store | `.bolt/sessions/<session-id>.jsonl` | Every turn, immediately | Never auto-deleted |
+| L2 | Session store | `.bolt/sessions/YYYY-MM-DD.jsonl` | Every turn, immediately | Never auto-deleted |
 | L3 | Long-term memory | `.bolt/memory/<id>.json` | Compaction + `memory_write` tool | Manual or TTL-based |
 
 ---
@@ -42,17 +42,23 @@ An append-only JSONL file written on **every turn** — before the next LLM call
 
 A `sessionId` (UUID v4) is generated at process startup. It is stamped on every L2 entry, every tool audit entry, and every L3 compact entry.
 
-The user may pass `--session <id>` at startup to continue a previous session. When resuming, the prior session's L2 log is loaded and the active task's history is injected into L1 (see Context Assembly below).
+The user may pass `--session <id>` at startup to continue a previous session. When resuming, the Memory Manager queries L2 entries by `sessionId` and injects the active task's history into L1 (see Context Assembly below).
+
+### Daily Log Rotation
+
+bolt is designed to run continuously (7×24). Rather than growing a single session file indefinitely, L2 uses **daily log rotation**: entries are appended to a file named by the current UTC date. A new file is opened automatically at midnight.
+
+This keeps individual files bounded, makes log archiving trivial, and enables date-range queries without scanning every entry.
 
 ### Schema
 
 ```ts
 interface SessionEntry {
-  sessionId: string;       // UUID of the current session
+  sessionId: string;       // UUID of the current session (stamped at process startup)
   seq: number;             // monotonically increasing turn counter
   ts: string;              // ISO 8601 timestamp
   taskId?: string;         // active task at the time of this entry (if any)
-  date: string;            // YYYY-MM-DD derived from ts — used for date-range queries
+  date: string;            // YYYY-MM-DD derived from ts — used for date-range queries and file routing
   role: 'user' | 'assistant' | 'tool_call' | 'tool_result';
   content: unknown;        // raw message content (Anthropic message format)
 }
@@ -63,12 +69,16 @@ interface SessionEntry {
 ```
 .bolt/
   sessions/
-    <session-id>.jsonl      ← one file per session, entries appended per turn
+    2026-04-07.jsonl        ← all entries for that UTC day, across all sessions
+    2026-04-08.jsonl
+    ...
 ```
+
+On each turn the Memory Manager resolves the current UTC date, opens (or creates) the matching file, and appends the entry. The `sessionId` field in each entry is the correlation key — querying history for a task or session means scanning the relevant date files and filtering by `taskId` or `sessionId`.
 
 ### Date Queries
 
-`date` is a denormalized index field derived from `ts`. Sessions can be listed or filtered by date without parsing timestamps. There is no day-level directory structure — date is just a field.
+`date` is a denormalized index field derived from `ts`. Date-range queries scan only the files for the specified date range, not all session files. Filtering within a file is a linear scan over JSONL entries.
 
 ---
 

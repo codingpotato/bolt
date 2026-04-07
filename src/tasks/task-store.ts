@@ -50,10 +50,12 @@ export class TaskStore {
   private readonly taskMap: Map<string, Task> = new Map();
   private counter = 0;
   private readonly filePath: string;
+  private readonly corruptedDir: string;
   private corrupt = false;
 
-  constructor(dataDir: string) {
-    this.filePath = join(dataDir, 'tasks.json');
+  constructor(filePath: string, corruptedDir?: string) {
+    this.filePath = filePath;
+    this.corruptedDir = corruptedDir ?? join(dirname(filePath), 'corrupted');
     this.loadSync();
   }
 
@@ -94,9 +96,8 @@ export class TaskStore {
     if (this.corrupt) {
       // Move corrupt file before writing clean state
       const ts = Date.now();
-      const corruptedDir = join(dirname(this.filePath), 'corrupted');
-      await mkdir(corruptedDir, { recursive: true });
-      await rename(this.filePath, join(corruptedDir, `${ts}-tasks.json`));
+      await mkdir(this.corruptedDir, { recursive: true });
+      await rename(this.filePath, join(this.corruptedDir, `${ts}-tasks.json`));
       this.corrupt = false;
     }
 
@@ -148,6 +149,51 @@ export class TaskStore {
     this.taskMap.set(newId, task);
     await this.persist();
     return newId;
+  }
+
+  /** Returns true if a task with the given ID exists in this store. */
+  has(id: string): boolean {
+    return this.taskMap.has(id);
+  }
+
+  /** Returns the current counter value. */
+  getCounter(): number {
+    return this.counter;
+  }
+
+  /** Sets the counter to n and persists. */
+  async setCounter(n: number): Promise<void> {
+    this.counter = n;
+    await this.persist();
+  }
+
+  /**
+   * Create a task with a pre-assigned ID (used by TaskRegistry).
+   * Does NOT check for circular dependencies (the registry does that).
+   * Does NOT increment the counter.
+   */
+  async createWithId(
+    id: string,
+    title: string,
+    description: string,
+    dependsOn: string[] = [],
+    requiresApproval = false,
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const task: Task = {
+      id,
+      title,
+      description,
+      status: dependsOn.length > 0 ? 'waiting' : 'pending',
+      dependsOn,
+      requiresApproval,
+      subtaskIds: [],
+      sessionIds: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.taskMap.set(id, task);
+    await this.persist();
   }
 
   private wouldCreateCycle(newId: string, deps: string[]): boolean {

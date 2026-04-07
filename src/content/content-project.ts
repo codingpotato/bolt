@@ -64,21 +64,6 @@ export interface PostProductionArtifacts {
 }
 
 /**
- * Maps workflow steps to task IDs.
- */
-export interface TaskIdMap {
-  analyzeTrends?: string;
-  generateScript?: string;
-  generateImagePrompts?: string;
-  generateImages?: string;
-  generateVideoPrompts?: string;
-  generateVideos?: string;
-  mergeClips?: string;
-  addAudio?: string;
-  addSubtitles?: string;
-}
-
-/**
  * Content project manifest.
  * Written by the agent at project creation and updated after every step.
  */
@@ -95,8 +80,6 @@ export interface ContentProject {
   updatedAt: string;
   /** Absolute path to project directory */
   dir: string;
-  /** Maps workflow steps to task IDs */
-  taskIds: TaskIdMap;
   artifacts: {
     trendReport?: Artifact;
     storyboard?: Artifact;
@@ -134,6 +117,7 @@ export class ContentProjectManager {
   /**
    * Create a new content project with the given topic.
    * Creates the project directory and writes the initial manifest.
+   * Also writes an empty tasks.json file for per-project task storage.
    * Returns the project manifest.
    *
    * If a project with the same ID already exists, appends a suffix (-2, -3, etc.)
@@ -152,7 +136,6 @@ export class ContentProjectManager {
       createdAt: now,
       updatedAt: now,
       dir: projectDir,
-      taskIds: {},
       artifacts: {
         scenes: [],
       },
@@ -162,6 +145,10 @@ export class ContentProjectManager {
     await mkdir(projectDir, { recursive: true });
     await mkdir(join(projectDir, 'scenes'), { recursive: true });
     await mkdir(join(projectDir, 'final'), { recursive: true });
+
+    // Write empty tasks file for per-project task storage
+    const tasksPath = join(projectDir, 'tasks.json');
+    await writeFile(tasksPath, JSON.stringify({ tasks: [], counter: 0 }, null, 2), 'utf-8');
 
     // Write initial manifest
     await this.writeManifest(project);
@@ -293,14 +280,6 @@ export class ContentProjectManager {
     project.artifacts.scenes = storyboard.scenes.map((scene) => ({
       sceneNumber: scene.sceneNumber,
     }));
-    await this.writeManifest(project);
-  }
-
-  /**
-   * Set a task ID for a workflow step.
-   */
-  async setTaskId(project: ContentProject, step: keyof TaskIdMap, taskId: string): Promise<void> {
-    project.taskIds[step] = taskId;
     await this.writeManifest(project);
   }
 

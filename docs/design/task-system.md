@@ -161,7 +161,35 @@ interface SubagentRunInput {
 
 ## Serialization
 
-All tasks are persisted to `.bolt/tasks.json` after every mutation. This allows bolt to resume an interrupted session and continue from the last known state.
+### Per-project task files
+
+Tasks for a content project are stored inside the project directory, co-located with the project manifest:
+
+```
+projects/<project-id>/
+  project.json        ← manifest: artifacts, status
+  tasks.json          ← all tasks for this project
+```
+
+This keeps each project fully self-contained. Archiving or deleting a finished project removes its task state automatically. A 7×24 agent running many projects over time never accumulates stale global task state.
+
+### Global tasks
+
+Tasks not associated with any content project (ad-hoc work, maintenance tasks) are stored in `.bolt/tasks.json`.
+
+### Active project index
+
+The execution loop discovers which project task files to load via a lightweight index:
+
+```
+.bolt/
+  projects.json       ← [{ projectId, status, dir }] — lists all known projects
+  tasks.json          ← global (non-project) tasks only
+```
+
+`projects.json` is updated whenever a project is created or its status changes. On startup, bolt loads `.bolt/tasks.json` and then loads `<dir>/tasks.json` for every project in `projects.json` that has non-terminal status (`pending`, `waiting`, `in_progress`, `blocked`, or `awaiting_approval`).
+
+All task files are written after every mutation. A crash mid-write loses at most one in-flight mutation — the previous state is recovered from the file on next startup.
 
 ## Execution Loop
 

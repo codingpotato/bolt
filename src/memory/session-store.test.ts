@@ -341,6 +341,30 @@ describe('SessionStore.listSessionIds', () => {
     expect(ids).toEqual(['session-a']);
   });
 
+  it('logs a warning (not throws) when a date file cannot be read due to a non-ENOENT error', async () => {
+    const warnSpy = vi.fn();
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: warnSpy, error: vi.fn() };
+    const store = new SessionStore(SESSIONS_DIR, logger);
+
+    const date = new Date().toISOString().slice(0, 10);
+    // Put a valid file in the mock filesystem so readdir returns it
+    dirs.add(SESSIONS_DIR);
+    files[`${SESSIONS_DIR}/${date}.jsonl`] = ''; // placeholder to make readdir see it
+
+    const { readFile } = await import('node:fs/promises');
+    vi.mocked(readFile).mockRejectedValueOnce(
+      Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }),
+    );
+
+    // Should not throw — the file is skipped with a warning
+    const ids = await store.listSessionIds();
+    expect(ids).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Failed to read session file — history may be incomplete',
+      expect.objectContaining({ code: 'EACCES' }),
+    );
+  });
+
   it('rethrows non-ENOENT errors from readdir', async () => {
     const { readdir } = await import('node:fs/promises');
     vi.mocked(readdir).mockRejectedValueOnce(Object.assign(new Error('EPERM'), { code: 'EPERM' }));

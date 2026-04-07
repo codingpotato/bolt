@@ -5,7 +5,6 @@ import { TaskStore, type Task, type TaskStatus } from './task-store';
 
 export interface ProjectEntry {
   projectId: string;
-  status: 'active' | 'completed' | 'archived';
   dir: string;
 }
 
@@ -66,7 +65,7 @@ export class TaskRegistry {
   async registerProject(projectId: string, projectDir: string): Promise<void> {
     const index = await this.readProjectsIndex();
     if (!index.find((e) => e.projectId === projectId)) {
-      index.push({ projectId, status: 'active', dir: projectDir });
+      index.push({ projectId, dir: projectDir });
       await this.writeProjectsIndex(index);
     }
     const tasksPath = join(projectDir, 'tasks.json');
@@ -167,11 +166,22 @@ export class TaskRegistry {
   }
 
   private async readProjectsIndex(): Promise<ProjectEntry[]> {
-    if (!existsSync(this.projectsIndexPath)) return [];
+    let raw: string;
     try {
-      const raw = await readFile(this.projectsIndexPath, 'utf-8');
+      raw = await readFile(this.projectsIndexPath, 'utf-8');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw err;
+    }
+    // If the file exists but is corrupt, move it to corrupted/ and start fresh
+    // rather than silently dropping the entire project index.
+    try {
       return JSON.parse(raw) as ProjectEntry[];
     } catch {
+      const ts = Date.now();
+      await mkdir(this.corruptedDir, { recursive: true });
+      const { rename } = await import('node:fs/promises');
+      await rename(this.projectsIndexPath, join(this.corruptedDir, `${ts}-projects.json`));
       return [];
     }
   }

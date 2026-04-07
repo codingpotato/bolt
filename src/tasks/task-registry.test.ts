@@ -223,12 +223,50 @@ describe('TaskRegistry', () => {
       expect(registry.list()).toHaveLength(1);
     });
 
+    it('moves corrupt projects.json to corrupted/ and starts fresh', async () => {
+      const registry = makeRegistryWithEmptyGlobal();
+      const projectDir = '/projects/new-proj';
+
+      // projects.json exists but contains invalid JSON
+      vi.mocked(fsPromises.readFile).mockImplementation(async (p) => {
+        if (String(p) === PROJECTS_INDEX_PATH) return 'not valid json {{{' as never;
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+      vi.mocked(fs.existsSync).mockImplementation((p) => {
+        const ps = String(p);
+        return ps === TASKS_PATH || ps === join(projectDir, 'tasks.json');
+      });
+      vi.mocked(fs.readFileSync).mockImplementation((p) => {
+        if (String(p) === TASKS_PATH || String(p) === join(projectDir, 'tasks.json')) {
+          return emptyTasksJson();
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
+      // Should not throw — corrupt file is moved and a fresh index is used
+      await registry.registerProject('new-proj', projectDir);
+
+      // rename should have been called to move the corrupt file
+      expect(vi.mocked(fsPromises.rename)).toHaveBeenCalledWith(
+        PROJECTS_INDEX_PATH,
+        expect.stringMatching(/corrupted.*projects\.json$/),
+      );
+      // The new index is written with only the new project
+      const indexWrites = vi.mocked(fsPromises.writeFile).mock.calls.filter(
+        (c) => String(c[0]) === PROJECTS_INDEX_PATH,
+      );
+      expect(indexWrites).toHaveLength(1);
+      const written = JSON.parse(indexWrites[0]![1] as string) as Array<{ projectId: string }>;
+      expect(written).toHaveLength(1);
+      expect(written[0]!.projectId).toBe('new-proj');
+    });
+
     it('does not duplicate project in index if already exists', async () => {
       const registry = makeRegistryWithEmptyGlobal();
       const projectDir = '/projects/dup-proj';
 
       const existingIndex = JSON.stringify([
-        { projectId: 'dup-proj', status: 'active', dir: projectDir },
+        { projectId: 'dup-proj', dir: projectDir },
       ]);
       vi.mocked(fs.existsSync).mockImplementation((p) => {
         const ps = String(p);
@@ -296,7 +334,7 @@ describe('TaskRegistry', () => {
       vi.mocked(fsPromises.readFile).mockImplementation(async (p) => {
         if (String(p) === PROJECTS_INDEX_PATH) {
           return JSON.stringify([
-            { projectId: 'active-proj', status: 'active', dir: projectDir },
+            { projectId: 'active-proj', dir: projectDir },
           ]) as never;
         }
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
@@ -349,7 +387,7 @@ describe('TaskRegistry', () => {
       vi.mocked(fsPromises.readFile).mockImplementation(async (p) => {
         if (String(p) === PROJECTS_INDEX_PATH) {
           return JSON.stringify([
-            { projectId: 'done-proj', status: 'active', dir: projectDir },
+            { projectId: 'done-proj', dir: projectDir },
           ]) as never;
         }
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });

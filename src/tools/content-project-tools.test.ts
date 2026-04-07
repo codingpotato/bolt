@@ -67,6 +67,10 @@ describe('createContentProjectTools', () => {
       expect(result.manifestPath).toBe(`projects/${result.projectId}/project.json`);
       expect(result.tasksPath).toBe(`projects/${result.projectId}/tasks.json`);
       expect(result.projectDir).toBe(join(testDir, 'projects', result.projectId));
+      expect(mockRegistry.registerProject).toHaveBeenCalledWith(
+        result.projectId,
+        result.projectDir,
+      );
     });
 
     it('uses title when provided', async () => {

@@ -124,7 +124,14 @@ export class SessionStore {
       let raw: string;
       try {
         raw = await readFile(filePath, 'utf-8');
-      } catch {
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code !== 'ENOENT') {
+          this.logger.warn('Failed to read session file — history may be incomplete', {
+            fileName,
+            code,
+          });
+        }
         continue;
       }
       for (const line of raw.split('\n')) {

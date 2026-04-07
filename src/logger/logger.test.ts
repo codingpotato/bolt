@@ -8,9 +8,9 @@ import { join } from 'node:path';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Flush the microtask queue so fire-and-forget promises settle. */
+/** Wait for fire-and-forget file I/O operations to settle. */
 async function flush(): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await new Promise<void>((resolve) => setTimeout(resolve, 10));
 }
 
 /** Delay for a given number of milliseconds. */

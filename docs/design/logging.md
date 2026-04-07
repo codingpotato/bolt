@@ -4,11 +4,11 @@
 
 bolt has three complementary logging mechanisms:
 
-| Mechanism             | Output                   | Purpose                                                                                |
-| --------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| **Structured logger** | `.bolt/bolt.log`         | Operational and debug output — agent lifecycle, LLM requests/responses, retry warnings |
-| **Trace logger**      | stderr (pretty blocks)   | Real-time LLM payload inspection — system prompts, messages, tool calls (opt-in)       |
-| **Audit logger**      | `.bolt/tool-audit.jsonl` | Security record — every tool call with scrubbed input/output                           |
+| Mechanism             | Output                          | Purpose                                                                                |
+| --------------------- | ------------------------------- | -------------------------------------------------------------------------------------- |
+| **Structured logger** | `.bolt/bolt.log`                | Operational and debug output — agent lifecycle, LLM requests/responses, retry warnings |
+| **Trace logger**      | `.bolt/trace.log`               | LLM payload inspection — system prompts, messages, tool calls (opt-in)                 |
+| **Audit logger**      | `.bolt/tool-audit.jsonl`        | Security record — every tool call with scrubbed input/output                           |
 
 This document covers the structured logger and trace logger. See `docs/design/tools-system.md` for the audit logger.
 
@@ -125,53 +125,53 @@ All other levels (`debug`, `info`, `warn`) are file-only JSON.
 
 ### Trace mode (opt-in)
 
-`BOLT_LOG_TRACE` (or `logTrace` in `.bolt/config.json`) enables the **trace logger** which writes rich bordered blocks to stderr showing system prompt content and LLM interaction details. Default: `false`.
+`BOLT_LOG_TRACE` (or `logTrace` in `.bolt/config.json`) enables the **trace logger** which writes LLM payloads to `.bolt/trace.log` for debugging. Default: `false`.
 
 ```sh
-# Emit trace blocks for system prompt, LLM requests, and LLM responses
+# Emit trace output for system prompt, LLM requests, and LLM responses
 BOLT_LOG_TRACE=true npm run dev
 
-# Combine with debug for both structured metadata and trace blocks:
+# Combine with debug for both structured metadata and trace output:
 BOLT_LOG_LEVEL=debug BOLT_LOG_TRACE=true npm run dev
 ```
 
-When enabled, bordered blocks are emitted to stderr for key LLM interaction events:
+When enabled, trace entries are written to `.bolt/trace.log` for key LLM interaction events:
 
 ```
-╔══ SYSTEM PROMPT ═══════════════════════════════════════════════════╗
-║ model=qwen3.5-27B  chars=6534  tokens=1406                         ║
-║ base=3115ch/662tok  skills=10×1272ch/265tok  tools=17×2147ch/479tok║
-╟────────────────────────────────────────────────────────────────────╢
-║ You are bolt, an autonomous AI agent for social media content      ║
-║ creators. Your goal is to help bloggers automate the content...    ║
-║ [truncated to 60 lines]                                            ║
-╚════════════════════════════════════════════════════════════════════╝
+═══════════════════════════════════════════════════════════════════════════
+SYSTEM PROMPT: model=qwen3.5-27B chars=6534 tokens=1406
+  base=3115ch/662tok
+  skills=10×1272ch/265tok
+  tools=17×2147ch/479tok
+═══════════════════════════════════════════════════════════════════════════
+You are bolt, an autonomous AI agent for social media content creators...
+[full content, untruncated]
 
-╔══ LLM REQUEST ═════════════════════════════════════════════════════╗
-║ model=qwen3.5-27B  messages=3  tools=14  window=578 / 200000 (0.3%)║
-║ system=662tok  context=578tok                                      ║
-╟────────────────────────────────────────────────────────────────────╢
-║ {"role":"user","content":"What trending topics should I write about?"}│
-╚════════════════════════════════════════════════════════════════════╝
+═══════════════════════════════════════════════════════════════════════════
+LLM REQUEST: model=qwen3.5-27B messages=3 tools=14
+  window=578 / 200000 (0.3%)
+  system=662tok  messages=578tok
+═══════════════════════════════════════════════════════════════════════════
+{"role":"user","content":"What trending topics should I write about?"}
 
-╔══ LLM RESPONSE ════════════════════════════════════════════════════╗
-║ model=qwen3.5-27B  inputTokens=1240 / 200000 (0.6%)  outputTokens=312║
-╟────────────────────────────────────────────────────────────────────╢
-║ Here are some trending topics you could write about:               ║
-║ 1. AI productivity tools in 2026                                   ║
-║ 2. Creator economy shift towards video                             ║
-╚════════════════════════════════════════════════════════════════════╝
+═══════════════════════════════════════════════════════════════════════════
+LLM RESPONSE: model=qwen3.5-27B inputTokens=1240 outputTokens=312 stopReason=tool_use
+  window=1240 / 200000 (0.6%)
+═══════════════════════════════════════════════════════════════════════════
+Here are some trending topics you could write about:
+1. AI productivity tools in 2026
+2. Creator economy shift towards video
 ```
 
-Trace blocks emitted:
+Trace entries emitted:
 
-| Block header   | When                                         | What it shows                                                                   |
+| Entry header   | When                                         | What it shows                                                                   |
 | -------------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
-| `SYSTEM PROMPT`| Once at session start (after prompt assembly)| Full system prompt (first 60 lines) + base/skills/tools char/token breakdown   |
+| `SYSTEM PROMPT`| Once at session start (after prompt assembly)| Full system prompt + base/skills/tools char/token breakdown                    |
 | `LLM REQUEST`  | Before each LLM API call                     | Last message in conversation + message count, tool count, context window usage  |
 | `LLM RESPONSE` | After each LLM API call                      | Model text output and/or tool calls + input/output tokens, context window usage|
 
-**Note**: Trace output goes to stderr only — no file is written. Long bodies are truncated after ~60 lines on screen; the structured log file (`bolt.log` at `debug` level) retains full content. Each trace block includes a header line with key metrics (model, token counts, window capacity).
+**Note**: Trace output is written to `.bolt/trace.log` with full, untruncated content. Each trace entry includes a header line with key metrics (model, token counts, window capacity).
 
 ---
 
@@ -180,6 +180,7 @@ Trace blocks emitted:
 | File                     | When created                         |
 | ------------------------ | ------------------------------------ |
 | `.bolt/bolt.log`         | Always — structured operational logs |
+| `.bolt/trace.log`        | When `BOLT_LOG_TRACE=true` — full trace output with complete system prompts and messages |
 | `.bolt/tool-audit.jsonl` | Always — security audit trail        |
 
 Files and their parent directories are created lazily on the first write — no manual setup required.
@@ -215,5 +216,5 @@ createTraceLogger() || createNoopTraceLogger()   // based on config.logTrace
 | Logger                | Writes to                      | Controls          | Purpose                                                                  |
 | --------------------- | ------------------------------ | ----------------- | ---------------------------------------------------------------------- |
 | Structured (`Logger`) | `.bolt/bolt.log` (JSON)        | `BOLT_LOG_LEVEL`  | Operational & debug events: agent lifecycle, LLM calls, token usage    |
-| Trace (`TraceLogger`) | stderr (bordered blocks)       | `BOLT_LOG_TRACE`  | Rich context for debugging: system prompt, LLM messages, token windows |
+| Trace (`TraceLogger`) | `.bolt/trace.log`              | `BOLT_LOG_TRACE`  | Full LLM payloads: system prompt, messages, tool calls, token windows  |
 | Audit (`ToolLogger`)  | `.bolt/tool-audit.jsonl` (JSON)| Always on         | Security record: tool calls with credential fields redacted             |

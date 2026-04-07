@@ -11,7 +11,7 @@ export interface Logger {
   error(message: string, meta?: Record<string, unknown>): void;
 }
 
-/** Trace logger interface — outputs rich blocks to stderr for debugging. */
+/** Trace logger interface — writes LLM payloads to trace log for debugging. */
 export interface TraceLogger {
   systemPrompt(
     content: string,
@@ -183,46 +183,66 @@ export function createNoopLogger(): Logger {
 }
 
 /**
- * Creates a trace logger that writes pretty bordered blocks to stderr.
- * Trace blocks are only written when `BOLT_LOG_TRACE=true`.
- * Each block type (SYSTEM PROMPT, LLM REQUEST, LLM RESPONSE) is rendered as a box.
+ * Creates a trace logger that writes to the workspace's `.bolt/trace.log` file.
+ * Full untruncated content is written to the trace log file.
  */
-export function createTraceLogger(): TraceLogger {
-  function writeBlock(title: string, headerLine: string, body: string): void {
-    const maxWidth = Math.max(title.length + 8, headerLine.length, 70);
-    const padding = ' '.repeat(Math.max(0, maxWidth - title.length - 4));
-    const lines = body.split('\n').slice(0, 60);
+export function createTraceLogger(workspaceRoot: string): TraceLogger {
+  const traceFilePath = workspaceRoot + '/.bolt/trace.log';
+  let initPromise: Promise<void> | null = null;
+  const logDir = dirname(traceFilePath);
 
-    process.stderr.write(`╔══ ${title}${padding}╗\n`);
-    process.stderr.write(`║ ${headerLine.padEnd(maxWidth - 2)} ║\n`);
-    process.stderr.write(`╟${'─'.repeat(maxWidth - 2)}╢\n`);
-    for (const line of lines) {
-      process.stderr.write(`║ ${line.slice(0, maxWidth - 2).padEnd(maxWidth - 2)} ║\n`);
+  function ensureDir(): Promise<void> {
+    if (initPromise === null) {
+      initPromise = mkdir(logDir, { recursive: true }).then(() => undefined);
     }
-    process.stderr.write(`╚${'═'.repeat(maxWidth - 2)}╝\n`);
+    return initPromise;
+  }
+
+  function writeToFile(line: string): void {
+    void ensureDir()
+      .then(() => appendFile(traceFilePath, line + '\n'))
+      .catch(() => undefined);
   }
 
   return {
     systemPrompt(content, meta) {
-      const headerLine = `model=${meta.model}  chars=${meta.chars}  tokens=${meta.tokens}`;
-      const breakdown = `base=${meta.base.chars}ch/${meta.base.tokens}tok  skills=${meta.skills.count}×${meta.skills.chars}ch/${meta.skills.tokens}tok  tools=${meta.tools.count}×${meta.tools.chars}ch/${meta.tools.tokens}tok`;
-      const fullHeader = `${headerLine}\n║ ${breakdown}`;
-      writeBlock('SYSTEM PROMPT', fullHeader, content);
+      // Write full system prompt to trace file (untruncated)
+      writeToFile('═══════════════════════════════════════════════════════════════════════════');
+      writeToFile(`SYSTEM PROMPT: model=${meta.model} chars=${meta.chars} tokens=${meta.tokens}`);
+      writeToFile(`  base=${meta.base.chars}ch/${meta.base.tokens}tok`);
+      writeToFile(`  skills=${meta.skills.count}×${meta.skills.chars}ch/${meta.skills.tokens}tok`);
+      writeToFile(`  tools=${meta.tools.count}×${meta.tools.chars}ch/${meta.tools.tokens}tok`);
+      writeToFile('═══════════════════════════════════════════════════════════════════════════');
+      writeToFile(content); // Full content, untruncated
+      writeToFile('');
     },
 
     llmRequest(lastMessage, meta) {
       const totalTokens = meta.systemTokens + meta.ctxTokens;
       const windowUsage = `${totalTokens} / ${meta.windowCapacity} (${((totalTokens / meta.windowCapacity) * 100).toFixed(1)}%)`;
-      const headerLine = `model=${meta.model}  messages=${meta.messages}  tools=${meta.tools}  window=${windowUsage}`;
-      const breakdown = `system=${meta.systemTokens}tok  messages=${meta.ctxTokens}tok`;
-      const fullHeader = `${headerLine}\n║ ${breakdown}`;
-      writeBlock('LLM REQUEST', fullHeader, lastMessage.slice(0, 2000));
+
+      // Write full LLM request to trace file (untruncated)
+      writeToFile('═══════════════════════════════════════════════════════════════════════════');
+      writeToFile(`LLM REQUEST: model=${meta.model} messages=${meta.messages} tools=${meta.tools}`);
+      writeToFile(`  window=${windowUsage}`);
+      writeToFile(`  system=${meta.systemTokens}tok  messages=${meta.ctxTokens}tok`);
+      writeToFile('═══════════════════════════════════════════════════════════════════════════');
+      writeToFile(lastMessage); // Full content, untruncated
+      writeToFile('');
     },
 
     llmResponse(content, meta) {
       const windowUsage = `${meta.inputTokens} / ${meta.windowCapacity} (${((meta.inputTokens / meta.windowCapacity) * 100).toFixed(1)}%)`;
-      const headerLine = `model=${meta.model}  inputTokens=${windowUsage}  outputTokens=${meta.outputTokens}  stopReason=${meta.stopReason}`;
-      writeBlock('LLM RESPONSE', headerLine, content);
+
+      // Write full LLM response to trace file (untruncated)
+      writeToFile('═══════════════════════════════════════════════════════════════════════════');
+      writeToFile(
+        `LLM RESPONSE: model=${meta.model} inputTokens=${meta.inputTokens} outputTokens=${meta.outputTokens} stopReason=${meta.stopReason}`,
+      );
+      writeToFile(`  window=${windowUsage}`);
+      writeToFile('═══════════════════════════════════════════════════════════════════════════');
+      writeToFile(content); // Full content, untruncated
+      writeToFile('');
     },
   };
 }

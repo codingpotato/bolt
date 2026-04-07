@@ -248,10 +248,9 @@ export class AgentCore {
           ctxTokens,
         });
 
-        // Emit LLM REQUEST trace block
-        const lastMsg = this.l1[this.l1.length - 1];
-        const lastMsgText = lastMsg ? JSON.stringify(lastMsg).slice(0, 2000) : '';
-        this.traceLogger.llmRequest(lastMsgText, {
+        // Emit LLM REQUEST trace block with all messages for debugging
+        const allMessagesText = this.l1.map((m) => JSON.stringify(m)).join('\n');
+        this.traceLogger.llmRequest(allMessagesText, {
           model: this.config.model,
           messages: this.l1.length,
           tools: tools.length,

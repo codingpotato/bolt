@@ -16,7 +16,7 @@ import { createNoopLogger } from '../logger';
 import { NoopProgressReporter } from '../progress';
 import type { ToolContext } from '../tools/tool';
 
-const SKILLS_DIR = join(__dirname);
+const SKILLS_DIR = join(__dirname, '..', '..', 'resources', 'skills');
 const AUTH: AuthConfig = { mode: 'api-key', credential: 'test-key' };
 const MODEL = 'claude-opus-4-6';
 const SCRIPT = '/path/to/subagent.js';

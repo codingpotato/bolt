@@ -34,7 +34,7 @@ function makeDir(name: string): Dirent {
 }
 
 describe('file_search tool', () => {
-  let mockLogger: { log: ReturnType<typeof vi.fn> };
+  let mockLogger: { log: (tool: string, input: unknown, result: unknown) => Promise<void> };
   let ctx: ToolContext;
 
   beforeEach(() => {
@@ -43,7 +43,7 @@ describe('file_search tool', () => {
     ctx = {
       cwd: '/workspace',
       log: mockLogger,
-      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as import('../logger').Logger,
       progress: {
         onSessionStart: vi.fn(),
         onThinking: vi.fn(),

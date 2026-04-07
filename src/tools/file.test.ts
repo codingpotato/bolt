@@ -7,7 +7,7 @@ import { fileReadTool, fileWriteTool, fileEditTool, MAX_FILE_CHARS } from './fil
 vi.mock('node:fs/promises');
 
 describe('file tools', () => {
-  let mockLogger: { log: ReturnType<typeof vi.fn> };
+  let mockLogger: { log: (tool: string, input: unknown, result: unknown) => Promise<void> };
   let ctx: ToolContext;
 
   beforeEach(() => {
@@ -16,7 +16,7 @@ describe('file tools', () => {
     ctx = {
       cwd: '/workspace',
       log: mockLogger,
-      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as import('../logger').Logger,
       progress: {
         onSessionStart: vi.fn(),
         onThinking: vi.fn(),

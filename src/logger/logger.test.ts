@@ -10,7 +10,7 @@ import { join } from 'node:path';
 
 /** Flush the microtask queue so fire-and-forget promises settle. */
 async function flush(): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  await new Promise<void>((resolve) => setTimeout(resolve, 10));
 }
 
 /** Delay for a given number of milliseconds. */

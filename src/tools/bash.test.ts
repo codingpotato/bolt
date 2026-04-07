@@ -6,7 +6,7 @@ import { bashTool, MAX_OUTPUT_CHARS } from './bash';
 vi.mock('node:child_process');
 
 describe('bashTool', () => {
-  let mockLogger: { log: ReturnType<typeof vi.fn> };
+  let mockLogger: { log: (tool: string, input: unknown, result: unknown) => Promise<void> };
   let ctx: ToolContext;
 
   beforeEach(() => {
@@ -15,7 +15,7 @@ describe('bashTool', () => {
     ctx = {
       cwd: '/workspace',
       log: mockLogger,
-      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as import('../logger').Logger,
       progress: {
         onSessionStart: vi.fn(),
         onThinking: vi.fn(),

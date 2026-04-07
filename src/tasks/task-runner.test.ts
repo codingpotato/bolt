@@ -45,8 +45,10 @@ function makeStore(tasks: Task[]): MockStore {
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
+import type { TaskExecutor } from './task-runner';
+
 describe('TaskRunner', () => {
-  let executor: ReturnType<typeof vi.fn>;
+  let executor: ReturnType<typeof vi.fn> & TaskExecutor;
 
   beforeEach(() => {
     executor = vi.fn().mockResolvedValue('result');

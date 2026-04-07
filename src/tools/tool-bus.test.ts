@@ -35,7 +35,7 @@ function makeCall(name: string, input: unknown, id = '1'): ToolCall {
 
 describe('ToolBus', () => {
   let bus: ToolBus;
-  let mockLogger: { log: ReturnType<typeof vi.fn> };
+  let mockLogger: { log: (tool: string, input: unknown, result: unknown) => Promise<void> };
   let ctx: ToolContext;
 
   beforeEach(() => {
@@ -44,7 +44,7 @@ describe('ToolBus', () => {
     ctx = {
       cwd: '/tmp',
       log: mockLogger,
-      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as import('../logger').Logger,
       progress: {
         onSessionStart: vi.fn(),
         onThinking: vi.fn(),

@@ -7,7 +7,7 @@ const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
 describe('webFetchTool', () => {
-  let mockLogger: { log: ReturnType<typeof vi.fn> };
+  let mockLogger: { log: (tool: string, input: unknown, result: unknown) => Promise<void> };
   let ctx: ToolContext;
 
   beforeEach(() => {
@@ -16,7 +16,7 @@ describe('webFetchTool', () => {
     ctx = {
       cwd: '/workspace',
       log: mockLogger,
-      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as import('../logger').Logger,
       progress: {
         onSessionStart: vi.fn(),
         onThinking: vi.fn(),

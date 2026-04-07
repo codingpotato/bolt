@@ -59,7 +59,7 @@ function makeConfig(model = 'claude-test'): Config {
 
 /** Create a Channel mock that yields the given messages then closes. */
 function makeChannel(messages: string[]): { channel: Channel; sendSpy: ReturnType<typeof vi.fn> } {
-  const sendSpy = vi.fn().mockResolvedValue(undefined) as ReturnType<typeof vi.fn>;
+  const sendSpy = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
   async function* receive(): AsyncIterable<UserTurn> {
     for (const content of messages) {

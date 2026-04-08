@@ -40,6 +40,9 @@ function makeCtx(): ToolContext {
       onLlmCall: () => {},
       onLlmResponse: () => {},
       onRetry: () => {},
+      onSubagentStart: () => {},
+      onSubagentEnd: () => {},
+      onSubagentError: () => {},
     },
   };
 }

@@ -43,6 +43,9 @@ describe('NoopProgressReporter', () => {
       });
       r.onMemoryCompaction(42, 'Discussion summary', ['auth', 'jwt']);
       r.onRetry(1, 3, 'ECONNREFUSED');
+      r.onSubagentStart('analyze-trends', 'Search trending topics');
+      r.onSubagentEnd('analyze-trends', 4200);
+      r.onSubagentError('analyze-trends', 'OOM');
     }).not.toThrow();
   });
 });
@@ -167,6 +170,47 @@ describe('CliProgressReporter', () => {
     it('onRetry writes retry warning', () => {
       reporter.onRetry(1, 3, 'ECONNREFUSED');
       expect(output()).toBe('⚠  API error, retrying (1/3): ECONNREFUSED\n');
+    });
+
+    it('onSubagentStart clears thinking and writes subagent start line', () => {
+      const fake = makeFakeStream(true);
+      reporter = new CliProgressReporter(fake.stream);
+      reporter.onThinking();
+      reporter.onSubagentStart('analyze-trends', 'Search trending topics on social media');
+      const out = fake.output();
+      expect(out).toContain('\x1b[1A\x1b[2K');
+      expect(out).toContain('⟳ Subagent: analyze-trends');
+      expect(out).toContain('Search trending topics on social media');
+    });
+
+    it('onSubagentStart truncates long descriptions at 80 chars', () => {
+      const desc = 'x'.repeat(100);
+      reporter.onSubagentStart('my-skill', desc);
+      expect(output()).toContain(`${'x'.repeat(80)}…`);
+      expect(output()).not.toContain(`${'x'.repeat(81)}`);
+    });
+
+    it('onSubagentEnd writes done line with duration', () => {
+      reporter.onSubagentEnd('analyze-trends', 8240);
+      expect(output()).toBe('  ✓ Subagent done: analyze-trends (8240ms)\n');
+    });
+
+    it('onSubagentError clears thinking and writes error line', () => {
+      const fake = makeFakeStream(true);
+      reporter = new CliProgressReporter(fake.stream);
+      reporter.onThinking();
+      reporter.onSubagentError('analyze-trends', 'process exited with code 1');
+      const out = fake.output();
+      expect(out).toContain('\x1b[1A\x1b[2K');
+      expect(out).toContain('✗ Subagent failed: analyze-trends');
+      expect(out).toContain('process exited with code 1');
+    });
+
+    it('onSubagentError truncates long error messages at 120 chars', () => {
+      const err = 'e'.repeat(200);
+      reporter.onSubagentError('my-skill', err);
+      expect(output()).toContain(`${'e'.repeat(120)}…`);
+      expect(output()).not.toContain(`${'e'.repeat(121)}`);
     });
 
     it('clearPendingThinking erases the thinking line', () => {

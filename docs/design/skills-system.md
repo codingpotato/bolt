@@ -171,16 +171,48 @@ Return result to caller
 
 | Skill | Description | Allowed Tools |
 |-------|-------------|---------------|
-| `produce-video` | **Orchestrator** — creates a content project, builds the full task DAG, and drives the 9-step video production pipeline with approval gates. Accepts `projectId` to resume a partially-completed run. | `content_project_create`, `content_project_read`, `content_project_update_artifact`, `task_create`, `task_update`, `task_list`, `skill_run`, `user_review`, `file_read`, `file_write` |
+| `plan-video-production` | **Planning only** — creates the content project directory, builds the full 9-step task DAG with `dependsOn` and `requiresApproval`, and returns a human-readable plan summary. Does NOT generate any content and does NOT call `user_review`. Accepts `projectId` to rebuild the DAG for a partially-completed run. | `content_project_create`, `content_project_read`, `task_create`, `task_list`, `file_read`, `file_write` |
 | `generate-video-script` | Write a short-form video script with structured storyboard (scene-by-scene breakdown including camera, dialogue, transitions) | `web_fetch`, `web_search` |
 | `generate-image-prompt` | Create a detailed image generation prompt optimised for the target model (e.g. SDXL, Flux) from a scene description | — |
-| `generate-video-prompt` | Create a motion/animation prompt for image-to-video generation from a scene description and source image | — |
+| `generate-video-prompt` | Create a motion/animation prompt for image-to-video generation from a scene description | — |
+
+> **Why `plan-video-production` is a skill but the execution is not:**
+>
+> Skills run as isolated subagents with piped stdio — they cannot interact with the user during execution. `user_review` called inside a subagent cannot reach the terminal or WebChannel. Any skill that needs to present content and wait for human approval must be refactored so the review gate happens at the **main agent level**, not inside the subagent.
+>
+> `plan-video-production` is safe as a subagent because it is purely deterministic: given inputs, it creates files and tasks and returns structured output — no interactive steps. The 9 execution steps with their approval gates run entirely in the main agent, which has full channel access.
 
 ### Code Workflows
 
 | Skill | Description | Allowed Tools |
 |-------|-------------|---------------|
 | `review-code` | Perform a code review on a diff or file; returns structured report | `file_read` |
+
+## Subagent Progress Visibility
+
+When the agent calls `skill_run`, it spawns a child process. Without feedback, the user sees no activity while the subagent runs — which can feel like a freeze, especially for longer tasks like trend analysis or script generation.
+
+The `skill_run` tool emits two progress events via `ProgressReporter`:
+
+1. **On spawn:** `"Subagent starting: <skill-name> — <skill.description>"`
+2. **On completion:** `"Subagent done: <skill-name> (<duration>ms)"`
+
+These appear as progress lines in the CLI and as status messages in WebChannel, giving the user a clear signal that work is happening and what kind of work.
+
+Example output during video production:
+
+```
+⟳ Subagent starting: analyze-trends — Search trending topics on social media...
+⟳ Subagent done: analyze-trends (8240ms)
+⟳ Subagent starting: generate-video-script — Write a short-form video script with structured storyboard
+⟳ Subagent done: generate-video-script (12400ms)
+⟳ Subagent starting: generate-image-prompt — Create a detailed image generation prompt...
+⟳ Subagent done: generate-image-prompt (1800ms)
+```
+
+For skills that run in a loop (e.g. `generate-image-prompt` called once per scene), the per-call events give the user visibility into which scene is being processed.
+
+---
 
 ## Adding a Custom Skill
 

@@ -95,6 +95,9 @@ function makeCompactManager(options: CompactManagerOptions = {}): CompactManager
     onLlmCall: vi.fn(),
     onLlmResponse: vi.fn(),
     onRetry: vi.fn(),
+    onSubagentStart: vi.fn(),
+    onSubagentEnd: vi.fn(),
+    onSubagentError: vi.fn(),
   };
 
   const config: MemoryConfig = { ...DEFAULT_CONFIG, keepRecentMessages };
@@ -598,6 +601,9 @@ describe('MemoryManager.compact()', () => {
       onLlmCall: vi.fn(),
       onLlmResponse: vi.fn(),
       onRetry: vi.fn(),
+      onSubagentStart: vi.fn(),
+      onSubagentEnd: vi.fn(),
+      onSubagentError: vi.fn(),
     };
 
     const config: MemoryConfig = { ...DEFAULT_CONFIG, keepRecentMessages: 3 };

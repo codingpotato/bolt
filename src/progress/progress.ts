@@ -57,6 +57,15 @@ export interface ProgressReporter {
 
   /** An API call failed and will be retried. */
   onRetry(attempt: number, maxAttempts: number, reason: string): void;
+
+  /** A skill subagent is about to be spawned. */
+  onSubagentStart(skillName: string, description: string): void;
+
+  /** A skill subagent completed successfully. */
+  onSubagentEnd(skillName: string, durationMs: number): void;
+
+  /** A skill subagent failed. */
+  onSubagentError(skillName: string, error: string): void;
 }
 
 /** No-op implementation — used by sub-agents, Discord channel, and tests. */
@@ -71,4 +80,7 @@ export class NoopProgressReporter implements ProgressReporter {
   onContextInjection(_source: 'task' | 'chat', _count: number, _taskId?: string): void {}
   onMemoryCompaction(_evictedCount: number, _summary: string, _tags: string[]): void {}
   onRetry(_attempt: number, _maxAttempts: number, _reason: string): void {}
+  onSubagentStart(_skillName: string, _description: string): void {}
+  onSubagentEnd(_skillName: string, _durationMs: number): void {}
+  onSubagentError(_skillName: string, _error: string): void {}
 }

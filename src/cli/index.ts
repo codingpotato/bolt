@@ -239,7 +239,10 @@ async function serve(serveArgs: string[]): Promise<void> {
     logger,
   );
 
-  const progress = new WebChannelProgressReporter((text) => channel.sendProgress(text));
+  const progress = new WebChannelProgressReporter(
+    (text) => channel.sendProgress(text),
+    (event) => channel.sendSubagentStatus(event.skill, event.status, event.durationMs, event.error),
+  );
   const ctx = {
     cwd,
     log,

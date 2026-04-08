@@ -41,22 +41,60 @@ A catalog of available tools with name and one-line descriptions is appended to 
 
 You MUST use the appropriate skill for each type of request:
 
-| Request Type | Skill to Use |
-|--------------|--------------|
-| Video production (YouTube Shorts, TikToks, Reels, animations) | `produce-video` |
-| Blog posts, articles | `write-blog-post` |
-| Social media posts | `draft-social-post` |
-| Trend analysis | `analyze-trends` |
+| Request Type | Action |
+|--------------|--------|
+| Video production (YouTube Shorts, TikToks, Reels, animations) | Run `plan-video-production` skill, then execute the pipeline yourself (see Video Execution Protocol below) |
+| Blog posts, articles | Run `write-blog-post` skill |
+| Social media posts | Run `draft-social-post` skill |
+| Trend analysis | Run `analyze-trends` skill |
 
-### Video Production (Critical)
+### Video Execution Protocol
 
-For ANY video-related request, you MUST invoke `produce-video`. This skill:
-- Presents a production plan for user approval BEFORE any generation
-- Creates a content project with proper file organization (`projects/<id>/`)
-- Enforces mandatory user review gates at every step
-- Tracks all artifacts in a project manifest
+Video production uses a **two-phase model**: a planning skill sets up the project and task DAG, then the main agent drives execution with full user review at every step.
 
-**Do NOT directly call** `comfyui_text2img`, `comfyui_img2video`, or `video_merge` tools. The `produce-video` skill handles everything.
+**Phase 1 — Plan (skill)**
+
+Call `skill_run({ name: "plan-video-production", args: { topic, title?, targetPlatform?, audioFile? } })`.
+
+This skill:
+- Creates the content project (`projects/<id>/`)
+- Creates the full task DAG (all 9 steps, with `dependsOn` and `requiresApproval: true`)
+- Returns `{ projectId, manifestPath, planSummary, tasks }`
+
+Present the returned `planSummary` to the user via `user_review` before executing any step. If the user requests changes (scene count, platform, style, etc.), re-run `plan-video-production` with the updated parameters and present again.
+
+**Phase 2 — Execute (main agent, step by step)**
+
+After plan approval, execute the task DAG yourself. For each task:
+
+1. `task_update({ id, status: "in_progress" })`
+2. Do the work — use the matching skill or tool:
+
+| Task | What to do |
+|------|-----------|
+| `analyzeTrends` | `skill_run({ name: "analyze-trends", args: { topic, platforms: [targetPlatform], timeRange: "week" } })` → write result to `projects/<id>/01-trend-report.md` |
+| `generateScript` | Read trend report → `skill_run({ name: "generate-video-script", args: { topic: "<topic + trend angles>", durationSeconds: 60 } })` → write storyboard to `projects/<id>/02-storyboard.json` |
+| `generateImagePrompts` | For each scene: `skill_run({ name: "generate-image-prompt", args: { sceneDescription: scene.description + " " + scene.imagePromptHint } })` → write to `projects/<id>/scenes/scene-<NN>/prompt.md` |
+| `generateImages` | For each scene: read approved prompt → `comfyui_text2img({ prompt, outputPath: "projects/<id>/scenes/scene-<NN>/image.png" })` |
+| `generateVideoPrompts` | For each scene: `skill_run({ name: "generate-video-prompt", args: { sceneDescription: scene.description } })` → write to `projects/<id>/scenes/scene-<NN>/video-prompt.md` |
+| `generateVideos` | For each scene: read approved video prompt + image → `comfyui_img2video({ imagePath, prompt, outputPath: "projects/<id>/scenes/scene-<NN>/clip.mp4" })` |
+| `mergeClips` | `video_merge({ clips: [...], outputPath: "projects/<id>/final/raw.mp4" })` |
+| `addAudio` | `video_add_audio({ videoPath: "final/raw.mp4", audioPath, outputPath: "projects/<id>/final/audio.mp4", mode: "mix" })` |
+| `addSubtitles` | Generate SRT from storyboard dialogue → `video_add_subtitles({ videoPath, subtitlesPath, outputPath: "projects/<id>/final/video.mp4" })` |
+
+3. Update artifact status: `content_project_update_artifact({ projectId, artifactPath, status: "draft" })`
+4. Present result to user: `user_review({ content, contentType, question })`
+5. **If approved:** `content_project_update_artifact({ ..., status: "approved" })` then `task_update({ id, status: "completed" })`
+6. **If rejected:** revise and re-present. Do NOT move to the next task until the current one is approved.
+
+**Critical review gates (never skip):**
+- Approve trend report before writing script
+- Approve storyboard before generating image prompts
+- Approve all image prompts before generating any image
+- Approve all images before generating video prompts
+- Approve all video prompts before generating any video clip
+
+**Use todos for per-scene sub-steps:** Create all scene todos upfront before touching any scene, then work through them one by one.
 
 ---
 
@@ -69,22 +107,30 @@ Run skills with `skill_run`. Skills execute in isolated sub-agents and return st
 ## Content Generation Workflow
 
 ```
-1. analyze-trends          → user_review (approve topic + angles)
+plan-video-production (skill) → plan summary → user_review (approve plan)
          ↓
-2. generate-video-script   → user_review (approve storyboard)
+[main agent executes task DAG]
          ↓
-3. generate-image-prompts  → user_review (approve prompts, one per scene)
+1. analyze-trends (skill)     → user_review (approve trend report)
          ↓
-4. comfyui_text2img ×N     → user_review (approve images)
+2. generate-video-script (skill) → user_review (approve storyboard)
          ↓
-5. generate-video-prompts  → user_review (approve motion prompts)
+3. generate-image-prompt (skill) × N scenes → user_review (approve all prompts)
          ↓
-6. comfyui_img2video ×N    → user_review (approve clips)
+4. comfyui_text2img × N scenes  → user_review (approve all images)
          ↓
-7. video_merge + video_add_audio + video_add_subtitles → final video
+5. generate-video-prompt (skill) × N scenes → user_review (approve all motion prompts)
+         ↓
+6. comfyui_img2video × N scenes → user_review (approve all clips)
+         ↓
+7. video_merge → user_review (approve merged video)
+         ↓
+8. video_add_audio [optional]   → user_review
+         ↓
+9. video_add_subtitles [optional] → user_review → final video
 ```
 
-Each step depends on the previous and should use `requiresApproval: true` on the task. Never skip a review gate before an expensive generation step.
+Phase 1 (planning) runs as a skill subagent. Phase 2 (execution) runs entirely in the main agent — never call `comfyui_text2img`, `comfyui_img2video`, or video editing tools from inside a skill. All review gates must be at the main agent level.
 
 All output files go under `projects/<project-id>/` within the workspace root.
 

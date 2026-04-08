@@ -1,10 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import { WebChannelProgressReporter } from './web-channel-progress';
+import type { SubagentStatusEvent } from './web-channel-progress';
 
 function makeReporter(): { reporter: WebChannelProgressReporter; sent: string[] } {
   const sent: string[] = [];
   const reporter = new WebChannelProgressReporter((text) => sent.push(text));
   return { reporter, sent };
+}
+
+function makeReporterWithStatus(): {
+  reporter: WebChannelProgressReporter;
+  sent: string[];
+  events: SubagentStatusEvent[];
+} {
+  const sent: string[] = [];
+  const events: SubagentStatusEvent[] = [];
+  const reporter = new WebChannelProgressReporter(
+    (text) => sent.push(text),
+    (event) => events.push(event),
+  );
+  return { reporter, sent, events };
 }
 
 describe('WebChannelProgressReporter', () => {
@@ -104,5 +119,85 @@ describe('WebChannelProgressReporter', () => {
       throw new Error('send failed');
     });
     expect(() => reporter.onThinking()).not.toThrow();
+  });
+
+  it('onSubagentStart emits text progress line', () => {
+    const { reporter, sent } = makeReporter();
+    reporter.onSubagentStart('analyze-trends', 'Search trending topics on social media');
+    expect(sent[0]).toContain('⟳ Subagent: analyze-trends');
+    expect(sent[0]).toContain('Search trending topics');
+  });
+
+  it('onSubagentStart truncates description at 80 chars', () => {
+    const { reporter, sent } = makeReporter();
+    reporter.onSubagentStart('my-skill', 'x'.repeat(100));
+    expect(sent[0]).toContain('x'.repeat(80) + '…');
+    expect(sent[0]).not.toContain('x'.repeat(81));
+  });
+
+  it('onSubagentStart emits structured starting event', () => {
+    const { reporter, events } = makeReporterWithStatus();
+    reporter.onSubagentStart('analyze-trends', 'Search trending topics');
+    expect(events[0]).toEqual({ skill: 'analyze-trends', status: 'starting' });
+  });
+
+  it('onSubagentEnd emits text progress line with duration', () => {
+    const { reporter, sent } = makeReporter();
+    reporter.onSubagentEnd('analyze-trends', 8240);
+    expect(sent[0]).toBe('  ✓ Subagent done: analyze-trends (8240ms)');
+  });
+
+  it('onSubagentEnd emits structured done event with durationMs', () => {
+    const { reporter, events } = makeReporterWithStatus();
+    reporter.onSubagentEnd('analyze-trends', 8240);
+    expect(events[0]).toEqual({ skill: 'analyze-trends', status: 'done', durationMs: 8240 });
+  });
+
+  it('onSubagentError emits text progress line', () => {
+    const { reporter, sent } = makeReporter();
+    reporter.onSubagentError('analyze-trends', 'process exited with code 1');
+    expect(sent[0]).toContain('✗ Subagent failed: analyze-trends');
+    expect(sent[0]).toContain('process exited with code 1');
+  });
+
+  it('onSubagentError emits structured failed event with error', () => {
+    const { reporter, events } = makeReporterWithStatus();
+    reporter.onSubagentError('analyze-trends', 'OOM');
+    expect(events[0]).toEqual({ skill: 'analyze-trends', status: 'failed', error: 'OOM' });
+  });
+
+  it('onSubagentStart swallows errors from sendSubagentStatus without throwing', () => {
+    const reporter = new WebChannelProgressReporter(
+      () => {},
+      () => { throw new Error('broadcast failed'); },
+    );
+    expect(() => reporter.onSubagentStart('s', 'desc')).not.toThrow();
+  });
+
+  it('onSubagentEnd swallows errors from sendSubagentStatus without throwing', () => {
+    const reporter = new WebChannelProgressReporter(
+      () => {},
+      () => { throw new Error('broadcast failed'); },
+    );
+    expect(() => reporter.onSubagentEnd('s', 100)).not.toThrow();
+  });
+
+  it('onSubagentError swallows errors from sendSubagentStatus without throwing', () => {
+    const reporter = new WebChannelProgressReporter(
+      () => {},
+      () => { throw new Error('broadcast failed'); },
+    );
+    expect(() => reporter.onSubagentError('s', 'err')).not.toThrow();
+  });
+
+  it('works without sendSubagentStatus callback', () => {
+    const sent: string[] = [];
+    const reporter = new WebChannelProgressReporter((text) => sent.push(text));
+    expect(() => {
+      reporter.onSubagentStart('s', 'desc');
+      reporter.onSubagentEnd('s', 100);
+      reporter.onSubagentError('s', 'err');
+    }).not.toThrow();
+    expect(sent).toHaveLength(3);
   });
 });

@@ -155,4 +155,22 @@ export class CliProgressReporter implements ProgressReporter {
   onRetry(attempt: number, maxAttempts: number, reason: string): void {
     this.write(`⚠  API error, retrying (${attempt}/${maxAttempts}): ${reason}\n`);
   }
+
+  onSubagentStart(skillName: string, description: string): void {
+    if (!this.active) return;
+    this.eraseThinking();
+    const desc = description.length > 80 ? `${description.slice(0, 80)}…` : description;
+    this.out.write(`⟳ Subagent: ${skillName} — ${desc}\n`);
+  }
+
+  onSubagentEnd(skillName: string, durationMs: number): void {
+    this.write(`  ✓ Subagent done: ${skillName} (${durationMs}ms)\n`);
+  }
+
+  onSubagentError(skillName: string, error: string): void {
+    if (!this.active) return;
+    this.eraseThinking();
+    const msg = error.length > 120 ? `${error.slice(0, 120)}…` : error;
+    this.out.write(`  ✗ Subagent failed: ${skillName} — ${msg}\n`);
+  }
 }

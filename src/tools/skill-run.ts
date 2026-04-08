@@ -139,16 +139,23 @@ export function createSkillRunTool(
         ...(inheritedRules.length > 0 ? { inheritedRules } : {}),
       };
 
+      ctx.progress.onSubagentStart(skill.name, skill.description);
+      const startTime = Date.now();
+
       let subagentOutput: string;
       try {
         const result = await runner(payload, scriptPath, execPath);
         subagentOutput = result.output;
+        const durationMs = Date.now() - startTime;
+        ctx.progress.onSubagentEnd(skill.name, durationMs);
         logger.debug('Skill completed', {
           skillName: input.name,
+          durationMs,
           outputPreview: subagentOutput.slice(0, 300),
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        ctx.progress.onSubagentError(skill.name, message);
         logger.debug('Skill failed', {
           skillName: input.name,
           error: message.slice(0, 500),

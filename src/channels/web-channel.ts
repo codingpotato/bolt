@@ -27,7 +27,8 @@ export interface ServerMessage {
     | 'user_message'
     | 'processing'
     | 'queue_status'
-    | 'task_complete';
+    | 'task_complete'
+    | 'subagent_status';
   content?: string;
   reviewId?: string;
   reviewRequest?: UserReviewRequest;
@@ -53,6 +54,14 @@ export interface ServerMessage {
   status?: 'completed' | 'failed';
   /** Task result for task_complete events. */
   result?: string;
+  /** Skill name for subagent_status events. */
+  skill?: string;
+  /** Lifecycle status for subagent_status events. */
+  subagentStatus?: 'starting' | 'done' | 'failed';
+  /** Duration in ms for subagent_status done events. */
+  durationMs?: number;
+  /** Error message for subagent_status failed events. */
+  error?: string;
 }
 
 /** Shape of the client's reply to a review request. */
@@ -510,6 +519,23 @@ export class WebChannel implements Channel {
 
   sendProgress(text: string): void {
     const msg: ServerMessage = { type: 'progress', content: text };
+    this.broadcastWs(msg);
+    this.broadcastSse(msg);
+  }
+
+  sendSubagentStatus(
+    skill: string,
+    subagentStatus: 'starting' | 'done' | 'failed',
+    durationMs?: number,
+    error?: string,
+  ): void {
+    const msg: ServerMessage = {
+      type: 'subagent_status',
+      skill,
+      subagentStatus,
+      ...(durationMs !== undefined ? { durationMs } : {}),
+      ...(error !== undefined ? { error } : {}),
+    };
     this.broadcastWs(msg);
     this.broadcastSse(msg);
   }

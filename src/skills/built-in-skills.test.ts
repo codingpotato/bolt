@@ -45,7 +45,7 @@ describe('built-in skills discoverability', () => {
     'summarize-url',
     'review-code',
     'fix-tests',
-    'produce-video',
+    'plan-video-production',
   ];
 
   it('loadSkills finds all 10 built-in skills when passed SKILLS_DIR as builtinSkillsDir', async () => {
@@ -549,14 +549,14 @@ describe('analyze-trends skill', () => {
 });
 
 // ---------------------------------------------------------------------------
-// produce-video (orchestrator)
+// plan-video-production (planner)
 // ---------------------------------------------------------------------------
 
-describe('produce-video skill', () => {
-  const skill = loadSkill('produce-video.skill.md');
+describe('plan-video-production skill', () => {
+  const skill = loadSkill('plan-video-production.skill.md');
 
   it('has correct name', () => {
-    expect(skill.name).toBe('produce-video');
+    expect(skill.name).toBe('plan-video-production');
   });
 
   it('requires topic input', () => {
@@ -578,51 +578,55 @@ describe('produce-video skill', () => {
     );
   });
 
-  it('requires projectId, manifestPath, and finalVideoPath in output', () => {
+  it('requires projectId, manifestPath, planSummary, and tasks in output', () => {
     expect(skill.outputSchema.required).toContain('projectId');
     expect(skill.outputSchema.required).toContain('manifestPath');
-    expect(skill.outputSchema.required).toContain('finalVideoPath');
+    expect(skill.outputSchema.required).toContain('planSummary');
+    expect(skill.outputSchema.required).toContain('tasks');
   });
 
-  it('allowedTools includes content project tools, task tools, skill_run, user_review, and media tools', () => {
+  it('allowedTools includes project and task tools but NOT user_review, skill_run, or generation tools', () => {
     expect(skill.allowedTools).toContain('content_project_create');
     expect(skill.allowedTools).toContain('content_project_read');
-    expect(skill.allowedTools).toContain('content_project_update_artifact');
     expect(skill.allowedTools).toContain('task_create');
-    expect(skill.allowedTools).toContain('task_update');
     expect(skill.allowedTools).toContain('task_list');
-    expect(skill.allowedTools).toContain('skill_run');
-    expect(skill.allowedTools).toContain('user_review');
     expect(skill.allowedTools).toContain('file_read');
     expect(skill.allowedTools).toContain('file_write');
-    expect(skill.allowedTools).toContain('comfyui_text2img');
-    expect(skill.allowedTools).toContain('comfyui_img2video');
-    expect(skill.allowedTools).toContain('video_merge');
-    expect(skill.allowedTools).toContain('video_add_audio');
-    expect(skill.allowedTools).toContain('video_add_subtitles');
+    // Must NOT include interactive or generation tools
+    expect(skill.allowedTools).not.toContain('user_review');
+    expect(skill.allowedTools).not.toContain('skill_run');
+    expect(skill.allowedTools).not.toContain('comfyui_text2img');
+    expect(skill.allowedTools).not.toContain('comfyui_img2video');
+    expect(skill.allowedTools).not.toContain('video_merge');
   });
 
-  it('has a non-empty system prompt describing the pipeline', () => {
+  it('has a non-empty system prompt describing planning (not execution)', () => {
     expect(skill.systemPrompt.length).toBeGreaterThan(0);
     expect(skill.systemPrompt).toContain('content_project_create');
     expect(skill.systemPrompt).toContain('task_create');
+    expect(skill.systemPrompt).toContain('planSummary');
   });
 
-  it('invokes sub-agent and returns project reference', async () => {
+  it('invokes sub-agent and returns project plan', async () => {
     const output = {
       projectId: 'ai-trends-2026-04-05',
       manifestPath: 'projects/ai-trends-2026-04-05/project.json',
-      finalVideoPath: 'projects/ai-trends-2026-04-05/final/video.mp4',
+      planSummary: '📋 Video Production Plan\n...',
+      tasks: [
+        { id: 't1', title: 'Analyze trends', step: 1 },
+        { id: 't2', title: 'Generate script & storyboard', step: 2 },
+      ],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(output) });
     const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
-      { name: 'produce-video', args: { topic: 'AI coding trends' } },
+      { name: 'plan-video-production', args: { topic: 'AI coding trends' } },
       makeCtx(),
     );
     const r = result.result as typeof output;
     expect(r.projectId).toBe('ai-trends-2026-04-05');
     expect(r.manifestPath).toContain('project.json');
-    expect(r.finalVideoPath).toContain('video.mp4');
+    expect(r.planSummary).toContain('Video Production Plan');
+    expect(r.tasks).toHaveLength(2);
   });
 });

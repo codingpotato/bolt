@@ -24,7 +24,7 @@
 
 | Skill | Description | Key tools used |
 |-------|-------------|---------------|
-| `produce-video` | **Orchestrator** — creates a content project, builds the full task DAG, and drives the 9-step video production pipeline with user approval gates | `content_project_create`, `task_create`, `skill_run`, `user_review`, `content_project_update_artifact` |
+| `plan-video-production` | **Planner only** — creates the content project directory, builds the full 9-step task DAG with dependencies and approval gates, and returns a human-readable plan summary. No generation, no `user_review`. The main agent executes the DAG. | `content_project_create`, `task_create`, `task_list`, `file_read`, `file_write` |
 | `analyze-trends` | Search trending topics and produce a structured trend report with content angles | `web_search`, `web_fetch` |
 | `write-blog-post` | Draft a long-form Markdown blog post on a given topic | `web_fetch` (optional research) |
 | `draft-social-post` | Write a short-form social media post for a given platform and topic | — |
@@ -34,37 +34,55 @@
 | `summarize-url` | Fetch a URL and return a structured summary | `web_fetch` |
 | `review-code` | Perform a code review on a diff or file | `file_read` |
 
-### `produce-video` Orchestrator Skill
+### Video Pipeline Orchestration: Two-Phase Model
 
-`produce-video` is the entry point for the full video production pipeline. It is the only skill that bridges the **task system** (execution) and the **content project** (artifact storage). All other content skills are step-level — they do one thing. `produce-video` coordinates them.
+The video production pipeline uses a **two-phase model** that separates planning (subagent-safe) from execution (main agent only). This separation exists because skills run as isolated subagents with piped stdio — they cannot present content to the user or collect approval during execution.
+
+#### Phase 1: `plan-video-production` skill (subagent)
+
+The planner is a pure input → output skill: it creates the content project and task DAG, then returns a structured plan for the main agent to present and execute.
 
 ```
 Input:
-  topic:          string   — original user request / content brief
-  title?:         string   — human-readable project title (defaults to topic)
-  targetPlatform?: string  — "tiktok" | "youtube-shorts" | "reels" | "linkedin" (default: "tiktok")
-  audioFile?:     string   — workspace-relative path to a background audio file (optional)
+  topic:           string   — original user request / content brief
+  title?:          string   — human-readable project title (defaults to topic)
+  targetPlatform?: string   — "tiktok" | "youtube-shorts" | "reels" | "linkedin" (default: "tiktok")
+  audioFile?:      string   — workspace-relative path to a background audio file (optional)
+  projectId?:      string   — existing project ID to rebuild the DAG for resuming a run
 
 Output:
-  projectId:      string   — slug ID of the created content project
-  manifestPath:   string   — relative path to project.json (e.g. "projects/<id>/project.json")
-  finalVideoPath: string   — relative path to the finished video file
+  projectId:       string   — slug ID of the content project
+  manifestPath:    string   — relative path to project.json
+  planSummary:     string   — human-readable plan for the user to approve
+  tasks:           object[] — task list with IDs, titles, and dependencies
 ```
 
-**What the skill does, step by step:**
+**What the skill does:**
 
-1. Calls `content_project_create({ topic, title })` → gets `{ projectId, manifestPath, projectDir }`
-2. Creates the full task DAG via `task_create` (all pipeline steps, with `dependsOn` and `requiresApproval: true`); tasks are serialized to `projects/<project-id>/tasks.json`:
+1. Calls `content_project_create({ topic, title })` → creates `projects/<id>/` with `project.json` and `tasks.json`
+2. Creates the full task DAG via `task_create` (all pipeline steps, with `dependsOn` and `requiresApproval: true`):
    - `analyzeTrends` → `generateScript` → `generateImagePrompts` → `generateImages` → `generateVideoPrompts` → `generateVideos` → `mergeClips` → (optional `addAudio`) → (optional `addSubtitles`)
-3. Stores `{ projectId, manifestPath }` in the `analyzeTrends` task result so every subsequent task can locate the manifest
-4. Executes each task in order by invoking the matching sub-skill via `skill_run`, presenting results for `user_review`, and calling `content_project_update_artifact` to track status in `project.json`
-5. Returns `{ projectId, manifestPath, finalVideoPath }` on completion
+3. Builds a human-readable `planSummary` describing each step and its approval gate
+4. Returns `{ projectId, manifestPath, planSummary, tasks }`
 
-**Why a skill, not a raw agent instruction?**
+The skill does NOT call `user_review`, does NOT generate any content, and does NOT call `comfyui_text2img` or `comfyui_img2video`. It is a pure setup operation.
 
-- The skill's system prompt encodes the exact step sequence, preventing the agent from inventing a different order on each invocation
-- It scopes the tool allowlist to exactly what orchestration needs — no `bash`, no `memory_write`
-- It can be restarted mid-pipeline: on invocation, the skill reads `project.json` first; if `projectId` is provided as input, it resumes from the last incomplete step rather than starting over
+#### Phase 2: Main agent execution
+
+After receiving the plan, the main agent:
+
+1. Presents `planSummary` to the user via `user_review` — NO task execution starts until approved
+2. If the user requests changes, re-runs `plan-video-production` with updated parameters
+3. Walks through the task DAG step by step, calling the appropriate skill or tool for each task
+4. After each generation step, calls `user_review` at the main agent level (never inside a subagent)
+5. On approval: updates artifact status to `"approved"` and marks the task `completed`
+6. On rejection: revises based on feedback and re-presents before proceeding
+
+**Why the main agent executes instead of a skill:**
+
+Skills run as isolated subagents with `stdio: ['pipe', 'pipe', 'pipe']`. A `user_review` call inside a subagent cannot reach the user's terminal or WebChannel — stdin is the serialized payload, not the user's keyboard. Placing review gates inside a skill means they are silently skipped or auto-approved, defeating the purpose of human-in-the-loop control.
+
+The rule is: **any step that requires user interaction must execute at the main agent level, not inside a skill subagent.**
 
 ## Workflow Patterns
 
@@ -97,75 +115,74 @@ Topic/brief ──► Generate draft ──► user_review ──┤
 
 ### Pattern 3: Full Video Production Pipeline
 
-The most complex workflow, combining multiple skills, user review gates, and MCP calls.
+The most complex workflow, combining a planning skill, main-agent execution, per-step generation skills, and user review gates at every stage.
 
 ```
 User: "Make a short video about AI coding trends"
         │
         ▼
-  ┌─────────────────────────────────────┐
-  │  1. analyze-trends (skill)          │
+  ┌─────────────────────────────────────┐  ← SUBAGENT (plan-video-production skill)
+  │  plan-video-production              │
+  │  Creates project + task DAG         │
+  │  Returns planSummary + task list    │
+  └────────────┬────────────────────────┘
+               │ returns { projectId, planSummary, tasks }
+               ▼
+  [MAIN AGENT]  user_review(planSummary) → approve/adjust
+
+  ┌─────────────────────────────────────┐  ← SUBAGENT (analyze-trends skill)
+  │  1. analyze-trends                  │
   │     web_search × N → trend report   │
-  │     user_review → approve/adjust    │
   └────────────┬────────────────────────┘
-               │
-  ┌────────────▼────────────────────────┐
-  │  2. generate-video-script (skill)   │
+               │ returns trend report
+               ▼
+  [MAIN AGENT]  save → user_review → approve/adjust
+
+  ┌─────────────────────────────────────┐  ← SUBAGENT (generate-video-script skill)
+  │  2. generate-video-script           │
   │     Script + storyboard (N scenes)  │
-  │     user_review → approve/adjust    │
   └────────────┬────────────────────────┘
-               │
-  ┌────────────▼────────────────────────┐
+               │ returns storyboard JSON
+               ▼
+  [MAIN AGENT]  save → user_review → approve/adjust
+
+  ┌─────────────────────────────────────┐  ← SUBAGENT × N (generate-image-prompt skill)
   │  3. generate-image-prompt × N       │
   │     One prompt per scene            │
-  │     user_review → approve/adjust    │
   └────────────┬────────────────────────┘
-               │
-  ┌────────────▼────────────────────────┐
-  │  4. comfyui_text2img × N            │
-  │     Generate image per scene        │
-  │     user_review → approve/redo      │
-  └────────────┬────────────────────────┘
-               │
-  ┌────────────▼────────────────────────┐
+               │ returns prompts (all N scenes)
+               ▼
+  [MAIN AGENT]  save → user_review (show all prompts) → approve/adjust
+
+  [MAIN AGENT]  4. comfyui_text2img × N  ← tool called directly by main agent
+               → user_review (show all images) → approve/redo
+
+  ┌─────────────────────────────────────┐  ← SUBAGENT × N (generate-video-prompt skill)
   │  5. generate-video-prompt × N       │
   │     Motion prompt per scene         │
-  │     user_review → approve/adjust    │
   └────────────┬────────────────────────┘
-               │
-  ┌────────────▼────────────────────────┐
-  │  6. comfyui_img2video × N           │
-  │     Generate video per scene        │
-  │     user_review → approve/redo      │
-  └────────────┬────────────────────────┘
-               │
-  ┌────────────▼────────────────────────┐
-  │  7. video_merge                     │
-  │     Concatenate all approved clips  │
-  │     → final/raw.mp4                 │
-  │     user_review → approve/redo      │
-  └────────────┬────────────────────────┘
-               │
-  ┌────────────▼────────────────────────┐
-  │  8. video_add_audio (optional)      │
-  │     Mix in background music or      │
-  │     voiceover                       │
-  │     → final/audio.mp4              │
-  │     user_review → approve/redo      │
-  └────────────┬────────────────────────┘
-               │
-  ┌────────────▼────────────────────────┐
-  │  9. video_add_subtitles (optional)  │
-  │     Generate SRT from storyboard    │
-  │     dialogue, embed into video      │
-  │     → final/video.mp4              │
-  │     user_review → approve           │
-  └────────────┬────────────────────────┘
-               │
+               │ returns motion prompts (all N scenes)
+               ▼
+  [MAIN AGENT]  save → user_review (show all prompts) → approve/adjust
+
+  [MAIN AGENT]  6. comfyui_img2video × N ← tool called directly by main agent
+               → user_review (show all clips) → approve/redo
+
+  [MAIN AGENT]  7. video_merge → final/raw.mp4
+               → user_review → approve/redo
+
+  [MAIN AGENT]  8. video_add_audio (optional) → final/audio.mp4
+               → user_review → approve/redo
+
+  [MAIN AGENT]  9. video_add_subtitles (optional) → final/video.mp4
+               → user_review → approve
+
                ▼
          Final video saved to disk
-         Channel completion message sent (S10-4)
+         Channel completion message sent
 ```
+
+**Key principle:** All `user_review` calls happen at the main agent level. Generation skills (`analyze-trends`, `generate-video-script`, `generate-image-prompt`, `generate-video-prompt`) run as subagents but only return data — they never call `user_review` themselves. The main agent presents their output and collects approval.
 
 Each step is a separate Task with `dependsOn` linking to the previous step and `requiresApproval: true`. All files are saved to a content project directory (see **Content Project** below); the manifest path is stored in the first task's result so every subsequent task knows exactly where to find its inputs.
 

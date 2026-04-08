@@ -267,6 +267,59 @@ describe('skill_run tool', () => {
     });
   });
 
+  describe('subagent progress events', () => {
+    function makeProgressSpy() {
+      const progress = new NoopProgressReporter();
+      const startSpy = vi.spyOn(progress, 'onSubagentStart');
+      const endSpy = vi.spyOn(progress, 'onSubagentEnd');
+      const errorSpy = vi.spyOn(progress, 'onSubagentError');
+      return { progress, startSpy, endSpy, errorSpy };
+    }
+
+    it('emits onSubagentStart with skill name and description before running', async () => {
+      const { progress, startSpy } = makeProgressSpy();
+      await tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, makeCtx({ progress }));
+      expect(startSpy).toHaveBeenCalledOnce();
+      expect(startSpy).toHaveBeenCalledWith('write-blog-post', BLOG_SKILL.description);
+    });
+
+    it('emits onSubagentEnd with skill name and non-negative durationMs on success', async () => {
+      const { progress, endSpy } = makeProgressSpy();
+      await tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, makeCtx({ progress }));
+      expect(endSpy).toHaveBeenCalledOnce();
+      const [calledName, calledMs] = endSpy.mock.calls[0]!;
+      expect(calledName).toBe('write-blog-post');
+      expect(calledMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('emits onSubagentError with skill name and error message on failure', async () => {
+      runnerSpy.mockRejectedValue(new Error('child crashed'));
+      const { progress, errorSpy } = makeProgressSpy();
+      await expect(
+        tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, makeCtx({ progress })),
+      ).rejects.toThrow(ToolError);
+      expect(errorSpy).toHaveBeenCalledOnce();
+      const [calledName, calledErr] = errorSpy.mock.calls[0]!;
+      expect(calledName).toBe('write-blog-post');
+      expect(calledErr).toContain('child crashed');
+    });
+
+    it('does not emit onSubagentEnd when runner fails', async () => {
+      runnerSpy.mockRejectedValue(new Error('fail'));
+      const { progress, endSpy } = makeProgressSpy();
+      await expect(
+        tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, makeCtx({ progress })),
+      ).rejects.toThrow();
+      expect(endSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not emit onSubagentError on success', async () => {
+      const { progress, errorSpy } = makeProgressSpy();
+      await tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, makeCtx({ progress }));
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('buildSkillPrompt', () => {
     it('includes the skill name', () => {
       const schema = { type: 'object', properties: { out: { type: 'string' } }, required: ['out'] };

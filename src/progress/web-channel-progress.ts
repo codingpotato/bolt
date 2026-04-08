@@ -1,6 +1,13 @@
 import type { LlmCallInfo, LlmResponseInfo, ProgressReporter } from './progress';
 import { fmt, summariseInput } from './cli-progress';
 
+export interface SubagentStatusEvent {
+  skill: string;
+  status: 'starting' | 'done' | 'failed';
+  durationMs?: number;
+  error?: string;
+}
+
 /**
  * ProgressReporter for the WebChannel (daemon mode).
  *
@@ -8,9 +15,15 @@ import { fmt, summariseInput } from './cli-progress';
  * Uses the same text format as CliProgressReporter but without ANSI codes.
  * Errors from sendProgress are swallowed so a disconnected client never
  * blocks the agent loop.
+ *
+ * The optional `sendSubagentStatus` callback is called with structured subagent
+ * lifecycle events so the frontend can render them with distinct styling.
  */
 export class WebChannelProgressReporter implements ProgressReporter {
-  constructor(private readonly sendProgress: (text: string) => void) {}
+  constructor(
+    private readonly sendProgress: (text: string) => void,
+    private readonly sendSubagentStatus?: (event: SubagentStatusEvent) => void,
+  ) {}
 
   private emit(text: string): void {
     try {
@@ -75,5 +88,40 @@ export class WebChannelProgressReporter implements ProgressReporter {
 
   onRetry(attempt: number, maxAttempts: number, reason: string): void {
     this.emit(`⚠ API error, retrying (${attempt}/${maxAttempts}): ${reason}`);
+  }
+
+  onSubagentStart(skillName: string, description: string): void {
+    const desc = description.length > 80 ? `${description.slice(0, 80)}…` : description;
+    this.emit(`⟳ Subagent: ${skillName} — ${desc}`);
+    if (this.sendSubagentStatus) {
+      try {
+        this.sendSubagentStatus({ skill: skillName, status: 'starting' });
+      } catch {
+        // Never block the agent loop on a failed broadcast.
+      }
+    }
+  }
+
+  onSubagentEnd(skillName: string, durationMs: number): void {
+    this.emit(`  ✓ Subagent done: ${skillName} (${durationMs}ms)`);
+    if (this.sendSubagentStatus) {
+      try {
+        this.sendSubagentStatus({ skill: skillName, status: 'done', durationMs });
+      } catch {
+        // Never block the agent loop on a failed broadcast.
+      }
+    }
+  }
+
+  onSubagentError(skillName: string, error: string): void {
+    const msg = error.length > 120 ? `${error.slice(0, 120)}…` : error;
+    this.emit(`  ✗ Subagent failed: ${skillName} — ${msg}`);
+    if (this.sendSubagentStatus) {
+      try {
+        this.sendSubagentStatus({ skill: skillName, status: 'failed', error });
+      } catch {
+        // Never block the agent loop on a failed broadcast.
+      }
+    }
   }
 }

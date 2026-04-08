@@ -55,6 +55,9 @@ describe('videoMergeTool', () => {
         onLlmCall: vi.fn(),
         onLlmResponse: vi.fn(),
         onRetry: vi.fn(),
+        onSubagentStart: vi.fn(),
+        onSubagentEnd: vi.fn(),
+        onSubagentError: vi.fn(),
       },
     };
   });

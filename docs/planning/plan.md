@@ -1524,6 +1524,90 @@ Acceptance Criteria:
 
 ---
 
+## Sprint 13 — Video Pipeline Refactor + Subagent Visibility
+
+**Goal:** Fix the fundamental architectural mismatch in the video production pipeline — `produce-video` ran as an isolated subagent but required `user_review` interaction, which subagents cannot perform. Replace it with a `plan-video-production` planning skill and move all interactive execution to the main agent. Also surface subagent activity to the user via progress events.
+
+### Stories
+
+**S13-1: `plan-video-production` skill (replaces produce-video orchestrator)**
+
+```
+As a blogger,
+I want bolt to set up a video production project and task plan before asking me anything,
+so that I can review and approve the full plan before any content is generated.
+
+Acceptance Criteria:
+- [ ] plan-video-production.skill.md created in src/skills/ with:
+      - input schema: { topic, title?, targetPlatform?, audioFile?, projectId? }
+      - output schema: { projectId, manifestPath, planSummary, tasks[] }
+      - allowedTools: content_project_create, content_project_read, task_create, task_list,
+        file_read, file_write
+      - NO user_review, NO skill_run, NO comfyui_*, NO video_* tools in allowedTools
+- [ ] Skill creates the content project via content_project_create
+- [ ] Skill creates the full task DAG (analyzeTrends → generateScript → generateImagePrompts
+      → generateImages → generateVideoPrompts → generateVideos → mergeClips
+      → addAudio (if audioFile) → addSubtitles (if needed))
+      with dependsOn and requiresApproval: true on every task
+- [ ] Skill builds a planSummary string listing each step with its approval gate description
+- [ ] Skill returns { projectId, manifestPath, planSummary, tasks }
+- [ ] When projectId is provided: reads project.json, calls task_list, returns existing
+      projectId + manifestPath + planSummary (for resumption context) without recreating
+- [ ] produce-video.skill.md removed from src/skills/
+- [ ] docs/design/skills-system.md updated: plan-video-production in Built-in Skills table
+- [ ] docs/design/content-generation.md updated: two-phase orchestration model documented
+- [ ] Unit tests verify skill metadata, task DAG shape, planSummary content, and resume behavior
+```
+
+**S13-2: Video pipeline execution in AGENT.md**
+
+```
+As a blogger,
+I want bolt to guide me through each video production step with a clear review at every stage,
+so that I can approve or adjust before anything expensive runs.
+
+Acceptance Criteria:
+- [ ] src/AGENT.md updated with explicit Video Execution Protocol:
+      - Phase 1: call plan-video-production, present planSummary via user_review
+      - Phase 2: execute each task in the DAG as the main agent (not inside a skill)
+      - Exact skill/tool to call for each of the 9 task types
+      - Correct input parameter names for each generation skill:
+          generate-image-prompt expects { sceneDescription }
+          generate-video-prompt expects { sceneDescription }
+      - user_review call after each generation step with appropriate contentType
+      - Revision loop: reject → revise → re-present → approve before moving on
+      - Critical gate rules: never start images before prompts approved, etc.
+- [ ] Skill routing rule for video updated: "run plan-video-production, then execute yourself"
+- [ ] Content Generation Workflow section updated to show two-phase model
+- [ ] No change to generation skills (analyze-trends, generate-video-script, etc.)
+- [ ] Integration test: mock plan-video-production output → main agent executes steps,
+      calls user_review between each, updates task status correctly
+```
+
+**S13-3: Subagent progress visibility**
+
+```
+As a user,
+I want to see when bolt spawns a subagent and what it is doing,
+so that I know work is happening and can understand the workflow.
+
+Acceptance Criteria:
+- [ ] skill_run tool emits a progress event immediately before spawning:
+      "[subagent] Starting: <skill-name> — <skill.description>"
+- [ ] skill_run tool emits a progress event on completion:
+      "[subagent] Done: <skill-name> (<durationMs>ms)"
+- [ ] CliChannel renders these as a distinct progress line (e.g. "⟳ Subagent: ...")
+- [ ] WebChannel broadcasts these as { type: "subagent_status", skill, status, durationMs? }
+      events to all connected clients
+- [ ] Frontend displays subagent status with a distinct visual style (muted, indented)
+- [ ] On subagent failure, emits "[subagent] Failed: <skill-name> — <error message>"
+- [ ] Progress events are emitted even when skill result is an error
+- [ ] Unit tests: skill_run emits correct events on start, success, and failure
+- [ ] docs/design/skills-system.md Subagent Progress Visibility section verified/updated
+```
+
+---
+
 ## Dependency Graph
 
 ```
@@ -1553,7 +1637,7 @@ Sprint 0 (Foundation)
 │              S10-4: channel task completion notification
 │              S10-5: content project tools + comfyUI workspace fix
 │              S10-6..8: FFmpeg Runner + video editing tools
-│              S10-9: produce-video orchestrator skill
+│              S10-9: produce-video orchestrator skill [superseded by S13]
 │                        │
 └───────────────────────►S11 (Simplified AGENT.md + Skills/Tools Injection)
                            │    S11-1:  AGENT.md simplification + dynamic catalogs
@@ -1565,16 +1649,22 @@ Sprint 0 (Foundation)
                            │    S11-4:  Embedding memory (optional)
                            │    S11-5:  README docs
                            │
-                           └──► S12 (Enhanced File Tools)
-                                       S12-1: file_search
-                                       S12-2: glob
-                                       S12-3: file_insert
-                                       S12-4: file_edit improvements
-                                       S12-5: file_read improvements
+                           ├──► S12 (Enhanced File Tools)
+                           │          S12-1: file_search
+                           │          S12-2: glob
+                           │          S12-3: file_insert
+                           │          S12-4: file_edit improvements
+                           │          S12-5: file_read improvements
+                           │
+                           └──► S13 (Video Pipeline Refactor + Subagent Visibility)
+                                       S13-1: plan-video-production skill
+                                       S13-2: Video execution protocol in AGENT.md
+                                       S13-3: Subagent progress events
 ```
 
 Sprint 12 depends on S2 (Tool Bus + Core Tools) since it extends the existing file tools.
-It is placed after S11 so it does not block the v1 release — these are enhancements, not blockers.
+Sprint 13 depends on S10 (video tools must exist) and S11 (dynamic skills injection).
+Both are placed after S11 so they do not block the v1 release.
 
 ---
 
@@ -1582,7 +1672,7 @@ It is placed after S11 so it does not block the v1 release — these are enhance
 
 All of the following must be true before tagging v1:
 
-- [ ] All Sprint 0–12 stories are complete and meet their acceptance criteria
+- [ ] All Sprint 0–13 stories are complete and meet their acceptance criteria
 - [ ] CI pipeline is green on `main`
 - [ ] Coverage thresholds met across all modules
 - [ ] No `any` types (`tsc --noEmit` passes)
@@ -1594,14 +1684,6 @@ All of the following must be true before tagging v1:
 - [ ] Post-production pipeline tested end-to-end: merge + audio + subtitles (with mocked FfmpegRunner)
 - [ ] file_search is the most-called tool in E2E tests (validates utility)
 - [ ] file_edit contextual error messages help the LLM self-correct in ≥ 80% of failed edit attempts (measured in E2E)
-
----
-
-Sprint 12 is included in the v1 release. Before tagging v1:
-
-- [ ] All Sprint 12 stories are complete and meet their acceptance criteria
-- [ ] CI pipeline is green on `main`
-- [ ] Coverage thresholds met across all modules
-- [ ] file_search is the most-called tool in E2E tests (validates utility)
-- [ ] file_edit contextual error messages help the LLM self-correct in ≥ 80% of failed edit attempts (measured in E2E)
-```
+- [ ] Video pipeline refactored: plan-video-production skill + main-agent execution (S13-1, S13-2)
+- [ ] All 9 video review gates confirmed reachable by the user in E2E test (S13-2)
+- [ ] Subagent progress events visible in CLI and WebChannel (S13-3)

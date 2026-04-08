@@ -54,6 +54,7 @@ import { createVideoAddSubtitlesTool } from '../tools/video-add-subtitles';
 import { FfmpegRunner } from '../ffmpeg/ffmpeg-runner';
 import { createContentProjectTools } from '../tools/content-project-tools';
 import { resolve, join } from 'node:path';
+import { BUILTIN_SKILLS_DIR } from '../assets';
 import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
 
@@ -158,7 +159,7 @@ async function serve(serveArgs: string[]): Promise<void> {
 
   const projectSkillsDir = join(dataDir, 'skills');
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
-  const builtinSkillsDir = join(__dirname, '../skills');
+  const builtinSkillsDir = BUILTIN_SKILLS_DIR;
   const skills = await loadSkills(
     projectSkillsDir,
     userSkillsDir,
@@ -405,7 +406,7 @@ async function main(): Promise<void> {
 
   const projectSkillsDir = join(dataDir, 'skills');
   const userSkillsDir = join(homedir(), '.bolt', 'skills');
-  const builtinSkillsDir = join(__dirname, '../skills');
+  const builtinSkillsDir = BUILTIN_SKILLS_DIR;
   const skills = await loadSkills(
     projectSkillsDir,
     userSkillsDir,

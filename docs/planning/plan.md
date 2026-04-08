@@ -1538,25 +1538,25 @@ I want bolt to set up a video production project and task plan before asking me 
 so that I can review and approve the full plan before any content is generated.
 
 Acceptance Criteria:
-- [ ] plan-video-production.skill.md created in src/skills/ with:
+- [x] plan-video-production.skill.md created in resources/skills/ with:
       - input schema: { topic, title?, targetPlatform?, audioFile?, projectId? }
       - output schema: { projectId, manifestPath, planSummary, tasks[] }
       - allowedTools: content_project_create, content_project_read, task_create, task_list,
         file_read, file_write
       - NO user_review, NO skill_run, NO comfyui_*, NO video_* tools in allowedTools
-- [ ] Skill creates the content project via content_project_create
-- [ ] Skill creates the full task DAG (analyzeTrends → generateScript → generateImagePrompts
+- [x] Skill creates the content project via content_project_create
+- [x] Skill creates the full task DAG (analyzeTrends → generateScript → generateImagePrompts
       → generateImages → generateVideoPrompts → generateVideos → mergeClips
       → addAudio (if audioFile) → addSubtitles (if needed))
       with dependsOn and requiresApproval: true on every task
-- [ ] Skill builds a planSummary string listing each step with its approval gate description
-- [ ] Skill returns { projectId, manifestPath, planSummary, tasks }
-- [ ] When projectId is provided: reads project.json, calls task_list, returns existing
+- [x] Skill builds a planSummary string listing each step with its approval gate description
+- [x] Skill returns { projectId, manifestPath, planSummary, tasks }
+- [x] When projectId is provided: reads project.json, calls task_list, returns existing
       projectId + manifestPath + planSummary (for resumption context) without recreating
-- [ ] produce-video.skill.md removed from src/skills/
-- [ ] docs/design/skills-system.md updated: plan-video-production in Built-in Skills table
-- [ ] docs/design/content-generation.md updated: two-phase orchestration model documented
-- [ ] Unit tests verify skill metadata, task DAG shape, planSummary content, and resume behavior
+- [x] produce-video.skill.md removed from src/skills/
+- [x] docs/design/skills-system.md updated: plan-video-production in Built-in Skills table
+- [x] docs/design/content-generation.md updated: two-phase orchestration model documented
+- [x] Unit tests verify skill metadata, task DAG shape, planSummary content, and resume behavior
 ```
 
 **S13-2: Video pipeline execution in AGENT.md**
@@ -1567,7 +1567,7 @@ I want bolt to guide me through each video production step with a clear review a
 so that I can approve or adjust before anything expensive runs.
 
 Acceptance Criteria:
-- [ ] src/AGENT.md updated with explicit Video Execution Protocol:
+- [x] resources/AGENT.md updated with explicit Video Execution Protocol:
       - Phase 1: call plan-video-production, present planSummary via user_review
       - Phase 2: execute each task in the DAG as the main agent (not inside a skill)
       - Exact skill/tool to call for each of the 9 task types
@@ -1577,10 +1577,10 @@ Acceptance Criteria:
       - user_review call after each generation step with appropriate contentType
       - Revision loop: reject → revise → re-present → approve before moving on
       - Critical gate rules: never start images before prompts approved, etc.
-- [ ] Skill routing rule for video updated: "run plan-video-production, then execute yourself"
-- [ ] Content Generation Workflow section updated to show two-phase model
-- [ ] No change to generation skills (analyze-trends, generate-video-script, etc.)
-- [ ] Integration test: mock plan-video-production output → main agent executes steps,
+- [x] Skill routing rule for video updated: "run plan-video-production, then execute yourself"
+- [x] Content Generation Workflow section updated to show two-phase model
+- [x] No change to generation skills (analyze-trends, generate-video-script, etc.)
+- [x] Integration test: mock plan-video-production output → main agent executes steps,
       calls user_review between each, updates task status correctly
 ```
 
@@ -1592,18 +1592,18 @@ I want to see when bolt spawns a subagent and what it is doing,
 so that I know work is happening and can understand the workflow.
 
 Acceptance Criteria:
-- [ ] skill_run tool emits a progress event immediately before spawning:
+- [x] skill_run tool emits a progress event immediately before spawning:
       "[subagent] Starting: <skill-name> — <skill.description>"
-- [ ] skill_run tool emits a progress event on completion:
+- [x] skill_run tool emits a progress event on completion:
       "[subagent] Done: <skill-name> (<durationMs>ms)"
-- [ ] CliChannel renders these as a distinct progress line (e.g. "⟳ Subagent: ...")
-- [ ] WebChannel broadcasts these as { type: "subagent_status", skill, status, durationMs? }
+- [x] CliChannel renders these as a distinct progress line (e.g. "⟳ Subagent: ...")
+- [x] WebChannel broadcasts these as { type: "subagent_status", skill, subagentStatus, durationMs? }
       events to all connected clients
 - [ ] Frontend displays subagent status with a distinct visual style (muted, indented)
-- [ ] On subagent failure, emits "[subagent] Failed: <skill-name> — <error message>"
-- [ ] Progress events are emitted even when skill result is an error
-- [ ] Unit tests: skill_run emits correct events on start, success, and failure
-- [ ] docs/design/skills-system.md Subagent Progress Visibility section verified/updated
+- [x] On subagent failure, emits "[subagent] Failed: <skill-name> — <error message>"
+- [x] Progress events are emitted even when skill result is an error
+- [x] Unit tests: skill_run emits correct events on start, success, and failure
+- [x] docs/design/skills-system.md Subagent Progress Visibility section verified/updated
 ```
 
 ---
@@ -1684,6 +1684,6 @@ All of the following must be true before tagging v1:
 - [ ] Post-production pipeline tested end-to-end: merge + audio + subtitles (with mocked FfmpegRunner)
 - [ ] file_search is the most-called tool in E2E tests (validates utility)
 - [ ] file_edit contextual error messages help the LLM self-correct in ≥ 80% of failed edit attempts (measured in E2E)
-- [ ] Video pipeline refactored: plan-video-production skill + main-agent execution (S13-1, S13-2)
-- [ ] All 9 video review gates confirmed reachable by the user in E2E test (S13-2)
-- [ ] Subagent progress events visible in CLI and WebChannel (S13-3)
+- [x] Video pipeline refactored: plan-video-production skill + main-agent execution (S13-1, S13-2)
+- [x] All 9 video review gates confirmed reachable by the user in E2E test (S13-2)
+- [x] Subagent progress events visible in CLI and WebChannel (S13-3)

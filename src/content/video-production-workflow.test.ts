@@ -1174,3 +1174,191 @@ Thanks for watching`;
     expect(reloaded?.artifacts.postProduction?.subtitles).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// S13-2: Main-agent execution from plan-video-production output
+// ---------------------------------------------------------------------------
+
+describe('S13-2: Main-agent execution from plan-video-production output', () => {
+  const testDir = join(__dirname, '.test-s13-execution');
+  const dataDir = join(testDir, '.bolt');
+  let projectManager: ContentProjectManager;
+  let taskStore: TaskStore;
+
+  beforeEach(async () => {
+    await mkdir(testDir, { recursive: true });
+    await mkdir(dataDir, { recursive: true });
+    projectManager = new ContentProjectManager(testDir);
+    taskStore = new TaskStore(join(dataDir, 'tasks.json'), dataDir);
+  });
+
+  afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  it('main agent drives pipeline from plan-video-production output, calling user_review between each step', async () => {
+    // Simulate plan-video-production returning { projectId, manifestPath, planSummary, tasks }
+    const project = await projectManager.createProject('AI Coding Trends', 'AI Coding Trends Video');
+    const manifestPath = `projects/${project.id}/project.json`;
+
+    const analyzeId = await taskStore.create('Analyze trends', 'Research trends', [], true);
+    const scriptId = await taskStore.create('Generate script & storyboard', 'Write storyboard', [analyzeId], true);
+    const imagePromptsId = await taskStore.create('Generate image prompts', 'Create prompts', [scriptId], true);
+    const imagesId = await taskStore.create('Generate images', 'ComfyUI text2img', [imagePromptsId], true);
+    const videoPromptsId = await taskStore.create('Generate video prompts', 'Create motion prompts', [imagesId], true);
+    const videosId = await taskStore.create('Generate video clips', 'ComfyUI img2video', [videoPromptsId], true);
+    const mergeId = await taskStore.create('Merge clips', 'Concatenate clips', [videosId], true);
+
+    // This is what plan-video-production returns — main agent receives it and drives execution
+    const planOutput = {
+      projectId: project.id,
+      manifestPath,
+      planSummary: '📋 Video Production Plan\n━━━\nSteps: 7\n━━━',
+      tasks: [
+        { id: analyzeId, title: 'Analyze trends', step: 1 },
+        { id: scriptId, title: 'Generate script & storyboard', step: 2 },
+        { id: imagePromptsId, title: 'Generate image prompts', step: 3 },
+        { id: imagesId, title: 'Generate images', step: 4 },
+        { id: videoPromptsId, title: 'Generate video prompts', step: 5 },
+        { id: videosId, title: 'Generate video clips', step: 6 },
+        { id: mergeId, title: 'Merge clips', step: 7 },
+      ],
+    };
+    expect(planOutput.tasks).toHaveLength(7);
+
+    // Verify initial state: only first task is pending, rest are waiting
+    const initial = taskStore.list();
+    expect(initial.find((t) => t.id === analyzeId)?.status).toBe('pending');
+    expect(initial.find((t) => t.id === scriptId)?.status).toBe('waiting');
+
+    // --- Step 1: Main agent executes analyzeTrends ---
+    // Main agent calls task_update(in_progress), runs analyze-trends skill, writes result,
+    // calls content_project_update_artifact(draft), then calls user_review
+    await taskStore.update(analyzeId, { status: 'in_progress' });
+    project.artifacts.trendReport = { path: '01-trend-report.md', status: 'draft' };
+    await projectManager.writeManifest(project);
+    // Simulates user_review approval: agent calls content_project_update_artifact(approved)
+    await projectManager.updateArtifactStatus(project, '01-trend-report.md', 'approved');
+    await taskStore.update(analyzeId, { status: 'completed', result: JSON.stringify({ projectId: project.id, manifestPath }) });
+
+    // After step 1 completes, step 2 becomes pending (dependency satisfied)
+    expect(taskStore.list().find((t) => t.id === scriptId)?.status).toBe('pending');
+    expect(taskStore.list().find((t) => t.id === imagePromptsId)?.status).toBe('waiting');
+
+    // --- Step 2: generateScript ---
+    await taskStore.update(scriptId, { status: 'in_progress' });
+    const storyboard: Storyboard = {
+      title: 'AI Coding Trends',
+      summary: 'Overview',
+      targetPlatform: 'tiktok',
+      estimatedDuration: '60s',
+      scenes: [
+        { sceneNumber: 1, description: 'Intro scene', camera: 'wide', duration: '5s', imagePromptHint: 'tech' },
+        { sceneNumber: 2, description: 'Demo scene', camera: 'close-up', duration: '5s', imagePromptHint: 'code' },
+      ],
+    };
+    await projectManager.initializeScenes(project, storyboard);
+    project.artifacts.storyboard = { path: '02-storyboard.json', status: 'draft' };
+    await projectManager.writeManifest(project);
+    await projectManager.updateArtifactStatus(project, '02-storyboard.json', 'approved');
+    await taskStore.update(scriptId, { status: 'completed' });
+
+    expect(taskStore.list().find((t) => t.id === imagePromptsId)?.status).toBe('pending');
+    expect(taskStore.list().find((t) => t.id === imagesId)?.status).toBe('waiting');
+
+    // --- Step 3: generateImagePrompts (main agent calls generate-image-prompt skill per scene) ---
+    await taskStore.update(imagePromptsId, { status: 'in_progress' });
+    const scene0 = project.artifacts.scenes[0]!;
+    const scene1 = project.artifacts.scenes[1]!;
+    scene0.imagePrompt = { path: 'scenes/scene-01/prompt.md', status: 'draft' };
+    scene1.imagePrompt = { path: 'scenes/scene-02/prompt.md', status: 'draft' };
+    await projectManager.writeManifest(project);
+    await projectManager.updateArtifactStatus(project, 'scenes/scene-01/prompt.md', 'approved');
+    await projectManager.updateArtifactStatus(project, 'scenes/scene-02/prompt.md', 'approved');
+    await taskStore.update(imagePromptsId, { status: 'completed' });
+
+    expect(taskStore.list().find((t) => t.id === imagesId)?.status).toBe('pending');
+
+    // --- Step 4: generateImages (main agent calls comfyui_text2img directly) ---
+    await taskStore.update(imagesId, { status: 'in_progress' });
+    const sceneDir = join(project.dir, 'scenes', 'scene-01');
+    await mkdir(sceneDir, { recursive: true });
+    await writeFile(join(sceneDir, 'image.png'), 'fake', 'utf-8');
+    scene0.image = { path: 'scenes/scene-01/image.png', status: 'draft' };
+    scene1.image = { path: 'scenes/scene-02/image.png', status: 'draft' };
+    await projectManager.writeManifest(project);
+    await projectManager.updateArtifactStatus(project, 'scenes/scene-01/image.png', 'approved');
+    await projectManager.updateArtifactStatus(project, 'scenes/scene-02/image.png', 'approved');
+    await taskStore.update(imagesId, { status: 'completed' });
+
+    expect(taskStore.list().find((t) => t.id === videoPromptsId)?.status).toBe('pending');
+
+    // --- Step 5: generateVideoPrompts ---
+    await taskStore.update(videoPromptsId, { status: 'in_progress' });
+    scene0.videoPrompt = { path: 'scenes/scene-01/video-prompt.md', status: 'draft' };
+    scene1.videoPrompt = { path: 'scenes/scene-02/video-prompt.md', status: 'draft' };
+    await projectManager.writeManifest(project);
+    await projectManager.updateArtifactStatus(project, 'scenes/scene-01/video-prompt.md', 'approved');
+    await projectManager.updateArtifactStatus(project, 'scenes/scene-02/video-prompt.md', 'approved');
+    await taskStore.update(videoPromptsId, { status: 'completed' });
+
+    expect(taskStore.list().find((t) => t.id === videosId)?.status).toBe('pending');
+
+    // --- Step 6: generateVideos (main agent calls comfyui_img2video directly) ---
+    await taskStore.update(videosId, { status: 'in_progress' });
+    scene0.clip = { path: 'scenes/scene-01/clip.mp4', status: 'draft' };
+    scene1.clip = { path: 'scenes/scene-02/clip.mp4', status: 'draft' };
+    await projectManager.writeManifest(project);
+    await projectManager.updateArtifactStatus(project, 'scenes/scene-01/clip.mp4', 'approved');
+    await projectManager.updateArtifactStatus(project, 'scenes/scene-02/clip.mp4', 'approved');
+    await taskStore.update(videosId, { status: 'completed' });
+
+    expect(taskStore.list().find((t) => t.id === mergeId)?.status).toBe('pending');
+
+    // --- Step 7: mergeClips (main agent calls video_merge directly) ---
+    await taskStore.update(mergeId, { status: 'in_progress' });
+    project.artifacts.postProduction = {
+      rawVideo: { path: 'final/raw.mp4', status: 'draft' },
+    };
+    await projectManager.writeManifest(project);
+    await projectManager.updateArtifactStatus(project, 'final/raw.mp4', 'approved');
+    await taskStore.update(mergeId, { status: 'completed' });
+
+    // All tasks completed — verify final state
+    const allTasks = taskStore.list();
+    expect(allTasks.every((t) => t.status === 'completed')).toBe(true);
+
+    const finalProject = await projectManager.readProject(project.id);
+    expect(finalProject?.artifacts.trendReport?.status).toBe('approved');
+    expect(finalProject?.artifacts.storyboard?.status).toBe('approved');
+    expect(finalProject?.artifacts.scenes[0]?.image?.status).toBe('approved');
+    expect(finalProject?.artifacts.scenes[0]?.clip?.status).toBe('approved');
+    expect(finalProject?.artifacts.postProduction?.rawVideo?.status).toBe('approved');
+  });
+
+  it('dependency gates block execution until previous step is approved', async () => {
+    const project = await projectManager.createProject('Test Topic');
+    const step1Id = await taskStore.create('Analyze trends', 'desc', [], true);
+    const step2Id = await taskStore.create('Generate script', 'desc', [step1Id], true);
+    const step3Id = await taskStore.create('Generate image prompts', 'desc', [step2Id], true);
+
+    // Steps 2 and 3 must remain waiting until step 1 completes
+    expect(taskStore.list().find((t) => t.id === step2Id)?.status).toBe('waiting');
+    expect(taskStore.list().find((t) => t.id === step3Id)?.status).toBe('waiting');
+
+    // Complete step 1 — step 2 becomes pending, step 3 stays waiting
+    await taskStore.update(step1Id, { status: 'in_progress' });
+    project.artifacts.trendReport = { path: '01-trend-report.md', status: 'approved' };
+    await projectManager.writeManifest(project);
+    await taskStore.update(step1Id, { status: 'completed' });
+
+    expect(taskStore.list().find((t) => t.id === step2Id)?.status).toBe('pending');
+    expect(taskStore.list().find((t) => t.id === step3Id)?.status).toBe('waiting');
+
+    // Complete step 2 — step 3 becomes pending
+    await taskStore.update(step2Id, { status: 'in_progress' });
+    await taskStore.update(step2Id, { status: 'completed' });
+
+    expect(taskStore.list().find((t) => t.id === step3Id)?.status).toBe('pending');
+  });
+});

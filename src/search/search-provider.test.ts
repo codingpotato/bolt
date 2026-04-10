@@ -233,6 +233,35 @@ describe('BraveProvider', () => {
     expect(results).toEqual([]);
   });
 
+  it('throws on invalid JSON response', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new Error('invalid json')),
+    });
+    const provider = new BraveProvider('key');
+    await expect(provider.search('test')).rejects.toThrow('invalid JSON');
+  });
+
+  it('falls back to URL hostname when meta_url is absent', async () => {
+    fetchMock.mockResolvedValue(
+      makeOkResponse({
+        web: {
+          results: [
+            {
+              title: 'No meta_url',
+              url: 'https://fallback.example.com/path',
+              description: 'snippet',
+            },
+          ],
+        },
+      }),
+    );
+    const provider = new BraveProvider('key');
+    const results = await provider.search('test');
+    expect(results[0]?.source).toBe('fallback.example.com');
+  });
+
   describe('checkConnectivity', () => {
     it('returns true when ok', async () => {
       fetchMock.mockResolvedValue({ ok: true });
@@ -330,6 +359,33 @@ describe('SerperProvider', () => {
     fetchMock.mockResolvedValue(makeOkResponse({}));
     const provider = new SerperProvider('key');
     expect(await provider.search('test')).toEqual([]);
+  });
+
+  it('throws on invalid JSON response', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new Error('invalid json')),
+    });
+    const provider = new SerperProvider('key');
+    await expect(provider.search('test')).rejects.toThrow('invalid JSON');
+  });
+
+  it('falls back to URL hostname when displayLink is absent', async () => {
+    fetchMock.mockResolvedValue(
+      makeOkResponse({
+        organic: [
+          {
+            title: 'No displayLink',
+            link: 'https://fallback.serper.dev/page',
+            snippet: 'snippet',
+          },
+        ],
+      }),
+    );
+    const provider = new SerperProvider('key');
+    const results = await provider.search('test');
+    expect(results[0]?.source).toBe('fallback.serper.dev');
   });
 
   describe('checkConnectivity', () => {

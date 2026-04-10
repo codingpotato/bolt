@@ -29,10 +29,7 @@ const DEFAULT_CONFIG: MemoryConfig = {
   injectRecentChat: true,
 };
 
-function makeManager(
-  store: unknown,
-  config: Partial<MemoryConfig> = {},
-): MemoryManager {
+function makeManager(store: unknown, config: Partial<MemoryConfig> = {}): MemoryManager {
   return new MemoryManager(
     store as SessionStore,
     { ...DEFAULT_CONFIG, ...config },
@@ -98,6 +95,10 @@ function makeCompactManager(options: CompactManagerOptions = {}): CompactManager
     onSubagentStart: vi.fn(),
     onSubagentEnd: vi.fn(),
     onSubagentError: vi.fn(),
+    onSubagentThinking: vi.fn(),
+    onSubagentToolCall: vi.fn(),
+    onSubagentToolResult: vi.fn(),
+    onSubagentRetry: vi.fn(),
   };
 
   const config: MemoryConfig = { ...DEFAULT_CONFIG, keepRecentMessages };
@@ -227,7 +228,9 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
     );
     loadSession.mockResolvedValue(manyEntries);
 
-    const manager = makeManager({ listSessionIds, loadSession } as unknown, { taskHistoryMessages: 5 });
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      taskHistoryMessages: 5,
+    });
     const messages = await manager.assembleInjectedHistory({
       currentSessionId: 'current',
       activeTaskId: 'task-1',
@@ -252,10 +255,10 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
     loadSession.mockResolvedValue(entries);
 
     // Budget fits ~3 entries (30 tokens / ~10 per entry).
-    const manager = makeManager(
-      { listSessionIds, loadSession } as unknown,
-      { taskHistoryTokenBudget: 30, taskHistoryMessages: 20 },
-    );
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      taskHistoryTokenBudget: 30,
+      taskHistoryMessages: 20,
+    });
     const messages = await manager.assembleInjectedHistory({
       currentSessionId: 'current',
       activeTaskId: 'task-1',
@@ -296,7 +299,9 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
     );
     loadSession.mockResolvedValue(entries);
 
-    const manager = makeManager({ listSessionIds, loadSession } as unknown, { keepRecentMessages: 3 });
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      keepRecentMessages: 3,
+    });
     const messages = await manager.assembleInjectedHistory({
       currentSessionId: 'current',
       resumedSessionId: 'prior-session',
@@ -351,7 +356,9 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
       return [];
     });
 
-    const manager = makeManager({ listSessionIds, loadSession } as unknown, { injectRecentChat: true });
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      injectRecentChat: true,
+    });
     const messages = await manager.assembleInjectedHistory({
       currentSessionId: 'current',
     });
@@ -362,7 +369,9 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
   });
 
   it('returns empty array when injectRecentChat is false', async () => {
-    const manager = makeManager({ listSessionIds, loadSession } as unknown, { injectRecentChat: false });
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      injectRecentChat: false,
+    });
     const messages = await manager.assembleInjectedHistory({
       currentSessionId: 'current',
     });
@@ -378,7 +387,9 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
   it('returns empty array when there are no prior sessions', async () => {
     listSessionIds.mockResolvedValue(['current']); // only the current session
 
-    const manager = makeManager({ listSessionIds, loadSession } as unknown, { injectRecentChat: true });
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      injectRecentChat: true,
+    });
     const messages = await manager.assembleInjectedHistory({
       currentSessionId: 'current',
     });
@@ -389,7 +400,9 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
   it('returns empty array when the sessions directory is empty', async () => {
     listSessionIds.mockResolvedValue([]);
 
-    const manager = makeManager({ listSessionIds, loadSession } as unknown, { injectRecentChat: true });
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      injectRecentChat: true,
+    });
     const messages = await manager.assembleInjectedHistory({
       currentSessionId: 'current',
     });
@@ -406,7 +419,9 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
       }),
     ]);
 
-    const manager = makeManager({ listSessionIds, loadSession } as unknown, { injectRecentChat: true });
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      injectRecentChat: true,
+    });
     const messages = await manager.assembleInjectedHistory({
       currentSessionId: 'current',
       resumedSessionId: 'prior',
@@ -420,7 +435,9 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
       makeEntry({ role: 'assistant', content: 42 as unknown as string, seq: 1 }),
     ]);
 
-    const manager = makeManager({ listSessionIds, loadSession } as unknown, { injectRecentChat: true });
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      injectRecentChat: true,
+    });
     const messages = await manager.assembleInjectedHistory({
       currentSessionId: 'current',
       resumedSessionId: 'prior',
@@ -437,7 +454,9 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
       makeEntry({ role: 'assistant', content: 'answer', seq: 4 }),
     ]);
 
-    const manager = makeManager({ listSessionIds, loadSession } as unknown, { injectRecentChat: true });
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      injectRecentChat: true,
+    });
     const messages = await manager.assembleInjectedHistory({
       currentSessionId: 'current',
       resumedSessionId: 'prior',
@@ -466,7 +485,9 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
       return [];
     });
 
-    const manager = makeManager({ listSessionIds, loadSession } as unknown, { injectRecentChat: true });
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, {
+      injectRecentChat: true,
+    });
     const messages = await manager.assembleInjectedHistory({ currentSessionId: 'current' });
 
     const contents = messages.map((m) => m.content);
@@ -637,6 +658,10 @@ describe('MemoryManager.compact()', () => {
       onSubagentStart: vi.fn(),
       onSubagentEnd: vi.fn(),
       onSubagentError: vi.fn(),
+      onSubagentThinking: vi.fn(),
+      onSubagentToolCall: vi.fn(),
+      onSubagentToolResult: vi.fn(),
+      onSubagentRetry: vi.fn(),
     };
     const messages = [
       makeMessage('user', 'a'),
@@ -686,6 +711,10 @@ describe('MemoryManager.compact()', () => {
       onSubagentStart: vi.fn(),
       onSubagentEnd: vi.fn(),
       onSubagentError: vi.fn(),
+      onSubagentThinking: vi.fn(),
+      onSubagentToolCall: vi.fn(),
+      onSubagentToolResult: vi.fn(),
+      onSubagentRetry: vi.fn(),
     };
 
     const messages = [
@@ -748,6 +777,10 @@ describe('MemoryManager.compact()', () => {
       onSubagentStart: vi.fn(),
       onSubagentEnd: vi.fn(),
       onSubagentError: vi.fn(),
+      onSubagentThinking: vi.fn(),
+      onSubagentToolCall: vi.fn(),
+      onSubagentToolResult: vi.fn(),
+      onSubagentRetry: vi.fn(),
     };
 
     const config: MemoryConfig = { ...DEFAULT_CONFIG, keepRecentMessages: 3 };

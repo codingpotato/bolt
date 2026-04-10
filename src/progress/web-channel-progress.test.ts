@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { WebChannelProgressReporter } from './web-channel-progress';
-import type { SubagentStatusEvent } from './web-channel-progress';
+import type { SubagentStatusEvent, SubagentProgressEvent } from './web-channel-progress';
 
 function makeReporter(): { reporter: WebChannelProgressReporter; sent: string[] } {
   const sent: string[] = [];
@@ -20,6 +20,21 @@ function makeReporterWithStatus(): {
     (event) => events.push(event),
   );
   return { reporter, sent, events };
+}
+
+function makeReporterWithProgress(): {
+  reporter: WebChannelProgressReporter;
+  sent: string[];
+  progress: SubagentProgressEvent[];
+} {
+  const sent: string[] = [];
+  const progress: SubagentProgressEvent[] = [];
+  const reporter = new WebChannelProgressReporter(
+    (text) => sent.push(text),
+    undefined,
+    (event) => progress.push(event),
+  );
+  return { reporter, sent, progress };
 }
 
 describe('WebChannelProgressReporter', () => {
@@ -199,5 +214,83 @@ describe('WebChannelProgressReporter', () => {
       reporter.onSubagentError('s', 'err');
     }).not.toThrow();
     expect(sent).toHaveLength(3);
+  });
+
+  describe('forwarded sub-agent progress events', () => {
+    it('onSubagentThinking emits indented text and structured event', () => {
+      const { reporter, sent, progress } = makeReporterWithProgress();
+      reporter.onSubagentThinking('write-blog-post');
+      expect(sent[0]).toBe('  ⟳ Thinking…');
+      expect(progress[0]).toEqual({ type: 'subagent_progress', skill: 'write-blog-post', event: 'thinking' });
+    });
+
+    it('onSubagentToolCall emits indented text and structured event', () => {
+      const { reporter, sent, progress } = makeReporterWithProgress();
+      reporter.onSubagentToolCall('write-blog-post', 'bash', { command: 'npm test' });
+      expect(sent[0]).toContain('  ⚙ bash');
+      expect(sent[0]).toContain('$ npm test');
+      expect(progress[0]).toMatchObject({
+        type: 'subagent_progress',
+        skill: 'write-blog-post',
+        event: 'tool_call',
+        tool: 'bash',
+      });
+    });
+
+    it('onSubagentToolResult emits indented text and structured event', () => {
+      const { reporter, sent, progress } = makeReporterWithProgress();
+      reporter.onSubagentToolResult('write-blog-post', 'bash', true, 'exit 0');
+      expect(sent[0]).toContain('✓ completed');
+      expect(progress[0]).toEqual({
+        type: 'subagent_progress',
+        skill: 'write-blog-post',
+        event: 'tool_result',
+        tool: 'bash',
+        success: true,
+        summary: 'exit 0',
+      });
+    });
+
+    it('onSubagentToolResult success=false emits error variant', () => {
+      const { reporter, sent, progress } = makeReporterWithProgress();
+      reporter.onSubagentToolResult('write-blog-post', 'bash', false, 'exit 1');
+      expect(sent[0]).toContain('✗ error');
+      expect(progress[0]).toMatchObject({ success: false, summary: 'exit 1' });
+    });
+
+    it('onSubagentRetry emits indented text and structured event', () => {
+      const { reporter, sent, progress } = makeReporterWithProgress();
+      reporter.onSubagentRetry('write-blog-post', 2, 3, 'ECONNREFUSED');
+      expect(sent[0]).toBe('  ⚠ API error, retrying (2/3): ECONNREFUSED');
+      expect(progress[0]).toEqual({
+        type: 'subagent_progress',
+        skill: 'write-blog-post',
+        event: 'retry',
+        attempt: 2,
+        maxAttempts: 3,
+        reason: 'ECONNREFUSED',
+      });
+    });
+
+    it('works without sendSubagentProgress callback', () => {
+      const sent: string[] = [];
+      const reporter = new WebChannelProgressReporter((text) => sent.push(text));
+      expect(() => {
+        reporter.onSubagentThinking('s');
+        reporter.onSubagentToolCall('s', 'bash', {});
+        reporter.onSubagentToolResult('s', 'bash', true, 'ok');
+        reporter.onSubagentRetry('s', 1, 3, 'err');
+      }).not.toThrow();
+      expect(sent).toHaveLength(4);
+    });
+
+    it('swallows errors from sendSubagentProgress without throwing', () => {
+      const reporter = new WebChannelProgressReporter(
+        () => {},
+        undefined,
+        () => { throw new Error('broadcast failed'); },
+      );
+      expect(() => reporter.onSubagentThinking('s')).not.toThrow();
+    });
   });
 });

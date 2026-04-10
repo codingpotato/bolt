@@ -8,6 +8,19 @@ export interface SubagentStatusEvent {
   error?: string;
 }
 
+export interface SubagentProgressEvent {
+  type: 'subagent_progress';
+  skill: string;
+  event: 'thinking' | 'tool_call' | 'tool_result' | 'retry';
+  tool?: string;
+  input?: string;
+  success?: boolean;
+  summary?: string;
+  attempt?: number;
+  maxAttempts?: number;
+  reason?: string;
+}
+
 /**
  * ProgressReporter for the WebChannel (daemon mode).
  *
@@ -23,6 +36,7 @@ export class WebChannelProgressReporter implements ProgressReporter {
   constructor(
     private readonly sendProgress: (text: string) => void,
     private readonly sendSubagentStatus?: (event: SubagentStatusEvent) => void,
+    private readonly sendSubagentProgress?: (event: SubagentProgressEvent) => void,
   ) {}
 
   private emit(text: string): void {
@@ -123,5 +137,38 @@ export class WebChannelProgressReporter implements ProgressReporter {
         // Never block the agent loop on a failed broadcast.
       }
     }
+  }
+
+  private emitSubagentProgress(event: SubagentProgressEvent): void {
+    if (this.sendSubagentProgress) {
+      try {
+        this.sendSubagentProgress(event);
+      } catch {
+        // Never block the agent loop on a failed broadcast.
+      }
+    }
+  }
+
+  onSubagentThinking(skill: string): void {
+    this.emit(`  ⟳ Thinking…`);
+    this.emitSubagentProgress({ type: 'subagent_progress', skill, event: 'thinking' });
+  }
+
+  onSubagentToolCall(skill: string, name: string, input: unknown): void {
+    const summary = summariseInput(name, input);
+    this.emit(`  ⚙ ${name}\n     ${summary}`);
+    this.emitSubagentProgress({ type: 'subagent_progress', skill, event: 'tool_call', tool: name, input: summary });
+  }
+
+  onSubagentToolResult(skill: string, name: string, success: boolean, summary: string): void {
+    const icon = success ? '✓' : '✗';
+    const label = success ? 'completed' : 'error';
+    this.emit(`     ${icon} ${label}  ${summary}`);
+    this.emitSubagentProgress({ type: 'subagent_progress', skill, event: 'tool_result', tool: name, success, summary });
+  }
+
+  onSubagentRetry(skill: string, attempt: number, maxAttempts: number, reason: string): void {
+    this.emit(`  ⚠ API error, retrying (${attempt}/${maxAttempts}): ${reason}`);
+    this.emitSubagentProgress({ type: 'subagent_progress', skill, event: 'retry', attempt, maxAttempts, reason });
   }
 }

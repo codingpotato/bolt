@@ -66,6 +66,18 @@ export interface ProgressReporter {
 
   /** A skill subagent failed. */
   onSubagentError(skillName: string, error: string): void;
+
+  /** Sub-agent's model is generating (forwarded from child process). */
+  onSubagentThinking(skill: string): void;
+
+  /** A tool call made inside a sub-agent (forwarded from child process). */
+  onSubagentToolCall(skill: string, name: string, input: unknown): void;
+
+  /** A sub-agent tool call completed (forwarded from child process). */
+  onSubagentToolResult(skill: string, name: string, success: boolean, summary: string): void;
+
+  /** A sub-agent API call failed and will be retried (forwarded from child process). */
+  onSubagentRetry(skill: string, attempt: number, maxAttempts: number, reason: string): void;
 }
 
 /** No-op implementation — used by sub-agents, Discord channel, and tests. */
@@ -83,4 +95,8 @@ export class NoopProgressReporter implements ProgressReporter {
   onSubagentStart(_skillName: string, _description: string): void {}
   onSubagentEnd(_skillName: string, _durationMs: number): void {}
   onSubagentError(_skillName: string, _error: string): void {}
+  onSubagentThinking(_skill: string): void {}
+  onSubagentToolCall(_skill: string, _name: string, _input: unknown): void {}
+  onSubagentToolResult(_skill: string, _name: string, _success: boolean, _summary: string): void {}
+  onSubagentRetry(_skill: string, _attempt: number, _maxAttempts: number, _reason: string): void {}
 }

@@ -45,7 +45,12 @@ describe('glob tool', () => {
     ctx = {
       cwd: '/workspace',
       log: mockLogger,
-      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as import('../logger').Logger,
+      logger: {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      } as import('../logger').Logger,
       progress: {
         onSessionStart: vi.fn(),
         onThinking: vi.fn(),
@@ -60,6 +65,10 @@ describe('glob tool', () => {
         onSubagentStart: vi.fn(),
         onSubagentEnd: vi.fn(),
         onSubagentError: vi.fn(),
+        onSubagentThinking: vi.fn(),
+        onSubagentToolCall: vi.fn(),
+        onSubagentToolResult: vi.fn(),
+        onSubagentRetry: vi.fn(),
       },
     };
   });

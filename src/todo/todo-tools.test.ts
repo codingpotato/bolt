@@ -27,6 +27,10 @@ function makeCtx(): ToolContext {
       onSubagentStart: () => {},
       onSubagentEnd: () => {},
       onSubagentError: () => {},
+      onSubagentThinking: () => {},
+      onSubagentToolCall: () => {},
+      onSubagentToolResult: () => {},
+      onSubagentRetry: () => {},
     },
   };
 }
@@ -113,9 +117,9 @@ describe('todo tools', () => {
         delete: vi.fn(),
       } as unknown as import('./todo-store').TodoStore;
       const [, updateTool] = createTodoTools(mockStore);
-      await expect(
-        updateTool!.execute({ id: 'x', status: 'done' }, ctx),
-      ).rejects.toThrow('raw string error');
+      await expect(updateTool!.execute({ id: 'x', status: 'done' }, ctx)).rejects.toThrow(
+        'raw string error',
+      );
     });
 
     it('is marked sequential', () => {

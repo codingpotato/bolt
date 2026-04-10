@@ -1080,6 +1080,10 @@ Thanks for watching`;
         onSubagentStart: vi.fn(),
         onSubagentEnd: vi.fn(),
         onSubagentError: vi.fn(),
+        onSubagentThinking: vi.fn(),
+        onSubagentToolCall: vi.fn(),
+        onSubagentToolResult: vi.fn(),
+        onSubagentRetry: vi.fn(),
       },
     };
 
@@ -1198,15 +1202,43 @@ describe('S13-2: Main-agent execution from plan-video-production output', () => 
 
   it('main agent drives pipeline from plan-video-production output, calling user_review between each step', async () => {
     // Simulate plan-video-production returning { projectId, manifestPath, planSummary, tasks }
-    const project = await projectManager.createProject('AI Coding Trends', 'AI Coding Trends Video');
+    const project = await projectManager.createProject(
+      'AI Coding Trends',
+      'AI Coding Trends Video',
+    );
     const manifestPath = `projects/${project.id}/project.json`;
 
     const analyzeId = await taskStore.create('Analyze trends', 'Research trends', [], true);
-    const scriptId = await taskStore.create('Generate script & storyboard', 'Write storyboard', [analyzeId], true);
-    const imagePromptsId = await taskStore.create('Generate image prompts', 'Create prompts', [scriptId], true);
-    const imagesId = await taskStore.create('Generate images', 'ComfyUI text2img', [imagePromptsId], true);
-    const videoPromptsId = await taskStore.create('Generate video prompts', 'Create motion prompts', [imagesId], true);
-    const videosId = await taskStore.create('Generate video clips', 'ComfyUI img2video', [videoPromptsId], true);
+    const scriptId = await taskStore.create(
+      'Generate script & storyboard',
+      'Write storyboard',
+      [analyzeId],
+      true,
+    );
+    const imagePromptsId = await taskStore.create(
+      'Generate image prompts',
+      'Create prompts',
+      [scriptId],
+      true,
+    );
+    const imagesId = await taskStore.create(
+      'Generate images',
+      'ComfyUI text2img',
+      [imagePromptsId],
+      true,
+    );
+    const videoPromptsId = await taskStore.create(
+      'Generate video prompts',
+      'Create motion prompts',
+      [imagesId],
+      true,
+    );
+    const videosId = await taskStore.create(
+      'Generate video clips',
+      'ComfyUI img2video',
+      [videoPromptsId],
+      true,
+    );
     const mergeId = await taskStore.create('Merge clips', 'Concatenate clips', [videosId], true);
 
     // This is what plan-video-production returns — main agent receives it and drives execution
@@ -1239,7 +1271,10 @@ describe('S13-2: Main-agent execution from plan-video-production output', () => 
     await projectManager.writeManifest(project);
     // Simulates user_review approval: agent calls content_project_update_artifact(approved)
     await projectManager.updateArtifactStatus(project, '01-trend-report.md', 'approved');
-    await taskStore.update(analyzeId, { status: 'completed', result: JSON.stringify({ projectId: project.id, manifestPath }) });
+    await taskStore.update(analyzeId, {
+      status: 'completed',
+      result: JSON.stringify({ projectId: project.id, manifestPath }),
+    });
 
     // After step 1 completes, step 2 becomes pending (dependency satisfied)
     expect(taskStore.list().find((t) => t.id === scriptId)?.status).toBe('pending');
@@ -1253,8 +1288,20 @@ describe('S13-2: Main-agent execution from plan-video-production output', () => 
       targetPlatform: 'tiktok',
       estimatedDuration: '60s',
       scenes: [
-        { sceneNumber: 1, description: 'Intro scene', camera: 'wide', duration: '5s', imagePromptHint: 'tech' },
-        { sceneNumber: 2, description: 'Demo scene', camera: 'close-up', duration: '5s', imagePromptHint: 'code' },
+        {
+          sceneNumber: 1,
+          description: 'Intro scene',
+          camera: 'wide',
+          duration: '5s',
+          imagePromptHint: 'tech',
+        },
+        {
+          sceneNumber: 2,
+          description: 'Demo scene',
+          camera: 'close-up',
+          duration: '5s',
+          imagePromptHint: 'code',
+        },
       ],
     };
     await projectManager.initializeScenes(project, storyboard);
@@ -1298,8 +1345,16 @@ describe('S13-2: Main-agent execution from plan-video-production output', () => 
     scene0.videoPrompt = { path: 'scenes/scene-01/video-prompt.md', status: 'draft' };
     scene1.videoPrompt = { path: 'scenes/scene-02/video-prompt.md', status: 'draft' };
     await projectManager.writeManifest(project);
-    await projectManager.updateArtifactStatus(project, 'scenes/scene-01/video-prompt.md', 'approved');
-    await projectManager.updateArtifactStatus(project, 'scenes/scene-02/video-prompt.md', 'approved');
+    await projectManager.updateArtifactStatus(
+      project,
+      'scenes/scene-01/video-prompt.md',
+      'approved',
+    );
+    await projectManager.updateArtifactStatus(
+      project,
+      'scenes/scene-02/video-prompt.md',
+      'approved',
+    );
     await taskStore.update(videoPromptsId, { status: 'completed' });
 
     expect(taskStore.list().find((t) => t.id === videosId)?.status).toBe('pending');

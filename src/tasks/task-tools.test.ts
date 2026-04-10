@@ -43,6 +43,10 @@ function makeCtx(): ToolContext {
       onSubagentStart: () => {},
       onSubagentEnd: () => {},
       onSubagentError: () => {},
+      onSubagentThinking: () => {},
+      onSubagentToolCall: () => {},
+      onSubagentToolResult: () => {},
+      onSubagentRetry: () => {},
     },
   };
 }

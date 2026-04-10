@@ -27,7 +27,7 @@ import { createAnthropicClient } from '../auth/auth';
 import { AgentCore } from '../agent/agent';
 import { TodoStore } from '../todo/todo-store';
 import { createTodoTools } from '../todo/todo-tools';
-import { NoopProgressReporter } from '../progress';
+import { StderrProgressReporter } from '../progress';
 import { loadAgentPrompt } from '../agent-prompt/agent-prompt';
 import type { SubagentPayload, SubagentResult } from '../subagent/subagent-runner';
 import { join } from 'node:path';
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
     cwd,
     log,
     logger,
-    progress: new NoopProgressReporter(),
+    progress: new StderrProgressReporter(),
     allowedTools: payload.allowedTools,
   };
 

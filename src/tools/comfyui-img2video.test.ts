@@ -63,6 +63,10 @@ describe('comfyuiImg2VideoTool', () => {
       onSubagentStart: vi.fn(),
       onSubagentEnd: vi.fn(),
       onSubagentError: vi.fn(),
+      onSubagentThinking: vi.fn(),
+      onSubagentToolCall: vi.fn(),
+      onSubagentToolResult: vi.fn(),
+      onSubagentRetry: vi.fn(),
     };
 
     ctx = {
@@ -115,7 +119,10 @@ describe('comfyuiImg2VideoTool', () => {
 
   it('rejects outputPath that escapes the workspace', async () => {
     await expect(
-      tool.execute({ imagePath: 'test.png', prompt: 'motion', outputPath: '../../outside.mp4' }, ctx),
+      tool.execute(
+        { imagePath: 'test.png', prompt: 'motion', outputPath: '../../outside.mp4' },
+        ctx,
+      ),
     ).rejects.toMatchObject({
       message: expect.stringContaining('outside the workspace'),
       retryable: false,

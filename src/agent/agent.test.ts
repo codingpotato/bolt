@@ -99,6 +99,10 @@ function makeCtx(): ToolContext {
       onSubagentStart: vi.fn(),
       onSubagentEnd: vi.fn(),
       onSubagentError: vi.fn(),
+      onSubagentThinking: vi.fn(),
+      onSubagentToolCall: vi.fn(),
+      onSubagentToolResult: vi.fn(),
+      onSubagentRetry: vi.fn(),
     },
   };
 }

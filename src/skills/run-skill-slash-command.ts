@@ -12,6 +12,7 @@ export function createRunSkillSlashCommand(
   execPath: string,
   runner: SubagentRunner,
   workspaceRoot: string,
+  inheritedRules: string,
 ): SlashCommand {
   const skillMap = new Map<string, Skill>(skills.map((s) => [s.name, s]));
 
@@ -64,6 +65,7 @@ export function createRunSkillSlashCommand(
         workspaceRoot,
         systemPrompt: skill.systemPrompt,
         ...(skill.allowedTools !== undefined ? { allowedTools: skill.allowedTools } : {}),
+        ...(inheritedRules.length > 0 ? { inheritedRules } : {}),
       };
 
       try {

@@ -53,6 +53,12 @@ describe('subagent_run tool', () => {
     expect(payload?.authConfig).toEqual(AUTH);
   });
 
+  it('passes workspace root from ctx.cwd to the runner', async () => {
+    const ctx = makeCtx({ cwd: '/my/workspace' });
+    await tool.execute({ prompt: 'task' }, ctx);
+    expect(lastPayload?.workspaceRoot).toBe('/my/workspace');
+  });
+
   it('passes the model to the runner', async () => {
     await tool.execute({ prompt: 'task' }, makeCtx());
     const payload = lastPayload;

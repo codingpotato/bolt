@@ -159,6 +159,12 @@ describe('skill_run tool', () => {
       expect(lastPayload?.model).toBe(MODEL);
     });
 
+    it('passes workspace root from ctx.cwd to the runner', async () => {
+      const ctx = makeCtx({ cwd: '/my/workspace' });
+      await tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, ctx);
+      expect(lastPayload?.workspaceRoot).toBe('/my/workspace');
+    });
+
     it('includes the skill name and args in the prompt', async () => {
       await tool.execute(
         { name: 'write-blog-post', args: { topic: 'TypeScript generics' } },

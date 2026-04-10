@@ -80,6 +80,7 @@ export function createSubagentRunTool(
         prompt: input.prompt,
         authConfig,
         model,
+        workspaceRoot: ctx.cwd,
         ...(allowedTools !== undefined ? { allowedTools } : {}),
         ...(inheritedRules.length > 0 ? { inheritedRules } : {}),
       };

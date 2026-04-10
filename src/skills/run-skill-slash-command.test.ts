@@ -72,6 +72,7 @@ describe('createRunSkillSlashCommand', () => {
     SCRIPT,
     EXEC,
     runnerSpy,
+    '/workspace',
   );
 
   it('has name "run-skill"', () => {
@@ -99,7 +100,7 @@ describe('createRunSkillSlashCommand', () => {
     });
 
     it('shows "none" when skill map is empty', async () => {
-      const emptyCmd = createRunSkillSlashCommand([], AUTH, MODEL, SCRIPT, EXEC, runnerSpy);
+      const emptyCmd = createRunSkillSlashCommand([], AUTH, MODEL, SCRIPT, EXEC, runnerSpy, '/workspace');
       const { ctx, send } = makeCtx();
       await emptyCmd.execute([], ctx);
       expect(send.mock.calls[0]?.[0]).toContain('none');
@@ -177,6 +178,12 @@ describe('createRunSkillSlashCommand', () => {
       await cmd.execute(['write-blog-post', '--topic', 'TypeScript'], ctx);
       expect(lastPayload?.authConfig).toEqual(AUTH);
       expect(lastPayload?.model).toBe(MODEL);
+    });
+
+    it('passes workspace root to the runner', async () => {
+      const { ctx } = makeCtx();
+      await cmd.execute(['write-blog-post', '--topic', 'TypeScript'], ctx);
+      expect(lastPayload?.workspaceRoot).toBe('/workspace');
     });
 
     it('includes skill name and args in the runner prompt', async () => {

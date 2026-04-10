@@ -30,7 +30,7 @@ import { createTodoTools } from '../todo/todo-tools';
 import { NoopProgressReporter } from '../progress';
 import { loadAgentPrompt } from '../agent-prompt/agent-prompt';
 import type { SubagentPayload, SubagentResult } from '../subagent/subagent-runner';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
 
   // Use a per-run temp dir so this sub-agent has no access to the parent's data.
   const dataDir = join(tmpdir(), `bolt-subagent-${randomUUID()}`);
-  const cwd = resolve(process.cwd());
+  const cwd = payload.workspaceRoot;
 
   const client = createAnthropicClient(payload.authConfig);
   const log = createAuditLogger(dataDir);

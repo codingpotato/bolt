@@ -216,6 +216,8 @@ async function serve(serveArgs: string[]): Promise<void> {
       subagentScript,
       subagentExec,
       runSubagent,
+      cwd,
+      inheritedRules,
     ),
   );
   slashRegistry.register({
@@ -463,6 +465,8 @@ async function main(): Promise<void> {
       subagentScript,
       subagentExec,
       runSubagent,
+      cwd,
+      inheritedRules,
     ),
   );
   const channel = new CliChannel(process.stdin, process.stdout, () =>

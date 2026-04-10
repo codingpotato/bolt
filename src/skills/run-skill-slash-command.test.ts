@@ -8,6 +8,7 @@ const AUTH: AuthConfig = { mode: 'api-key', credential: 'key' };
 const MODEL = 'claude-opus-4-6';
 const SCRIPT = '/path/to/subagent.js';
 const EXEC = process.execPath;
+const INHERITED_RULES = '## Safety Rules\n\nDo not harm.';
 
 const BLOG_SKILL: Skill = {
   name: 'write-blog-post',
@@ -72,6 +73,8 @@ describe('createRunSkillSlashCommand', () => {
     SCRIPT,
     EXEC,
     runnerSpy,
+    '/workspace',
+    INHERITED_RULES,
   );
 
   it('has name "run-skill"', () => {
@@ -99,7 +102,7 @@ describe('createRunSkillSlashCommand', () => {
     });
 
     it('shows "none" when skill map is empty', async () => {
-      const emptyCmd = createRunSkillSlashCommand([], AUTH, MODEL, SCRIPT, EXEC, runnerSpy);
+      const emptyCmd = createRunSkillSlashCommand([], AUTH, MODEL, SCRIPT, EXEC, runnerSpy, '/workspace', '');
       const { ctx, send } = makeCtx();
       await emptyCmd.execute([], ctx);
       expect(send.mock.calls[0]?.[0]).toContain('none');
@@ -177,6 +180,34 @@ describe('createRunSkillSlashCommand', () => {
       await cmd.execute(['write-blog-post', '--topic', 'TypeScript'], ctx);
       expect(lastPayload?.authConfig).toEqual(AUTH);
       expect(lastPayload?.model).toBe(MODEL);
+    });
+
+    it('passes workspace root to the runner', async () => {
+      const { ctx } = makeCtx();
+      await cmd.execute(['write-blog-post', '--topic', 'TypeScript'], ctx);
+      expect(lastPayload?.workspaceRoot).toBe('/workspace');
+    });
+
+    it('passes inherited rules to the runner', async () => {
+      const { ctx } = makeCtx();
+      await cmd.execute(['write-blog-post', '--topic', 'TypeScript'], ctx);
+      expect(lastPayload?.inheritedRules).toBe(INHERITED_RULES);
+    });
+
+    it('omits inheritedRules when empty string', async () => {
+      const cmdNoRules = createRunSkillSlashCommand(
+        [BLOG_SKILL],
+        AUTH,
+        MODEL,
+        SCRIPT,
+        EXEC,
+        runnerSpy,
+        '/workspace',
+        '',
+      );
+      const { ctx } = makeCtx();
+      await cmdNoRules.execute(['write-blog-post', '--topic', 'TypeScript'], ctx);
+      expect(lastPayload?.inheritedRules).toBeUndefined();
     });
 
     it('includes skill name and args in the runner prompt', async () => {

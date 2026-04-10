@@ -134,6 +134,7 @@ export function createSkillRunTool(
         prompt,
         authConfig,
         model,
+        workspaceRoot: ctx.cwd,
         systemPrompt: skill.systemPrompt,
         ...(effectiveTools !== undefined ? { allowedTools: effectiveTools } : {}),
         ...(inheritedRules.length > 0 ? { inheritedRules } : {}),

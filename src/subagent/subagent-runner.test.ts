@@ -12,6 +12,7 @@ function makePayload(overrides: Partial<SubagentPayload> = {}): SubagentPayload 
     prompt: 'Do something',
     authConfig: AUTH,
     model: 'claude-opus-4-6',
+    workspaceRoot: '/workspace',
     ...overrides,
   };
 }

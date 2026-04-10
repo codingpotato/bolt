@@ -7,6 +7,8 @@ export interface SubagentPayload {
   prompt: string;
   authConfig: AuthConfig;
   model: string;
+  /** Workspace root to use — must be passed from the parent's ctx.cwd. */
+  workspaceRoot: string;
   allowedTools?: string[];
   /** Optional system prompt override — used by skill_run to inject the skill's system prompt. */
   systemPrompt?: string;

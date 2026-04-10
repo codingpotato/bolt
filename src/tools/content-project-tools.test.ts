@@ -14,7 +14,9 @@ describe('createContentProjectTools', () => {
 
   beforeEach(async () => {
     await mkdir(testDir, { recursive: true });
-    mockRegistry = { registerProject: vi.fn().mockResolvedValue(undefined) } as unknown as TaskRegistry;
+    mockRegistry = {
+      registerProject: vi.fn().mockResolvedValue(undefined),
+    } as unknown as TaskRegistry;
     tools = createContentProjectTools(mockRegistry);
     ctx = {
       cwd: testDir,
@@ -34,6 +36,10 @@ describe('createContentProjectTools', () => {
         onSubagentStart: vi.fn(),
         onSubagentEnd: vi.fn(),
         onSubagentError: vi.fn(),
+        onSubagentThinking: vi.fn(),
+        onSubagentToolCall: vi.fn(),
+        onSubagentToolResult: vi.fn(),
+        onSubagentRetry: vi.fn(),
       },
     };
   });

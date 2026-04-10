@@ -146,8 +146,9 @@ When a task is delegated to a sub-agent:
 1. Parent creates a child `Task` with a clear description and success criteria
 2. Parent calls the `subagent_run` tool with a prompt that includes the task description and success criteria
 3. A new agent process starts with a fresh context containing only the task prompt
-4. Sub-agent executes and returns a structured result
-5. Parent receives the result and calls `task_update` to record the outcome
+4. Sub-agent executes and streams internal progress events back to the parent via stderr
+5. Sub-agent returns a structured result via stdout
+6. Parent receives the result and calls `task_update` to record the outcome
 
 `subagent_run` input schema:
 ```ts
@@ -158,6 +159,22 @@ interface SubagentRunInput {
 ```
 
 **Context isolation:** the sub-agent has no access to the parent's message history, memory store, or other tasks.
+
+### Sub-agent stdio protocol
+
+```
+stdin  → SubagentPayload (JSON, one write, then closed)
+stdout ← SubagentResult  (JSON, written on completion)
+stderr ← progress events (newline-delimited, streamed in real time)
+         PROGRESS:{"event":"onThinking"}
+         PROGRESS:{"event":"onToolCall","name":"bash","input":{...}}
+         PROGRESS:{"event":"onToolResult","name":"bash","success":true,"summary":"..."}
+         PROGRESS:{"event":"onRetry","attempt":1,"maxAttempts":3,"reason":"..."}
+         <any other line> → treated as a log line, not forwarded to UI
+exit 0 → success; exit 1 → failure (stderr contains error message)
+```
+
+The parent's `runSubagent` reads stderr line-by-line in real time. `PROGRESS:` lines are parsed and re-emitted on the parent's `ProgressReporter` as `onSubagentThinking`, `onSubagentToolCall`, `onSubagentToolResult`, and `onSubagentRetry`. This surfaces sub-agent activity in the CLI and WebChannel without breaking context isolation — only serialisable event data crosses the process boundary.
 
 ## Serialization
 

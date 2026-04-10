@@ -65,10 +65,14 @@ function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
   };
 }
 
+import type { ProgressReporter } from '../progress';
+
 type Payload = import('../subagent/subagent-runner').SubagentPayload;
 
 describe('skill_run tool', () => {
   let lastPayload: Payload | undefined;
+  let lastProgress: ProgressReporter | undefined;
+  let lastSkillName: string | undefined;
   const runnerSpy = vi.fn();
 
   function makeValidOutput(skill: Skill): string {
@@ -79,8 +83,12 @@ describe('skill_run tool', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     lastPayload = undefined;
-    runnerSpy.mockImplementation((payload: Payload) => {
+    lastProgress = undefined;
+    lastSkillName = undefined;
+    runnerSpy.mockImplementation((payload: Payload, _script: string, _exec: string | undefined, progress: ProgressReporter | undefined, skillName: string | undefined) => {
       lastPayload = payload;
+      lastProgress = progress;
+      lastSkillName = skillName;
       return Promise.resolve({ output: makeValidOutput(BLOG_SKILL) });
     });
   });
@@ -144,6 +152,17 @@ describe('skill_run tool', () => {
   });
 
   describe('sub-agent execution', () => {
+    it('passes ctx.progress to the runner', async () => {
+      const ctx = makeCtx();
+      await tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, ctx);
+      expect(lastProgress).toBe(ctx.progress);
+    });
+
+    it('passes skill.name as skillName to the runner', async () => {
+      await tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, makeCtx());
+      expect(lastSkillName).toBe('write-blog-post');
+    });
+
     it('passes systemPrompt from skill to the runner', async () => {
       await tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, makeCtx());
       expect(lastPayload?.systemPrompt).toBe(BLOG_SKILL.systemPrompt);

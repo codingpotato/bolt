@@ -46,6 +46,10 @@ describe('NoopProgressReporter', () => {
       r.onSubagentStart('analyze-trends', 'Search trending topics');
       r.onSubagentEnd('analyze-trends', 4200);
       r.onSubagentError('analyze-trends', 'OOM');
+      r.onSubagentThinking('analyze-trends');
+      r.onSubagentToolCall('analyze-trends', 'web_fetch', { url: 'https://example.com' });
+      r.onSubagentToolResult('analyze-trends', 'web_fetch', true, '200 OK');
+      r.onSubagentRetry('analyze-trends', 1, 3, 'ECONNREFUSED');
     }).not.toThrow();
   });
 });
@@ -228,6 +232,34 @@ describe('CliProgressReporter', () => {
       reporter.clearPendingThinking();
       // write should not have been called for the erase sequence
       expect(writeSpy).not.toHaveBeenCalledWith('\x1b[1A\x1b[2K');
+    });
+
+    it('onSubagentThinking writes indented thinking line', () => {
+      reporter.onSubagentThinking('write-blog-post');
+      expect(output()).toBe('  ⟳ Thinking…\n');
+    });
+
+    it('onSubagentToolCall writes indented tool block', () => {
+      reporter.onSubagentToolCall('write-blog-post', 'bash', { command: 'npm test' });
+      expect(output()).toContain('  ⚙  bash');
+      expect(output()).toContain('     $ npm test');
+    });
+
+    it('onSubagentToolResult writes indented success result', () => {
+      reporter.onSubagentToolResult('write-blog-post', 'bash', true, 'exit 0');
+      expect(output()).toContain('     ✓ completed');
+      expect(output()).toContain('exit 0');
+    });
+
+    it('onSubagentToolResult writes indented error result', () => {
+      reporter.onSubagentToolResult('write-blog-post', 'bash', false, 'exit 1');
+      expect(output()).toContain('     ✗ error');
+      expect(output()).toContain('exit 1');
+    });
+
+    it('onSubagentRetry writes indented retry line', () => {
+      reporter.onSubagentRetry('write-blog-post', 1, 3, 'ECONNREFUSED');
+      expect(output()).toBe('  ⚠  API error, retrying (1/3): ECONNREFUSED\n');
     });
   });
 

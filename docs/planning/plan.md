@@ -2,7 +2,7 @@
 
 ## Overview
 
-12 sprints, each with a shippable increment. Every sprint follows the TDD cycle and agile process defined in `docs/workflow/`. Dependencies flow strictly — later sprints build on earlier ones.
+15 sprints, each with a shippable increment. Every sprint follows the TDD cycle and agile process defined in `docs/workflow/`. Dependencies flow strictly — later sprints build on earlier ones.
 
 ```
  Sprint 0  — Foundation
@@ -18,6 +18,8 @@
  Sprint 10 — ComfyUI Client + Video Production + Post-Production
  Sprint 11 — Simplified AGENT.md + Dynamic Skills Injection
  Sprint 12 — Enhanced File Tools (search, insert, glob, file_edit improvements)
+ Sprint 13 — Video Pipeline Refactor + Subagent Visibility
+ Sprint 14 — Sub-agent Internal Progress Streaming
 ```
 
 ---
@@ -1657,14 +1659,104 @@ Sprint 0 (Foundation)
                            │          S12-5: file_read improvements
                            │
                            └──► S13 (Video Pipeline Refactor + Subagent Visibility)
-                                       S13-1: plan-video-production skill
-                                       S13-2: Video execution protocol in AGENT.md
-                                       S13-3: Subagent progress events
+                           │          S13-1: plan-video-production skill
+                           │          S13-2: Video execution protocol in AGENT.md
+                           │          S13-3: Subagent progress events
+                           │
+                           └──► S14 (Sub-agent Internal Progress Streaming)
+                                       S14-1: StderrProgressReporter + protocol extension
+                                       S14-2: runSubagent stderr forwarding
+                                       S14-3: ProgressReporter onSubagent* forwarded methods
 ```
 
 Sprint 12 depends on S2 (Tool Bus + Core Tools) since it extends the existing file tools.
 Sprint 13 depends on S10 (video tools must exist) and S11 (dynamic skills injection).
-Both are placed after S11 so they do not block the v1 release.
+Sprint 14 depends on S6 (sub-agent runner) and S13-3 (outer subagent progress events).
+All are placed after S11 so they do not block the v1 release.
+
+---
+
+## Sprint 14 — Sub-agent Internal Progress Streaming
+
+**Goal:** Surface the tool calls and LLM interactions happening *inside* a sub-agent to the parent's CLI and WebChannel. Currently, users see only a start/end bracket around a silent black box. This sprint streams sub-agent internal progress back to the parent via stderr so every tool call is visible in real time.
+
+### Stories
+
+**S14-1: StderrProgressReporter and protocol extension**
+
+```
+As a user,
+I want to see the tool calls and thinking steps happening inside a sub-agent,
+so that I know what bolt is doing during long sub-agent runs.
+
+Acceptance Criteria:
+- [ ] StderrProgressReporter implemented in src/progress/stderr-progress.ts:
+      - Implements ProgressReporter
+      - onThinking, onToolCall, onToolResult, onRetry write JSON to stderr:
+            PROGRESS:{"event":"onThinking"}
+            PROGRESS:{"event":"onToolCall","name":"...","input":...}
+            PROGRESS:{"event":"onToolResult","name":"...","success":...,"summary":"..."}
+            PROGRESS:{"event":"onRetry","attempt":...,"maxAttempts":...,"reason":"..."}
+      - All other methods (onSessionStart, onLlmCall, onLlmResponse, onTaskStatusChange,
+        onContextInjection, onMemoryCompaction, onSubagent*) are no-ops
+- [ ] src/cli/subagent.ts replaces NoopProgressReporter with StderrProgressReporter
+- [ ] Unit tests for StderrProgressReporter verify each forwarded event's JSON format
+      and that suppressed events write nothing to stderr
+```
+
+**S14-2: runSubagent stderr forwarding**
+
+```
+As a developer,
+I want runSubagent to parse PROGRESS: lines from child stderr in real time
+and re-emit them on the parent's ProgressReporter,
+so that forwarded events reach the CLI and WebChannel without buffering.
+
+Acceptance Criteria:
+- [ ] runSubagent signature gains optional parameters: progress?: ProgressReporter, skillName?: string
+- [ ] SubagentRunner type updated to include progress and skillName
+- [ ] Child stderr is read line-by-line in real time (readline on the child.stderr stream)
+- [ ] Lines starting with "PROGRESS:" are parsed and dispatched:
+        onThinking    → ctx.progress.onSubagentThinking(skillName)
+        onToolCall    → ctx.progress.onSubagentToolCall(skillName, name, input)
+        onToolResult  → ctx.progress.onSubagentToolResult(skillName, name, success, summary)
+        onRetry       → ctx.progress.onSubagentRetry(skillName, attempt, maxAttempts, reason)
+- [ ] Malformed PROGRESS: lines (invalid JSON) are logged as warnings and skipped
+- [ ] Non-PROGRESS: lines continue to go to logger.debug as before
+- [ ] On non-zero exit, full (non-PROGRESS) stderr is still captured for the error message
+- [ ] skill_run passes ctx.progress and skill.name to runSubagent
+- [ ] Unit tests mock child process stderr to verify forwarding, malformed-line handling,
+      and that non-zero exit still works correctly
+```
+
+**S14-3: ProgressReporter interface — onSubagent* forwarded methods**
+
+```
+As a developer,
+I want the ProgressReporter interface to expose the four forwarded sub-agent events,
+so that CLI and WebChannel implementations can render them distinctly.
+
+Acceptance Criteria:
+- [ ] ProgressReporter interface in src/progress/progress.ts gains four methods:
+        onSubagentThinking(skill: string): void
+        onSubagentToolCall(skill: string, name: string, input: unknown): void
+        onSubagentToolResult(skill: string, name: string, success: boolean, summary: string): void
+        onSubagentRetry(skill: string, attempt: number, maxAttempts: number, reason: string): void
+- [ ] NoopProgressReporter implements all four as no-ops
+- [ ] CliProgressReporter renders forwarded events with two-space indent:
+        onSubagentThinking  → "  ⟳ Thinking…"
+        onSubagentToolCall  → "  ⚙  <name>\n     <summarised input>"
+        onSubagentToolResult → "     ✓ <summary>" or "     ✗ <summary>"
+        onSubagentRetry     → "  ⚠  retrying (attempt/max): reason"
+- [ ] WebChannelProgressReporter broadcasts forwarded events as:
+        { type: "subagent_progress", event: "thinking"|"tool_call"|"tool_result"|"retry",
+          skill: string, ...event fields }
+- [ ] All existing ProgressReporter implementors (NoopProgressReporter,
+      CliProgressReporter, WebChannelProgressReporter) compile without errors
+- [ ] Unit tests for CliProgressReporter cover all four forwarded event rendering cases
+- [ ] Unit tests for WebChannelProgressReporter verify subagent_progress message shape
+- [ ] docs/design/cli-progress.md verified as matching implementation
+```
 
 ---
 
@@ -1672,7 +1764,7 @@ Both are placed after S11 so they do not block the v1 release.
 
 All of the following must be true before tagging v1:
 
-- [ ] All Sprint 0–13 stories are complete and meet their acceptance criteria
+- [ ] All Sprint 0–14 stories are complete and meet their acceptance criteria
 - [ ] CI pipeline is green on `main`
 - [ ] Coverage thresholds met across all modules
 - [ ] No `any` types (`tsc --noEmit` passes)
@@ -1687,3 +1779,4 @@ All of the following must be true before tagging v1:
 - [x] Video pipeline refactored: plan-video-production skill + main-agent execution (S13-1, S13-2)
 - [x] All 9 video review gates confirmed reachable by the user in E2E test (S13-2)
 - [x] Subagent progress events visible in CLI and WebChannel (S13-3)
+- [ ] Sub-agent internal progress (tool calls, thinking) visible in CLI and WebChannel (S14)

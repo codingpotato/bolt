@@ -145,7 +145,7 @@ export function createSkillRunTool(
 
       let subagentOutput: string;
       try {
-        const result = await runner(payload, scriptPath, execPath);
+        const result = await runner(payload, scriptPath, execPath, ctx.progress, skill.name);
         subagentOutput = result.output;
         const durationMs = Date.now() - startTime;
         ctx.progress.onSubagentEnd(skill.name, durationMs);

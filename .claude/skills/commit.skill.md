@@ -58,9 +58,13 @@ If `message` is empty or does not match this format, stop and report `committed:
 
 3. **Stage files** — if `files` is non-empty, run `git add <file>...` for each. Otherwise run `git add -u` (staged tracked changes only — never `git add -A` to avoid accidentally staging secrets or build artifacts).
 
-4. **Create the commit** — use the validated message:
+4. **Create the commit** — pass the message as a plain quoted string directly to `-m`. Do NOT use heredoc (`<<'EOF'`) or subshell (`$(...)`) expansion — the pre-commit hook extracts the message via grep and will reject anything that is not a literal string:
    ```
-   git commit -m "<message>"
+   git commit -m "<type>(<scope>): <story-id> <description>"
+   ```
+   Multi-line bodies are allowed; append them with a second `-m` flag:
+   ```
+   git commit -m "<type>(<scope>): <story-id> <description>" -m "<body>"
    ```
 
 5. **Confirm and return** — capture the short SHA from `git log -1 --format=%h` and return `committed: true`.

@@ -239,6 +239,44 @@ body`;
     const skill = parseSkillFile('bad.skill.md', 'just a body, no frontmatter');
     expect(skill).toBeNull();
   });
+
+  it('returns null when allowedTools is a non-array, non-undefined value', () => {
+    const raw = `---
+name: my-skill
+description: test
+input:
+  q:
+    type: string
+output:
+  r:
+    type: string
+allowedTools: 42
+---
+body`;
+
+    const skill = parseSkillFile('bad.skill.md', raw);
+    expect(skill).toBeNull();
+  });
+
+  it('returns null when allowedTools contains non-string items', () => {
+    const raw = `---
+name: my-skill
+description: test
+input:
+  q:
+    type: string
+output:
+  r:
+    type: string
+allowedTools:
+  - web_fetch
+  - 123
+---
+body`;
+
+    const skill = parseSkillFile('bad.skill.md', raw);
+    expect(skill).toBeNull();
+  });
 });
 
 // ── loadSkills ────────────────────────────────────────────────────────────────
@@ -363,6 +401,27 @@ body`;
 
     const skills = await loadSkills(projectSkillsDir, userSkillsDir);
     expect(skills).toEqual([]);
+  });
+
+  it('warns and skips a skill file when readFile throws', async () => {
+    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
+      if (dir === projectSkillsDir) return ['my-skill.skill.md'] as never;
+      return [] as never;
+    });
+    vi.mocked(fsPromises.readFile).mockRejectedValue(new Error('EACCES: permission denied'));
+
+    const warn = vi.fn();
+    const skills = await loadSkills(projectSkillsDir, userSkillsDir, warn);
+    expect(skills).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('my-skill.skill.md'));
+  });
+
+  it('throws when readdir fails with a non-ENOENT error', async () => {
+    vi.mocked(fsPromises.readdir).mockRejectedValue(
+      Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }),
+    );
+
+    await expect(loadSkills(projectSkillsDir, userSkillsDir)).rejects.toThrow('EACCES');
   });
 
   it('loads skills from builtinSkillsDir', async () => {

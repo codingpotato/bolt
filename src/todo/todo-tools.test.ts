@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createTodoTools } from './todo-tools';
 import { TodoStore } from './todo-store';
 import type { ToolContext } from '../tools/tool';
@@ -103,6 +103,21 @@ describe('todo tools', () => {
       ).rejects.toThrow('todo not found');
     });
 
+    it('wraps a non-Error thrown by store.update in ToolError', async () => {
+      const mockStore = {
+        create: vi.fn(),
+        update: vi.fn(() => {
+          throw 'raw string error' as never;
+        }),
+        list: vi.fn(),
+        delete: vi.fn(),
+      } as unknown as import('./todo-store').TodoStore;
+      const [, updateTool] = createTodoTools(mockStore);
+      await expect(
+        updateTool!.execute({ id: 'x', status: 'done' }, ctx),
+      ).rejects.toThrow('raw string error');
+    });
+
     it('is marked sequential', () => {
       expect(getTool('todo_update').sequential).toBe(true);
     });
@@ -144,6 +159,20 @@ describe('todo tools', () => {
       await expect(getTool('todo_delete').execute({ id: 'bad-id' }, ctx)).rejects.toThrow(
         'todo not found',
       );
+    });
+
+    it('wraps a non-Error thrown by store.delete in ToolError', async () => {
+      const mockStore = {
+        create: vi.fn(),
+        update: vi.fn(),
+        list: vi.fn(),
+        delete: vi.fn(() => {
+          throw 42 as never;
+        }),
+      } as unknown as import('./todo-store').TodoStore;
+      const tools = createTodoTools(mockStore);
+      const deleteTool = tools.find((t) => t.name === 'todo_delete')!;
+      await expect(deleteTool.execute({ id: 'x' }, ctx)).rejects.toThrow('42');
     });
 
     it('only removes the targeted item', async () => {

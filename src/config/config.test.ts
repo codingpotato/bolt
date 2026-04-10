@@ -97,6 +97,13 @@ describe('resolveConfig', () => {
       expect(() => resolveConfig()).not.toThrow();
     });
 
+    it('rethrows non-ENOENT errors from reading config file', () => {
+      readFileSync.mockImplementation(() => {
+        throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      });
+      expect(() => resolveConfig()).toThrow('EACCES');
+    });
+
     it('rejects config file that contains ANTHROPIC_API_KEY', () => {
       mockConfigFile({ ANTHROPIC_API_KEY: 'sk-test' });
       expect(() => resolveConfig()).toThrow(ConfigError);
@@ -368,6 +375,20 @@ describe('resolveConfig', () => {
       expect(config.search.provider).toBe('brave');
       expect(config.search.maxResults).toBe(5);
     });
+
+    it('parses BOLT_SEARCH_MAX_RESULTS env var', () => {
+      process.env['BOLT_SEARCH_MAX_RESULTS'] = '20';
+      const config = resolveConfig();
+      expect(config.search.maxResults).toBe(20);
+      delete process.env['BOLT_SEARCH_MAX_RESULTS'];
+    });
+
+    it('ignores BOLT_SEARCH_MAX_RESULTS when not a valid number', () => {
+      process.env['BOLT_SEARCH_MAX_RESULTS'] = 'abc';
+      const config = resolveConfig();
+      expect(config.search.maxResults).toBe(10);
+      delete process.env['BOLT_SEARCH_MAX_RESULTS'];
+    });
   });
 
   describe('comfyui config', () => {
@@ -578,6 +599,41 @@ describe('resolveConfig', () => {
       expect(config.comfyui.pollIntervalMs).toBe(5000);
       delete process.env['BOLT_COMFYUI_POLL_INTERVAL_MS'];
     });
+
+    it('ignores BOLT_COMFYUI_POLL_INTERVAL_MS when not a valid number', () => {
+      process.env['BOLT_COMFYUI_POLL_INTERVAL_MS'] = 'abc';
+      const config = resolveConfig();
+      expect(config.comfyui.pollIntervalMs).toBe(2000);
+      delete process.env['BOLT_COMFYUI_POLL_INTERVAL_MS'];
+    });
+
+    it('parses BOLT_COMFYUI_TIMEOUT_MS', () => {
+      process.env['BOLT_COMFYUI_TIMEOUT_MS'] = '120000';
+      const config = resolveConfig();
+      expect(config.comfyui.timeoutMs).toBe(120000);
+      delete process.env['BOLT_COMFYUI_TIMEOUT_MS'];
+    });
+
+    it('ignores BOLT_COMFYUI_TIMEOUT_MS when not a valid number', () => {
+      process.env['BOLT_COMFYUI_TIMEOUT_MS'] = 'abc';
+      const config = resolveConfig();
+      expect(config.comfyui.timeoutMs).toBe(300000);
+      delete process.env['BOLT_COMFYUI_TIMEOUT_MS'];
+    });
+
+    it('parses BOLT_COMFYUI_MAX_CONCURRENT', () => {
+      process.env['BOLT_COMFYUI_MAX_CONCURRENT'] = '4';
+      const config = resolveConfig();
+      expect(config.comfyui.maxConcurrentPerServer).toBe(4);
+      delete process.env['BOLT_COMFYUI_MAX_CONCURRENT'];
+    });
+
+    it('ignores BOLT_COMFYUI_MAX_CONCURRENT when not a valid number', () => {
+      process.env['BOLT_COMFYUI_MAX_CONCURRENT'] = 'abc';
+      const config = resolveConfig();
+      expect(config.comfyui.maxConcurrentPerServer).toBe(2);
+      delete process.env['BOLT_COMFYUI_MAX_CONCURRENT'];
+    });
   });
 
   describe('WebChannel env vars', () => {
@@ -635,6 +691,43 @@ describe('resolveConfig', () => {
     });
   });
 
+  describe('Memory env vars', () => {
+    it('parses BOLT_MEMORY_COMPACT_THRESHOLD', () => {
+      process.env['BOLT_MEMORY_COMPACT_THRESHOLD'] = '0.7';
+      const config = resolveConfig();
+      expect(config.memory.compactThreshold).toBe(0.7);
+      delete process.env['BOLT_MEMORY_COMPACT_THRESHOLD'];
+    });
+
+    it('ignores BOLT_MEMORY_COMPACT_THRESHOLD when not a valid number', () => {
+      process.env['BOLT_MEMORY_COMPACT_THRESHOLD'] = 'abc';
+      const config = resolveConfig();
+      expect(config.memory.compactThreshold).toBe(0.8);
+      delete process.env['BOLT_MEMORY_COMPACT_THRESHOLD'];
+    });
+
+    it('parses BOLT_MEMORY_KEEP_RECENT', () => {
+      process.env['BOLT_MEMORY_KEEP_RECENT'] = '20';
+      const config = resolveConfig();
+      expect(config.memory.keepRecentMessages).toBe(20);
+      delete process.env['BOLT_MEMORY_KEEP_RECENT'];
+    });
+
+    it('ignores BOLT_MEMORY_KEEP_RECENT when not a valid number', () => {
+      process.env['BOLT_MEMORY_KEEP_RECENT'] = 'abc';
+      const config = resolveConfig();
+      expect(config.memory.keepRecentMessages).toBe(10);
+      delete process.env['BOLT_MEMORY_KEEP_RECENT'];
+    });
+
+    it('parses BOLT_MEMORY_SEARCH_BACKEND', () => {
+      process.env['BOLT_MEMORY_SEARCH_BACKEND'] = 'embedding';
+      const config = resolveConfig();
+      expect(config.memory.searchBackend).toBe('embedding');
+      delete process.env['BOLT_MEMORY_SEARCH_BACKEND'];
+    });
+  });
+
   describe('Agent prompt env vars', () => {
     it('parses BOLT_AGENT_PROJECT_FILE', () => {
       process.env['BOLT_AGENT_PROJECT_FILE'] = '/custom/AGENT.md';
@@ -647,6 +740,13 @@ describe('resolveConfig', () => {
       process.env['BOLT_AGENT_MAX_TOKENS'] = '10000';
       const config = resolveConfig();
       expect(config.agentPrompt.maxTokens).toBe(10000);
+      delete process.env['BOLT_AGENT_MAX_TOKENS'];
+    });
+
+    it('ignores BOLT_AGENT_MAX_TOKENS when not a valid number', () => {
+      process.env['BOLT_AGENT_MAX_TOKENS'] = 'abc';
+      const config = resolveConfig();
+      expect(config.agentPrompt.maxTokens).toBe(8000);
       delete process.env['BOLT_AGENT_MAX_TOKENS'];
     });
 

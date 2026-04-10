@@ -171,6 +171,17 @@ describe('runSubagent()', () => {
     );
   });
 
+  it('rejects with stringified error when spawn throws a non-Error', async () => {
+    const { spawn } = await import('node:child_process');
+    vi.mocked(spawn).mockImplementation(() => {
+      throw 'spawn failed string' as never;
+    });
+
+    await expect(runSubagent(makePayload(), '/bad/path')).rejects.toThrow(
+      'Failed to spawn sub-agent: spawn failed string',
+    );
+  });
+
   it('rejects when the child process emits an error event', async () => {
     const { spawn } = await import('node:child_process');
     const stdin = makeStream();

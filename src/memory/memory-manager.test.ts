@@ -428,6 +428,50 @@ describe('MemoryManager.assembleInjectedHistory()', () => {
 
     expect(messages.some((m) => m.content === '42')).toBe(true);
   });
+
+  it('filters out tool_call and tool_result entries from session history', async () => {
+    loadSession.mockResolvedValue([
+      makeEntry({ role: 'user', content: 'question', seq: 1 }),
+      makeEntry({ role: 'tool_call' as 'user', content: { name: 'bash' }, seq: 2 }),
+      makeEntry({ role: 'tool_result' as 'user', content: 'result', seq: 3 }),
+      makeEntry({ role: 'assistant', content: 'answer', seq: 4 }),
+    ]);
+
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, { injectRecentChat: true });
+    const messages = await manager.assembleInjectedHistory({
+      currentSessionId: 'current',
+      resumedSessionId: 'prior',
+    });
+
+    // Only user and assistant entries are kept
+    expect(messages).toHaveLength(2);
+    expect(messages[0]?.role).toBe('user');
+    expect(messages[1]?.role).toBe('assistant');
+  });
+
+  it('skips prior sessions with empty entries in loadRecentChatHistory', async () => {
+    listSessionIds.mockResolvedValue(['empty-session', 'recent-session', 'current']);
+    loadSession.mockImplementation(async (id: string) => {
+      if (id === 'empty-session') return []; // empty — should be skipped
+      if (id === 'recent-session') {
+        return [
+          makeEntry({
+            sessionId: 'recent-session',
+            role: 'user',
+            content: 'recent msg',
+            ts: '2026-03-21T10:00:00.000Z',
+          }),
+        ];
+      }
+      return [];
+    });
+
+    const manager = makeManager({ listSessionIds, loadSession } as unknown, { injectRecentChat: true });
+    const messages = await manager.assembleInjectedHistory({ currentSessionId: 'current' });
+
+    const contents = messages.map((m) => m.content);
+    expect(contents).toContain('recent msg');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -573,6 +617,106 @@ describe('MemoryManager.compact()', () => {
     expect(result!.length).toBe(4); // 1 stub + 3 kept
     expect(result![0]!.role).toBe('user');
     expect(typeof result![0]!.content === 'string' && result![0]!.content).toContain('compacted');
+  });
+
+  it('uses fallback summary without calling model when client is null', async () => {
+    // makeManager creates a MemoryManager with client=null and memoryStore=null
+    const store = { listSessionIds: vi.fn(), loadSession: vi.fn() } as unknown;
+    const manager = makeManager(store, { keepRecentMessages: 3 });
+    const progress: ProgressReporter = {
+      onSessionStart: vi.fn(),
+      onThinking: vi.fn(),
+      onToolCall: vi.fn(),
+      onToolResult: vi.fn(),
+      onTaskStatusChange: vi.fn(),
+      onContextInjection: vi.fn(),
+      onMemoryCompaction: vi.fn(),
+      onLlmCall: vi.fn(),
+      onLlmResponse: vi.fn(),
+      onRetry: vi.fn(),
+      onSubagentStart: vi.fn(),
+      onSubagentEnd: vi.fn(),
+      onSubagentError: vi.fn(),
+    };
+    const messages = [
+      makeMessage('user', 'a'),
+      makeMessage('assistant', 'b'),
+      makeMessage('user', 'c'),
+      makeMessage('assistant', 'd'),
+      makeMessage('user', 'e'),
+    ];
+    const result = await manager.compact(messages, 'session-1', undefined, progress);
+    expect(result).not.toBeNull();
+    // Fallback summary used when no client
+    expect(typeof result![0]!.content === 'string' && result![0]!.content).toContain('compacted');
+    // onMemoryCompaction still fires
+    expect(progress.onMemoryCompaction).toHaveBeenCalledWith(2, expect.any(String), []);
+  });
+
+  it('skips writing to memoryStore when memoryStore is null', async () => {
+    const createSpy = vi.fn().mockResolvedValue({
+      content: [{ type: 'text', text: 'Summary\nTags: x' }],
+    });
+    const mockClient = {
+      messages: { create: createSpy },
+    } as unknown as import('@anthropic-ai/sdk').default;
+
+    // Construct manager with client but NO memoryStore
+    const config: MemoryConfig = { ...DEFAULT_CONFIG, keepRecentMessages: 3 };
+    const manager = new MemoryManager(
+      {} as SessionStore,
+      config,
+      createNoopLogger(),
+      null, // no memoryStore
+      mockClient,
+      'claude-test-model',
+    );
+
+    const progress: ProgressReporter = {
+      onSessionStart: vi.fn(),
+      onThinking: vi.fn(),
+      onToolCall: vi.fn(),
+      onToolResult: vi.fn(),
+      onTaskStatusChange: vi.fn(),
+      onContextInjection: vi.fn(),
+      onMemoryCompaction: vi.fn(),
+      onLlmCall: vi.fn(),
+      onLlmResponse: vi.fn(),
+      onRetry: vi.fn(),
+      onSubagentStart: vi.fn(),
+      onSubagentEnd: vi.fn(),
+      onSubagentError: vi.fn(),
+    };
+
+    const messages = [
+      makeMessage('user', 'a'),
+      makeMessage('assistant', 'b'),
+      makeMessage('user', 'c'),
+      makeMessage('assistant', 'd'),
+      makeMessage('user', 'e'),
+    ];
+    const result = await manager.compact(messages, 'session-1', undefined, progress);
+    expect(result).not.toBeNull();
+    expect(createSpy).toHaveBeenCalledTimes(1); // model was called
+    // No write — just verify no crash
+  });
+
+  it('uses full response as summary when model response has no Tags line', async () => {
+    const { manager, writeSpy, progress } = makeCompactManager({
+      keepRecentMessages: 3,
+      modelResponse: 'Just a plain summary with no tags line.',
+    });
+    const messages = [
+      makeMessage('user', 'a'),
+      makeMessage('assistant', 'b'),
+      makeMessage('user', 'c'),
+      makeMessage('assistant', 'd'),
+      makeMessage('user', 'e'),
+    ];
+    await manager.compact(messages, 'session-1', undefined, progress);
+    const writeArg = writeSpy.mock.calls[0]![0] as { summary: string; tags: string[] };
+    expect(writeArg.summary).toBe('Just a plain summary with no tags line.');
+    expect(writeArg.tags).toEqual([]);
   });
 
   it('writes CompactEntry before eviction (write called before return)', async () => {

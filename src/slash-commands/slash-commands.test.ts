@@ -84,6 +84,18 @@ describe('SlashCommandRegistry', () => {
     expect(msg).toContain('/ping');
   });
 
+  it('handles bare slash with no command name', async () => {
+    const r = new SlashCommandRegistry();
+    r.register({ name: 'ping', description: 'Ping.', execute: vi.fn().mockResolvedValue({}) });
+
+    const { ctx, sendSpy } = makeCtx();
+    const result = await r.dispatch('/', ctx);
+
+    expect(result).toEqual({});
+    expect(sendSpy).toHaveBeenCalledOnce();
+    expect((sendSpy.mock.calls[0] as unknown[])[0] as string).toContain('Unknown command:');
+  });
+
   it('list() returns all registered commands', () => {
     const r = new SlashCommandRegistry();
     r.register({ name: 'a', description: 'A.', execute: vi.fn().mockResolvedValue({}) });

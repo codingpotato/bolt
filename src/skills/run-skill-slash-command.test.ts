@@ -98,6 +98,13 @@ describe('createRunSkillSlashCommand', () => {
       expect(msg).toContain('summarize');
     });
 
+    it('shows "none" when skill map is empty', async () => {
+      const emptyCmd = createRunSkillSlashCommand([], AUTH, MODEL, SCRIPT, EXEC, runnerSpy);
+      const { ctx, send } = makeCtx();
+      await emptyCmd.execute([], ctx);
+      expect(send.mock.calls[0]?.[0]).toContain('none');
+    });
+
     it('does not call the runner', async () => {
       const { ctx } = makeCtx();
       await cmd.execute([], ctx);

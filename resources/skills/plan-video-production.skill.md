@@ -1,6 +1,8 @@
 ---
 name: plan-video-production
 description: Create a content project and build the full video production task DAG, then return a human-readable plan summary for the user to review before any generation starts.
+when: Use as the mandatory first step whenever the user requests a video (YouTube Shorts, TikToks, Reels, animations). Always present the returned planSummary via user_review before executing any pipeline step.
+when_not: Do not use for non-video content. Do not call generation tools (comfyui_*, video_*) or user_review from within this skill — the main agent handles all user interaction and execution after planning.
 input:
   topic:
     type: string

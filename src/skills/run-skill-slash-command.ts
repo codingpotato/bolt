@@ -1,11 +1,13 @@
 import type { SlashCommand } from '../slash-commands/slash-commands';
+import { loadSkillsFromDir } from './skill-loader';
 import type { Skill } from './skill-loader';
 import type { AuthConfig } from '../auth/auth';
 import type { SubagentPayload, SubagentRunner } from '../subagent/subagent-runner';
 import { buildSkillPrompt } from '../tools/skill-run';
 
 export function createRunSkillSlashCommand(
-  skills: Skill[],
+  builtinSkills: Skill[],
+  projectSkillsDir: string,
   authConfig: AuthConfig,
   model: string,
   scriptPath: string,
@@ -14,13 +16,16 @@ export function createRunSkillSlashCommand(
   workspaceRoot: string,
   inheritedRules: string,
 ): SlashCommand {
-  const skillMap = new Map<string, Skill>(skills.map((s) => [s.name, s]));
-
   return {
     name: 'run-skill',
     description: 'Run a skill: /run-skill <name> [--<arg> <value> ...]',
 
     async execute(args, ctx) {
+      // Reload workspace skills on each call for the same reason as skill_run tool.
+      const workspaceSkills = await loadSkillsFromDir(projectSkillsDir);
+      const skillMap = new Map<string, Skill>(builtinSkills.map((s) => [s.name, s]));
+      for (const s of workspaceSkills) skillMap.set(s.name, s);
+
       const skillName = args[0];
       if (!skillName) {
         const names = [...skillMap.keys()].join(', ') || 'none';

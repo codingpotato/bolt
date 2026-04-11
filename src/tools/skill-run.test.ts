@@ -7,10 +7,17 @@ import type { AuthConfig } from '../auth/auth';
 import { createNoopLogger } from '../logger';
 import { NoopProgressReporter } from '../progress';
 
+vi.mock('../skills/skill-loader', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../skills/skill-loader')>();
+  return { ...actual, loadSkillsFromDir: vi.fn().mockResolvedValue([]) };
+});
+import { loadSkillsFromDir } from '../skills/skill-loader';
+
 const AUTH: AuthConfig = { mode: 'api-key', credential: 'key' };
 const SCRIPT = '/path/to/subagent.js';
 const EXEC = process.execPath;
 const MODEL = 'claude-opus-4-6';
+const PROJECT_SKILLS_DIR = '/project/.bolt/skills';
 
 const BLOG_SKILL: Skill = {
   name: 'write-blog-post',
@@ -95,6 +102,7 @@ describe('skill_run tool', () => {
 
   const tool = createSkillRunTool(
     [BLOG_SKILL, REVIEW_SKILL],
+    PROJECT_SKILLS_DIR,
     AUTH,
     MODEL,
     SCRIPT,
@@ -342,6 +350,45 @@ describe('skill_run tool', () => {
       const { progress, errorSpy } = makeProgressSpy();
       await tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, makeCtx({ progress }));
       expect(errorSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('workspace skills', () => {
+    const WORKSPACE_SKILL: Skill = {
+      name: 'workspace-skill',
+      description: 'A skill created by the agent',
+      systemPrompt: 'Do workspace things.',
+      inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] },
+      outputSchema: { type: 'object', properties: { r: { type: 'string' } }, required: ['r'] },
+    };
+
+    it('invokes a skill loaded from projectSkillsDir at call time', async () => {
+      vi.mocked(loadSkillsFromDir).mockResolvedValueOnce([WORKSPACE_SKILL]);
+      runnerSpy.mockResolvedValueOnce({ output: JSON.stringify({ r: 'done' }) });
+      const result = await tool.execute({ name: 'workspace-skill', args: { q: 'hello' } }, makeCtx());
+      expect(result.result).toEqual({ r: 'done' });
+    });
+
+    it('workspace skill shadows a builtin with the same name', async () => {
+      const override: Skill = {
+        ...BLOG_SKILL,
+        systemPrompt: 'Override prompt from workspace.',
+      };
+      vi.mocked(loadSkillsFromDir).mockResolvedValueOnce([override]);
+      // Use mockImplementationOnce so lastPayload is still captured.
+      runnerSpy.mockImplementationOnce((payload: Payload) => {
+        lastPayload = payload;
+        return Promise.resolve({ output: JSON.stringify({ post: 'overridden' }) });
+      });
+      await tool.execute({ name: 'write-blog-post', args: { topic: 'TS' } }, makeCtx());
+      expect(lastPayload?.systemPrompt).toBe('Override prompt from workspace.');
+    });
+
+    it('throws ToolError for a skill unknown to both builtins and workspace', async () => {
+      vi.mocked(loadSkillsFromDir).mockResolvedValueOnce([]);
+      await expect(
+        tool.execute({ name: 'no-such-skill', args: {} }, makeCtx()),
+      ).rejects.toThrow(ToolError);
     });
   });
 

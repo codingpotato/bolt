@@ -84,24 +84,18 @@ describe('CliProgressReporter', () => {
       expect(output()).toBe('⟳ Thinking…\n');
     });
 
-    it('onLlmCall erases thinking line and writes context stats', () => {
+    it('onLlmCall does not write LLM stats in non-verbose TTY mode', () => {
       const fake = makeFakeStream(true);
       reporter = new CliProgressReporter(fake.stream);
       reporter.onThinking();
       reporter.onLlmCall({ messageCount: 23, injectedTokens: 4200, systemTokens: 4000, ctxTokens: 5000 });
-      const out = fake.output();
-      expect(out).toContain('\x1b[1A\x1b[2K');
-      expect(out).toContain('⟳ Thinking…');
-      expect(out).toContain('23 msgs');
-      expect(out).toContain('sys:');
-      expect(out).toContain('ctx:');
-      expect(out).toContain('inj:');
-      expect(out).toContain('4,000');
-      expect(out).toContain('5,000');
-      expect(out).toContain('4,200');
+      // Plain "Thinking…" stays — verbose is required for detailed LLM trace
+      expect(fake.output()).toBe('⟳ Thinking…\n');
+      expect(fake.output()).not.toContain('msgs');
+      expect(fake.output()).not.toContain('sys:');
     });
 
-    it('onLlmResponse erases thinking line and writes token usage', () => {
+    it('onLlmResponse does not write token usage in non-verbose TTY mode', () => {
       const fake = makeFakeStream(true);
       reporter = new CliProgressReporter(fake.stream);
       reporter.onThinking();
@@ -111,11 +105,9 @@ describe('CliProgressReporter', () => {
         stopReason: 'tool_use',
         windowCapacity: 200_000,
       });
-      const out = fake.output();
-      expect(out).toContain('\x1b[1A\x1b[2K');
-      expect(out).toContain('12,450');
-      expect(out).toContain('234');
-      expect(out).toContain('tool_use');
+      // Plain "Thinking…" stays — verbose is required for detailed LLM trace
+      expect(fake.output()).toBe('⟳ Thinking…\n');
+      expect(fake.output()).not.toContain('12,450');
     });
 
     it('onToolCall clears thinking line and writes tool block', () => {
@@ -321,6 +313,40 @@ describe('CliProgressReporter', () => {
 
       reporter.onSessionStart('abc123', false);
       expect(fake.output()).toContain('started');
+    });
+
+    it('onLlmCall writes context stats in verbose mode', () => {
+      const fake = makeFakeStream(false);
+      const reporter = new CliProgressReporter(fake.stream, true, false);
+      reporter.onThinking();
+      reporter.onLlmCall({ messageCount: 23, injectedTokens: 4200, systemTokens: 4000, ctxTokens: 5000 });
+      const out = fake.output();
+      expect(out).toContain('\x1b[1A\x1b[2K');
+      expect(out).toContain('⟳ Thinking…');
+      expect(out).toContain('23 msgs');
+      expect(out).toContain('sys:');
+      expect(out).toContain('ctx:');
+      expect(out).toContain('inj:');
+      expect(out).toContain('4,000');
+      expect(out).toContain('5,000');
+      expect(out).toContain('4,200');
+    });
+
+    it('onLlmResponse writes token usage in verbose mode', () => {
+      const fake = makeFakeStream(false);
+      const reporter = new CliProgressReporter(fake.stream, true, false);
+      reporter.onThinking();
+      reporter.onLlmResponse({
+        inputTokens: 12450,
+        outputTokens: 234,
+        stopReason: 'tool_use',
+        windowCapacity: 200_000,
+      });
+      const out = fake.output();
+      expect(out).toContain('\x1b[1A\x1b[2K');
+      expect(out).toContain('12,450');
+      expect(out).toContain('234');
+      expect(out).toContain('tool_use');
     });
   });
 });

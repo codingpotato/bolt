@@ -1,6 +1,8 @@
 ---
 name: summarize-url
 description: Fetch a URL and return a structured summary of its content
+when: Use when you have a specific URL and need structured output (title, summary, keyPoints, contentType) to feed into a subsequent step such as write-blog-post.
+when_not: Do not use for broad research across many sources — use analyze-trends or web_search instead. Do not use when you only need to read the raw page content; call web_fetch directly.
 input:
   url:
     type: string

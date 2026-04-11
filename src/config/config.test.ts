@@ -729,6 +729,27 @@ describe('resolveConfig', () => {
   });
 
   describe('Agent prompt env vars', () => {
+    it('default projectFile is absolute relative to workspace root', () => {
+      const config = resolveConfig();
+      expect(config.agentPrompt.projectFile).toBe(join(process.cwd(), '.bolt', 'AGENT.md'));
+    });
+
+    it('projectFile is absolute relative to BOLT_WORKSPACE_ROOT when set', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/test-ws';
+      const config = resolveConfig();
+      expect(config.agentPrompt.projectFile).toBe('/tmp/test-ws/.bolt/AGENT.md');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+    });
+
+    it('relative BOLT_AGENT_PROJECT_FILE is resolved relative to workspace root', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/test-ws';
+      process.env['BOLT_AGENT_PROJECT_FILE'] = 'custom/.bolt/AGENT.md';
+      const config = resolveConfig();
+      expect(config.agentPrompt.projectFile).toBe('/tmp/test-ws/custom/.bolt/AGENT.md');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+      delete process.env['BOLT_AGENT_PROJECT_FILE'];
+    });
+
     it('parses BOLT_AGENT_PROJECT_FILE', () => {
       process.env['BOLT_AGENT_PROJECT_FILE'] = '/custom/AGENT.md';
       const config = resolveConfig();

@@ -51,9 +51,21 @@ export async function loadAgentPrompt(config: Config): Promise<string> {
 
 /**
  * Appends a dynamic skills catalog section to the system prompt.
+ *
+ * Skills with `when` / `when_not` fields are rendered with routing guidance
+ * so the agent can distinguish between similar skills without consulting
+ * external routing tables.  Skills without these fields fall back to a
+ * compact one-liner.
  */
 export function appendSkillsCatalog(prompt: string, skills: Skill[]): string {
   if (skills.length === 0) return prompt;
+
+  const entries = skills.map((s) => {
+    const lines = [`**\`${s.name}\`** — ${s.description}`];
+    if (s.when) lines.push(`Use when: ${s.when}`);
+    if (s.when_not) lines.push(`Avoid when: ${s.when_not}`);
+    return lines.join('\n');
+  });
 
   const skillsSection = [
     '',
@@ -61,11 +73,9 @@ export function appendSkillsCatalog(prompt: string, skills: Skill[]): string {
     '',
     '## Available Skills',
     '',
-    'The following skills are available via the `skill_run` tool:',
+    'Invoke with the `skill_run` tool. Each skill runs as an isolated sub-agent.',
     '',
-    '| Skill | Description |',
-    '|-------|-------------|',
-    ...skills.map((s) => `| \`${s.name}\` | ${s.description} |`),
+    entries.join('\n\n'),
   ].join('\n');
 
   return prompt + skillsSection;

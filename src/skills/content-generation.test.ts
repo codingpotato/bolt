@@ -12,6 +12,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseSkillFile, type Skill } from './skill-loader';
 import { createSkillRunTool } from '../tools/skill-run';
+
+vi.mock('./skill-loader', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./skill-loader')>();
+  return { ...actual, loadSkillsFromDir: vi.fn().mockResolvedValue([]) };
+});
+const PROJECT_SKILLS_DIR = '/project/.bolt/skills';
 import type { AuthConfig } from '../auth/auth';
 import { createNoopLogger } from '../logger';
 import { NoopProgressReporter } from '../progress';
@@ -72,7 +78,7 @@ describe('generate-video-script scene fields', () => {
     };
 
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(storyboard) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'generate-video-script', args: { topic: 'AI coding tools' } },
       makeCtx(),
@@ -122,7 +128,7 @@ describe('generate-video-script scene fields', () => {
     };
 
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(storyboard) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'generate-video-script', args: { topic: 'AI developer tools', durationSeconds: 30 } },
       makeCtx(),
@@ -168,6 +174,7 @@ describe('skill chaining: summarize-url output feeds into write-blog-post', () =
     const summarizeRunner = vi.fn().mockResolvedValue({ output: JSON.stringify(summaryOutput) });
     const summarizeTool = createSkillRunTool(
       [summarizeSkill],
+      PROJECT_SKILLS_DIR,
       AUTH,
       MODEL,
       SCRIPT,
@@ -188,7 +195,7 @@ describe('skill chaining: summarize-url output feeds into write-blog-post', () =
     };
 
     const blogRunner = vi.fn().mockResolvedValue({ output: JSON.stringify(blogOutput) });
-    const blogTool = createSkillRunTool([blogSkill], AUTH, MODEL, SCRIPT, EXEC, blogRunner, '');
+    const blogTool = createSkillRunTool([blogSkill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, blogRunner, '');
 
     const blogResult = await blogTool.execute(
       {
@@ -220,6 +227,7 @@ describe('skill chaining: summarize-url output feeds into write-blog-post', () =
     const summarizeRunner = vi.fn().mockResolvedValue({ output: JSON.stringify(summaryOutput) });
     const summarizeTool = createSkillRunTool(
       [summarizeSkill],
+      PROJECT_SKILLS_DIR,
       AUTH,
       MODEL,
       SCRIPT,
@@ -237,7 +245,7 @@ describe('skill chaining: summarize-url output feeds into write-blog-post', () =
 
     const blogOutput = { post: '# TypeScript Best Practices\n\nStrict mode is essential.' };
     const blogRunner = vi.fn().mockResolvedValue({ output: JSON.stringify(blogOutput) });
-    const blogTool = createSkillRunTool([blogSkill], AUTH, MODEL, SCRIPT, EXEC, blogRunner, '');
+    const blogTool = createSkillRunTool([blogSkill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, blogRunner, '');
 
     const step2 = await blogTool.execute(
       { name: 'write-blog-post', args: { topic: combinedTopic } },

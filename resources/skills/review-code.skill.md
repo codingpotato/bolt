@@ -1,6 +1,8 @@
 ---
 name: review-code
 description: Perform a code review on a diff or file and return a structured report
+when: Use when the user asks for a code review of a diff, PR, or specific file. Produces a structured report with issues, severity, and line references.
+when_not: Do not use to fix code — use fix-tests or direct file editing tools instead. Do not use for reviewing non-code content (docs, configs) unless code is embedded.
 input:
   diff:
     type: string

@@ -612,14 +612,17 @@ export function resolveConfig(): Config {
 
   // If config file specifies workspace.root, apply it and re-resolve dataDir
   // if it was relative (so dataDir stays relative to the final workspace root).
+  // BOLT_WORKSPACE_ROOT env var takes precedence and prevents the config file
+  // from changing the workspace root or redirecting dataDir.
   if (
     typeof fileConfig.workspace === 'object' &&
     fileConfig.workspace !== null &&
     'root' in fileConfig.workspace &&
-    typeof (fileConfig.workspace as Record<string, unknown>).root === 'string'
+    typeof (fileConfig.workspace as Record<string, unknown>).root === 'string' &&
+    !envWorkspaceRoot
   ) {
     workspaceRoot = (fileConfig.workspace as Record<string, unknown>).root as string;
-    if (!isAbsolute(rawDataDir) && !envWorkspaceRoot) {
+    if (!isAbsolute(rawDataDir)) {
       dataDir = join(workspaceRoot, rawDataDir);
     }
   }
@@ -632,6 +635,15 @@ export function resolveConfig(): Config {
   merged.workspace.root = workspaceRoot;
 
   const withEnv = applyEnvOverrides(merged);
+
+  // Resolve agentPrompt.projectFile to an absolute path relative to the
+  // workspace root. Without this, a relative default (.bolt/AGENT.md) would
+  // be interpreted relative to process.cwd(), creating a stray .bolt folder
+  // whenever cwd differs from the workspace (e.g. BOLT_WORKSPACE_ROOT env var).
+  if (!isAbsolute(withEnv.agentPrompt.projectFile)) {
+    withEnv.agentPrompt.projectFile = join(withEnv.workspace.root, withEnv.agentPrompt.projectFile);
+  }
+
   validate(withEnv);
   return withEnv;
 }

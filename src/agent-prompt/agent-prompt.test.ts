@@ -108,7 +108,7 @@ describe('ensureAgentFile', () => {
 });
 
 describe('appendSkillsCatalog', () => {
-  it('appends a skills table when skills are provided', () => {
+  it('appends a skills section when skills are provided', () => {
     const skills: Skill[] = [
       {
         name: 'write-blog',
@@ -129,10 +129,69 @@ describe('appendSkillsCatalog', () => {
     expect(result).toContain('## Available Skills');
     expect(result).toContain('`write-blog`');
     expect(result).toContain('`review-code`');
+    expect(result).toContain('Write a blog post');
   });
 
   it('returns prompt unchanged when no skills', () => {
     expect(appendSkillsCatalog('# Base', [])).toBe('# Base');
+  });
+
+  it('renders when and when_not guidance when present', () => {
+    const skills: Skill[] = [
+      {
+        name: 'analyze-trends',
+        description: 'Analyse trending topics',
+        when: 'Use at the start of a content pipeline.',
+        when_not: 'Do not use for a single quick lookup.',
+        systemPrompt: '',
+        inputSchema: {},
+        outputSchema: {},
+      },
+    ];
+    const result = appendSkillsCatalog('# Base', skills);
+    expect(result).toContain('Use when: Use at the start of a content pipeline.');
+    expect(result).toContain('Avoid when: Do not use for a single quick lookup.');
+  });
+
+  it('omits Use when / Avoid when lines for skills without those fields', () => {
+    const skills: Skill[] = [
+      {
+        name: 'simple-skill',
+        description: 'A simple skill',
+        systemPrompt: '',
+        inputSchema: {},
+        outputSchema: {},
+      },
+    ];
+    const result = appendSkillsCatalog('# Base', skills);
+    expect(result).not.toContain('Use when:');
+    expect(result).not.toContain('Avoid when:');
+    expect(result).toContain('`simple-skill`');
+    expect(result).toContain('A simple skill');
+  });
+
+  it('renders mixed skills correctly — some with routing guidance, some without', () => {
+    const skills: Skill[] = [
+      {
+        name: 'skill-with-routing',
+        description: 'Has routing guidance',
+        when: 'Use in pipeline step 1.',
+        systemPrompt: '',
+        inputSchema: {},
+        outputSchema: {},
+      },
+      {
+        name: 'skill-without-routing',
+        description: 'No routing guidance',
+        systemPrompt: '',
+        inputSchema: {},
+        outputSchema: {},
+      },
+    ];
+    const result = appendSkillsCatalog('# Base', skills);
+    expect(result).toContain('Use when: Use in pipeline step 1.');
+    expect(result).toContain('`skill-without-routing`');
+    expect(result).toContain('No routing guidance');
   });
 });
 

@@ -37,18 +37,7 @@ A catalog of available tools with name and one-line descriptions is appended to 
 
 ---
 
-## Skill Routing Rules
-
-You MUST use the appropriate skill for each type of request:
-
-| Request Type | Action |
-|--------------|--------|
-| Video production (YouTube Shorts, TikToks, Reels, animations) | Run `plan-video-production` skill, then execute the pipeline yourself (see Video Execution Protocol below) |
-| Blog posts, articles | Run `write-blog-post` skill |
-| Social media posts | Run `draft-social-post` skill |
-| Trend analysis | Run `analyze-trends` skill |
-
-### Video Execution Protocol
+## Video Execution Protocol
 
 Video production uses a **two-phase model**: a planning skill sets up the project and task DAG, then the main agent drives execution with full user review at every step.
 
@@ -100,39 +89,7 @@ After plan approval, execute the task DAG yourself. For each task:
 
 ## Skills
 
-Run skills with `skill_run`. Skills execute in isolated sub-agents and return structured output. A catalog of available skills is appended to this prompt at startup.
-
----
-
-## Content Generation Workflow
-
-```
-plan-video-production (skill) → plan summary → user_review (approve plan)
-         ↓
-[main agent executes task DAG]
-         ↓
-1. analyze-trends (skill)     → user_review (approve trend report)
-         ↓
-2. generate-video-script (skill) → user_review (approve storyboard)
-         ↓
-3. generate-image-prompt (skill) × N scenes → user_review (approve all prompts)
-         ↓
-4. comfyui_text2img × N scenes  → user_review (approve all images)
-         ↓
-5. generate-video-prompt (skill) × N scenes → user_review (approve all motion prompts)
-         ↓
-6. comfyui_img2video × N scenes → user_review (approve all clips)
-         ↓
-7. video_merge → user_review (approve merged video)
-         ↓
-8. video_add_audio [optional]   → user_review
-         ↓
-9. video_add_subtitles [optional] → user_review → final video
-```
-
-Phase 1 (planning) runs as a skill subagent. Phase 2 (execution) runs entirely in the main agent — never call `comfyui_text2img`, `comfyui_img2video`, or video editing tools from inside a skill. All review gates must be at the main agent level.
-
-All output files go under `projects/<project-id>/` within the workspace root.
+Run skills with `skill_run`. Skills execute in isolated sub-agents and return structured output. A catalog of available skills — with routing guidance (when to use each, and when not to) — is appended to this prompt at startup.
 
 ---
 

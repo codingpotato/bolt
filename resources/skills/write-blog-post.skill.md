@@ -1,6 +1,8 @@
 ---
 name: write-blog-post
 description: Draft a long-form blog post on a given topic
+when: Use when the user requests a blog post, article, or long-form written piece (600+ words). Use after trend research when the topic and angle are already known.
+when_not: Do not use for short social media posts (use draft-social-post instead) or for quick inline text the agent can write directly without a sub-agent.
 input:
   topic:
     type: string

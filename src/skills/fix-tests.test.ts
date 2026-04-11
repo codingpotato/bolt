@@ -16,6 +16,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseSkillFile, type Skill } from './skill-loader';
 import { createSkillRunTool } from '../tools/skill-run';
+
+vi.mock('./skill-loader', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./skill-loader')>();
+  return { ...actual, loadSkillsFromDir: vi.fn().mockResolvedValue([]) };
+});
+const PROJECT_SKILLS_DIR = '/project/.bolt/skills';
 import type { AuthConfig } from '../auth/auth';
 import { createNoopLogger } from '../logger';
 import { NoopProgressReporter } from '../progress';
@@ -58,7 +64,7 @@ describe('fix-tests: pass on first run', () => {
       fixesApplied: [],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const r = (
       await tool.execute(
         { name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } },
@@ -74,7 +80,7 @@ describe('fix-tests: pass on first run', () => {
   it('omitting command leaves it absent from serialised args (default is LLM-inferred)', async () => {
     const result = { passed: true, attempts: 1, finalOutput: 'ok', fixesApplied: [] };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     await tool.execute({ name: 'fix-tests', args: { maxRetries: 3 } }, makeCtx());
     const [payload] = runner.mock.calls[0] as [
       import('../subagent/subagent-runner').SubagentPayload,
@@ -102,7 +108,7 @@ describe('fix-tests: fix on first retry', () => {
       fixesApplied: ['Fixed off-by-one error in src/utils.ts line 17'],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const r = (
       await tool.execute(
         { name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } },
@@ -133,7 +139,7 @@ describe('fix-tests: retries exhausted', () => {
       ],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const r = (
       await tool.execute(
         { name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } },
@@ -154,7 +160,7 @@ describe('fix-tests: retries exhausted', () => {
       fixesApplied: ['Attempted null-check in src/index.ts'],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const r = (
       await tool.execute(
         { name: 'fix-tests', args: { command: 'npm test', maxRetries: 1 } },
@@ -181,7 +187,7 @@ describe('fix-tests: fixesApplied list', () => {
       fixesApplied: fixes,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const r = (
       await tool.execute(
         { name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } },
@@ -200,7 +206,7 @@ describe('fix-tests: attempts counter', () => {
   it('attempts equals 1 when passing on the first run', async () => {
     const result = { passed: true, attempts: 1, finalOutput: 'ok', fixesApplied: [] };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const r = (await tool.execute({ name: 'fix-tests', args: { maxRetries: 3 } }, makeCtx()))
       .result as typeof result;
     expect(r.attempts).toBe(1);
@@ -215,7 +221,7 @@ describe('fix-tests: attempts counter', () => {
       fixesApplied: Array.from({ length: maxRetries }, (_, i) => `fix attempt ${i + 1}`),
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const r = (
       await tool.execute(
         { name: 'fix-tests', args: { command: 'npm test', maxRetries } },
@@ -266,7 +272,7 @@ describe('fix-tests sub-agent payload', () => {
   it('sends correct allowedTools to sub-agent', async () => {
     const result = { passed: true, attempts: 1, finalOutput: 'ok', fixesApplied: [] };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     await tool.execute(
       { name: 'fix-tests', args: { command: 'npm test', maxRetries: 3 } },
       makeCtx(),
@@ -282,7 +288,7 @@ describe('fix-tests sub-agent payload', () => {
   it('includes command and maxRetries in the prompt', async () => {
     const result = { passed: true, attempts: 1, finalOutput: 'ok', fixesApplied: [] };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(result) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     await tool.execute(
       { name: 'fix-tests', args: { command: 'npx vitest run', maxRetries: 5 } },
       makeCtx(),

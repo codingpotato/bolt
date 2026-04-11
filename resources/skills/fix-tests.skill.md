@@ -1,6 +1,8 @@
 ---
 name: fix-tests
 description: Run a test suite, read failures, apply targeted fixes, and retry until tests pass or retries are exhausted
+when: Use when the user asks to fix a failing test suite, or after writing code that may have broken existing tests. Handles the run → diagnose → fix → retry loop automatically.
+when_not: Do not use just to run tests without fixing (call bash directly). Do not use when only a single known file needs editing — direct file edits are faster than a full retry loop.
 input:
   command:
     type: string

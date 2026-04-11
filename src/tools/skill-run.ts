@@ -1,5 +1,6 @@
 import { ToolError } from './tool';
 import type { Tool, ToolContext, JSONSchema } from './tool';
+import { loadSkillsFromDir } from '../skills/skill-loader';
 import type { Skill } from '../skills/skill-loader';
 import type { AuthConfig } from '../auth/auth';
 import type { SubagentPayload, SubagentRunner } from '../subagent/subagent-runner';
@@ -77,7 +78,8 @@ export function buildSkillPrompt(
 }
 
 export function createSkillRunTool(
-  skills: Skill[],
+  builtinSkills: Skill[],
+  projectSkillsDir: string,
   authConfig: AuthConfig,
   model: string,
   scriptPath: string,
@@ -86,7 +88,8 @@ export function createSkillRunTool(
   inheritedRules: string,
   logger: Logger = createNoopLogger(),
 ): Tool<SkillRunInput, SkillRunOutput> {
-  const skillMap = new Map<string, Skill>(skills.map((s) => [s.name, s]));
+  // Builtins are loaded once at startup and never change.
+  const builtinMap = new Map<string, Skill>(builtinSkills.map((s) => [s.name, s]));
 
   return {
     name: 'skill_run',
@@ -109,6 +112,15 @@ export function createSkillRunTool(
     },
 
     async execute(input: SkillRunInput, ctx: ToolContext): Promise<SkillRunOutput> {
+      // Reload workspace skills on every call — the agent may have written new
+      // .skill.md files into projectSkillsDir since startup. Workspace skills
+      // shadow builtins on name collision.
+      const workspaceSkills = await loadSkillsFromDir(projectSkillsDir, (msg) =>
+        logger.warn(msg),
+      );
+      const skillMap = new Map<string, Skill>(builtinMap);
+      for (const s of workspaceSkills) skillMap.set(s.name, s);
+
       const skill = skillMap.get(input.name);
       if (!skill) {
         throw new ToolError(`unknown skill: "${input.name}"`);

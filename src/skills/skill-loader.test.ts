@@ -3,7 +3,7 @@ import * as fsPromises from 'node:fs/promises';
 
 vi.mock('node:fs/promises');
 
-import { loadSkills, parseSkillFile } from './skill-loader';
+import { loadSkillsFromDir, parseSkillFile } from './skill-loader';
 
 // ── parseSkillFile ────────────────────────────────────────────────────────────
 
@@ -127,6 +127,65 @@ body`;
       type: 'string',
       enum: ['casual', 'formal'],
     });
+  });
+
+  it('parses when and when_not fields', () => {
+    const raw = `---
+name: my-skill
+description: test
+when: Use when you need structured output.
+when_not: Do not use for quick lookups.
+input:
+  q:
+    type: string
+output:
+  r:
+    type: string
+---
+body`;
+
+    const skill = parseSkillFile('my-skill.skill.md', raw);
+    expect(skill?.when).toBe('Use when you need structured output.');
+    expect(skill?.when_not).toBe('Do not use for quick lookups.');
+  });
+
+  it('parses multi-line when field', () => {
+    const raw = `---
+name: my-skill
+description: test
+when: |
+  Use for trend analysis.
+  Prefer over web_search for structured output.
+input:
+  q:
+    type: string
+output:
+  r:
+    type: string
+---
+body`;
+
+    const skill = parseSkillFile('my-skill.skill.md', raw);
+    expect(skill?.when).toContain('Use for trend analysis.');
+    expect(skill?.when).toContain('Prefer over web_search');
+  });
+
+  it('omits when and when_not when not specified', () => {
+    const raw = `---
+name: my-skill
+description: test
+input:
+  q:
+    type: string
+output:
+  r:
+    type: string
+---
+body`;
+
+    const skill = parseSkillFile('my-skill.skill.md', raw);
+    expect(skill?.when).toBeUndefined();
+    expect(skill?.when_not).toBeUndefined();
   });
 
   it('sets allowedTools to undefined when not specified', () => {
@@ -279,11 +338,10 @@ body`;
   });
 });
 
-// ── loadSkills ────────────────────────────────────────────────────────────────
+// ── loadSkillsFromDir ─────────────────────────────────────────────────────────
 
-describe('loadSkills', () => {
-  const projectSkillsDir = '/project/.bolt/skills';
-  const userSkillsDir = '/home/user/.bolt/skills';
+describe('loadSkillsFromDir', () => {
+  const skillsDir = '/project/.bolt/skills';
 
   const validSkillContent = `---
 name: my-skill
@@ -301,67 +359,22 @@ Do the thing.`;
     vi.clearAllMocks();
   });
 
-  it('loads skills from projectSkillsDir', async () => {
-    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === projectSkillsDir) return ['my-skill.skill.md'] as never;
-      return [] as never;
-    });
+  it('loads skills from the directory', async () => {
+    vi.mocked(fsPromises.readdir).mockResolvedValue(['my-skill.skill.md'] as never);
     vi.mocked(fsPromises.readFile).mockResolvedValue(validSkillContent);
 
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir);
+    const skills = await loadSkillsFromDir(skillsDir);
     expect(skills).toHaveLength(1);
     expect(skills[0]?.name).toBe('my-skill');
-  });
-
-  it('loads skills from userSkillsDir', async () => {
-    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === userSkillsDir) return ['my-skill.skill.md'] as never;
-      return [] as never;
-    });
-    vi.mocked(fsPromises.readFile).mockResolvedValue(validSkillContent);
-
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir);
-    expect(skills).toHaveLength(1);
-    expect(skills[0]?.name).toBe('my-skill');
-  });
-
-  it('projectSkillsDir wins on name collision', async () => {
-    const projectContent = validSkillContent;
-    const userContent = `---
-name: my-skill
-description: User version
-input:
-  query:
-    type: string
-output:
-  result:
-    type: string
----
-User version prompt.`;
-
-    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === projectSkillsDir) return ['my-skill.skill.md'] as never;
-      if (dir === userSkillsDir) return ['my-skill.skill.md'] as never;
-      return [] as never;
-    });
-    vi.mocked(fsPromises.readFile).mockImplementation(async (filePath: unknown) => {
-      if (String(filePath).startsWith(projectSkillsDir)) return projectContent as never;
-      return userContent as never;
-    });
-
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir);
-    expect(skills).toHaveLength(1);
-    expect(skills[0]?.description).toBe('A test skill');
   });
 
   it('ignores files that are not .skill.md', async () => {
-    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === projectSkillsDir) return ['my-skill.skill.md', 'README.md', 'notes.txt'] as never;
-      return [] as never;
-    });
+    vi.mocked(fsPromises.readdir).mockResolvedValue(
+      ['my-skill.skill.md', 'README.md', 'notes.txt'] as never,
+    );
     vi.mocked(fsPromises.readFile).mockResolvedValue(validSkillContent);
 
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir);
+    const skills = await loadSkillsFromDir(skillsDir);
     expect(skills).toHaveLength(1);
   });
 
@@ -371,47 +384,43 @@ User version prompt.`;
 ---
 body`;
 
-    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === projectSkillsDir) return ['bad.skill.md', 'my-skill.skill.md'] as never;
-      return [] as never;
-    });
+    vi.mocked(fsPromises.readdir).mockResolvedValue(
+      ['bad.skill.md', 'my-skill.skill.md'] as never,
+    );
     vi.mocked(fsPromises.readFile).mockImplementation(async (filePath: unknown) => {
       if (String(filePath).includes('bad')) return invalidContent as never;
       return validSkillContent as never;
     });
 
     const warn = vi.fn();
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir, warn);
+    const skills = await loadSkillsFromDir(skillsDir, warn);
     expect(skills).toHaveLength(1);
     expect(skills[0]?.name).toBe('my-skill');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('bad.skill.md'));
   });
 
-  it('returns empty array when both directories are missing', async () => {
+  it('returns empty array when the directory does not exist', async () => {
     vi.mocked(fsPromises.readdir).mockRejectedValue(
       Object.assign(new Error('ENOENT'), { code: 'ENOENT' }),
     );
 
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir);
+    const skills = await loadSkillsFromDir(skillsDir);
     expect(skills).toEqual([]);
   });
 
-  it('returns empty array when both directories are empty', async () => {
+  it('returns empty array when the directory is empty', async () => {
     vi.mocked(fsPromises.readdir).mockResolvedValue([] as never);
 
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir);
+    const skills = await loadSkillsFromDir(skillsDir);
     expect(skills).toEqual([]);
   });
 
   it('warns and skips a skill file when readFile throws', async () => {
-    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === projectSkillsDir) return ['my-skill.skill.md'] as never;
-      return [] as never;
-    });
+    vi.mocked(fsPromises.readdir).mockResolvedValue(['my-skill.skill.md'] as never);
     vi.mocked(fsPromises.readFile).mockRejectedValue(new Error('EACCES: permission denied'));
 
     const warn = vi.fn();
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir, warn);
+    const skills = await loadSkillsFromDir(skillsDir, warn);
     expect(skills).toHaveLength(0);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('my-skill.skill.md'));
   });
@@ -421,106 +430,6 @@ body`;
       Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }),
     );
 
-    await expect(loadSkills(projectSkillsDir, userSkillsDir)).rejects.toThrow('EACCES');
-  });
-
-  it('loads skills from builtinSkillsDir', async () => {
-    const builtinSkillsDir = '/bolt/src/skills';
-    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === builtinSkillsDir) return ['my-skill.skill.md'] as never;
-      return [] as never;
-    });
-    vi.mocked(fsPromises.readFile).mockResolvedValue(validSkillContent);
-
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir, () => {}, builtinSkillsDir);
-    expect(skills).toHaveLength(1);
-    expect(skills[0]?.name).toBe('my-skill');
-  });
-
-  it('projectSkillsDir wins over builtinSkillsDir on name collision', async () => {
-    const builtinSkillsDir = '/bolt/src/skills';
-    const builtinContent = `---
-name: my-skill
-description: Built-in version
-input:
-  query:
-    type: string
-output:
-  result:
-    type: string
----
-Built-in prompt.`;
-
-    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === projectSkillsDir) return ['my-skill.skill.md'] as never;
-      if (dir === builtinSkillsDir) return ['my-skill.skill.md'] as never;
-      return [] as never;
-    });
-    vi.mocked(fsPromises.readFile).mockImplementation(async (filePath: unknown) => {
-      if (String(filePath).startsWith(projectSkillsDir)) return validSkillContent as never;
-      return builtinContent as never;
-    });
-
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir, () => {}, builtinSkillsDir);
-    expect(skills).toHaveLength(1);
-    expect(skills[0]?.description).toBe('A test skill'); // project wins
-  });
-
-  it('userSkillsDir wins over builtinSkillsDir on name collision', async () => {
-    const builtinSkillsDir = '/bolt/src/skills';
-    const builtinContent = `---
-name: my-skill
-description: Built-in version
-input:
-  query:
-    type: string
-output:
-  result:
-    type: string
----
-Built-in prompt.`;
-
-    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === userSkillsDir) return ['my-skill.skill.md'] as never;
-      if (dir === builtinSkillsDir) return ['my-skill.skill.md'] as never;
-      return [] as never;
-    });
-    vi.mocked(fsPromises.readFile).mockImplementation(async (filePath: unknown) => {
-      if (String(filePath).startsWith(userSkillsDir)) return validSkillContent as never;
-      return builtinContent as never;
-    });
-
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir, () => {}, builtinSkillsDir);
-    expect(skills).toHaveLength(1);
-    expect(skills[0]?.description).toBe('A test skill'); // user wins over built-in
-  });
-
-  it('merges skills from both directories (non-colliding names)', async () => {
-    const skill2Content = `---
-name: other-skill
-description: Another skill
-input:
-  x:
-    type: string
-output:
-  y:
-    type: string
----
-Other prompt.`;
-
-    vi.mocked(fsPromises.readdir).mockImplementation(async (dir) => {
-      if (dir === projectSkillsDir) return ['my-skill.skill.md'] as never;
-      if (dir === userSkillsDir) return ['other-skill.skill.md'] as never;
-      return [] as never;
-    });
-    vi.mocked(fsPromises.readFile).mockImplementation(async (filePath: unknown) => {
-      if (String(filePath).includes('other')) return skill2Content as never;
-      return validSkillContent as never;
-    });
-
-    const skills = await loadSkills(projectSkillsDir, userSkillsDir);
-    expect(skills).toHaveLength(2);
-    const names = skills.map((s) => s.name).sort();
-    expect(names).toEqual(['my-skill', 'other-skill']);
+    await expect(loadSkillsFromDir(skillsDir)).rejects.toThrow('EACCES');
   });
 });

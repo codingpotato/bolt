@@ -1,6 +1,8 @@
 ---
 name: generate-video-script
 description: Write a short-form video script with a structured scene-by-scene storyboard
+when: Use during video production phase 2 (generateScript task) after trend research is complete. The storyboard output drives all downstream scene steps (image prompts, video prompts, generation).
+when_not: Do not use without prior trend data when the topic is still open-ended. Do not use for non-video content — use write-blog-post or draft-social-post instead.
 input:
   topic:
     type: string

@@ -1,6 +1,8 @@
 ---
 name: draft-social-post
 description: Write a short-form social media post for a given platform and topic
+when: Use when the user asks for a tweet, LinkedIn post, Xiaohongshu note, or Instagram caption. Use after trend research when platform and topic are confirmed.
+when_not: Do not use for blog posts or articles (use write-blog-post). Do not use when the user wants a full content piece rather than a single social update.
 input:
   topic:
     type: string

@@ -37,18 +37,7 @@ A catalog of available tools with name and one-line descriptions is appended to 
 
 ---
 
-## Skill Routing Rules
-
-You MUST use the appropriate skill for each type of request:
-
-| Request Type | Action |
-|--------------|--------|
-| Video production (YouTube Shorts, TikToks, Reels, animations) | Run `plan-video-production` skill, then execute the pipeline yourself (see Video Execution Protocol below) |
-| Blog posts, articles | Run `write-blog-post` skill |
-| Social media posts | Run `draft-social-post` skill |
-| Trend analysis | Run `analyze-trends` skill |
-
-### Video Execution Protocol
+## Video Execution Protocol
 
 Video production uses a **two-phase model**: a planning skill sets up the project and task DAG, then the main agent drives execution with full user review at every step.
 
@@ -100,7 +89,7 @@ After plan approval, execute the task DAG yourself. For each task:
 
 ## Skills
 
-Run skills with `skill_run`. Skills execute in isolated sub-agents and return structured output. A catalog of available skills is appended to this prompt at startup.
+Run skills with `skill_run`. Skills execute in isolated sub-agents and return structured output. A catalog of available skills — with routing guidance (when to use each, and when not to) — is appended to this prompt at startup.
 
 ---
 

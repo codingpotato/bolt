@@ -129,6 +129,65 @@ body`;
     });
   });
 
+  it('parses when and when_not fields', () => {
+    const raw = `---
+name: my-skill
+description: test
+when: Use when you need structured output.
+when_not: Do not use for quick lookups.
+input:
+  q:
+    type: string
+output:
+  r:
+    type: string
+---
+body`;
+
+    const skill = parseSkillFile('my-skill.skill.md', raw);
+    expect(skill?.when).toBe('Use when you need structured output.');
+    expect(skill?.when_not).toBe('Do not use for quick lookups.');
+  });
+
+  it('parses multi-line when field', () => {
+    const raw = `---
+name: my-skill
+description: test
+when: |
+  Use for trend analysis.
+  Prefer over web_search for structured output.
+input:
+  q:
+    type: string
+output:
+  r:
+    type: string
+---
+body`;
+
+    const skill = parseSkillFile('my-skill.skill.md', raw);
+    expect(skill?.when).toContain('Use for trend analysis.');
+    expect(skill?.when).toContain('Prefer over web_search');
+  });
+
+  it('omits when and when_not when not specified', () => {
+    const raw = `---
+name: my-skill
+description: test
+input:
+  q:
+    type: string
+output:
+  r:
+    type: string
+---
+body`;
+
+    const skill = parseSkillFile('my-skill.skill.md', raw);
+    expect(skill?.when).toBeUndefined();
+    expect(skill?.when_not).toBeUndefined();
+  });
+
   it('sets allowedTools to undefined when not specified', () => {
     const raw = `---
 name: my-skill

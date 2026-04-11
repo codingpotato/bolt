@@ -1,6 +1,8 @@
 ---
 name: generate-image-prompt
 description: Create a detailed image generation prompt optimised for the target model
+when: Use once per scene during the generateImagePrompts task. Call after the storyboard is finalised; pass the scene description and imagePromptHint from the storyboard.
+when_not: Do not use to generate the image itself (use comfyui_text2img for that). Do not skip user_review before passing the output to comfyui_text2img.
 input:
   sceneDescription:
     type: string

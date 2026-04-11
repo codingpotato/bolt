@@ -6,6 +6,10 @@ import type { JSONSchema } from '../tools/tool';
 export interface Skill {
   name: string;
   description: string;
+  /** Conditions under which the agent should prefer this skill over alternatives. */
+  when?: string;
+  /** Conditions under which the agent should NOT use this skill. */
+  when_not?: string;
   systemPrompt: string;
   inputSchema: JSONSchema;
   outputSchema: JSONSchema;
@@ -19,6 +23,8 @@ export interface Skill {
 interface RawFrontmatter {
   name: unknown;
   description: unknown;
+  when?: unknown;
+  when_not?: unknown;
   input: unknown;
   output: unknown;
   allowedTools?: unknown;
@@ -97,9 +103,16 @@ export function parseSkillFile(_filename: string, raw: string): Skill | null {
   // allowedTools must be string[] or absent — anything else is invalid
   if (allowedTools === null) return null;
 
+  const when =
+    typeof fm.when === 'string' && fm.when.trim() !== '' ? fm.when.trim() : undefined;
+  const when_not =
+    typeof fm.when_not === 'string' && fm.when_not.trim() !== '' ? fm.when_not.trim() : undefined;
+
   return {
     name: fm.name.trim(),
     description: fm.description.trim(),
+    ...(when !== undefined ? { when } : {}),
+    ...(when_not !== undefined ? { when_not } : {}),
     systemPrompt: (body ?? '').trim(),
     inputSchema: fieldMapToJsonSchema(fm.input),
     outputSchema: fieldMapToJsonSchema(fm.output),

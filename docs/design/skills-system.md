@@ -40,6 +40,8 @@ Skills are defined as `.skill.md` files. The frontmatter carries metadata; the b
 ---
 name: write-blog-post
 description: Draft a long-form blog post on a given topic
+when: Use when the user requests a blog post or article (600+ words). Use after trend research when the topic and angle are already known.
+when_not: Do not use for short social media posts (use draft-social-post instead) or for quick inline text the agent can write directly.
 input:
   topic:
     type: string
@@ -61,6 +63,24 @@ You are a skilled content writer. Given a topic and tone, write a complete,
 well-structured blog post in Markdown. Use the web_search and web_fetch tools
 to research the topic before writing if needed.
 ```
+
+### Frontmatter fields
+
+| Field | Required | Purpose |
+|-------|----------|---------|
+| `name` | Yes | Kebab-case identifier used to invoke the skill |
+| `description` | Yes | One-line summary shown in the skills catalog |
+| `when` | No | **Routing guidance — when the agent should prefer this skill** over direct tools or alternatives |
+| `when_not` | No | **Negative routing guidance — when the agent should NOT use this skill** (disambiguation, anti-patterns) |
+| `input` | Yes | Map of input field names to definitions (type, description, default, enum) |
+| `output` | Yes | Map of output field names to definitions |
+| `allowedTools` | No | Tool names the skill's sub-agent may call; intersected with the parent allowlist |
+
+### Why `when` / `when_not` matter
+
+The `when` and `when_not` fields are injected into the agent's system prompt alongside the skill description. This makes each skill **self-describing for routing** — the agent does not need an external routing table to know when to invoke it.
+
+This is especially important for **workspace skills created at runtime**: when the agent writes a new `.skill.md` file and immediately invokes it, the only routing context the main agent has comes from the skill file itself. A well-written `when` / `when_not` block prevents the agent from using the wrong skill or calling a sub-agent when a direct tool would suffice.
 
 ## Skill Discovery
 

@@ -1,6 +1,8 @@
 ---
 name: generate-video-prompt
 description: Create a motion and animation prompt for image-to-video generation
+when: Use once per scene during the generateVideoPrompts task, after the scene image has been approved. Pass the scene description from the storyboard.
+when_not: Do not use to generate the video itself (use comfyui_img2video for that). Do not call before the scene image exists — image must precede video generation.
 input:
   sceneDescription:
     type: string

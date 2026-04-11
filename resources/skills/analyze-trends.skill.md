@@ -1,6 +1,8 @@
 ---
 name: analyze-trends
 description: Search trending topics on social media, analyse viral patterns, and produce a structured trend report with content angles and recommendations
+when: Use at the start of a content pipeline or video production plan when you need structured, multi-platform trend data with content angles. Prefer over raw web_search when the output needs to feed into a script or post.
+when_not: Do not use for a single quick lookup or when trend context is already available in the current task. Call web_search directly for one-off factual queries.
 input:
   topic:
     type: string

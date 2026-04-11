@@ -37,7 +37,7 @@ import { createMemoryWriteTool } from '../tools/memory-write';
 import { createSubagentRunTool } from '../tools/subagent-run';
 import { createSkillRunTool } from '../tools/skill-run';
 import { runSubagent } from '../subagent/subagent-runner';
-import { loadSkills } from '../skills/skill-loader';
+import { loadSkillsFromDir } from '../skills/skill-loader';
 import { createSkillsSlashCommand } from '../skills/skills-slash-command';
 import { createRunSkillSlashCommand } from '../skills/run-skill-slash-command';
 import { createSlashCommandRegistry } from '../slash-commands/slash-commands';
@@ -55,7 +55,6 @@ import { FfmpegRunner } from '../ffmpeg/ffmpeg-runner';
 import { createContentProjectTools } from '../tools/content-project-tools';
 import { resolve, join } from 'node:path';
 import { BUILTIN_SKILLS_DIR } from '../assets';
-import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
 
 const INHERITED_SECTIONS = ['Safety Rules', 'Communication Style', 'Operating Modes'] as const;
@@ -158,17 +157,18 @@ async function serve(serveArgs: string[]): Promise<void> {
   logger.debug('Subagent script resolved', { scriptPath: subagentScript, execPath: subagentExec });
 
   const projectSkillsDir = join(dataDir, 'skills');
-  const userSkillsDir = join(homedir(), '.bolt', 'skills');
-  const builtinSkillsDir = BUILTIN_SKILLS_DIR;
-  const skills = await loadSkills(
-    projectSkillsDir,
-    userSkillsDir,
-    (msg) => logger.warn(msg),
-    builtinSkillsDir,
+  const builtinSkills = await loadSkillsFromDir(BUILTIN_SKILLS_DIR, (msg: string) =>
+    logger.warn(msg),
   );
 
   const allTools = toolBus.list();
-  const systemPrompt = await assembleSystemPrompt(config, skills, allTools, logger, traceLogger);
+  const systemPrompt = await assembleSystemPrompt(
+    config,
+    builtinSkills,
+    allTools,
+    logger,
+    traceLogger,
+  );
 
   const estimatedTokens = estimateTokenCount(systemPrompt);
   if (estimatedTokens > config.agentPrompt.maxTokens) {
@@ -196,7 +196,8 @@ async function serve(serveArgs: string[]): Promise<void> {
   );
   toolBus.register(
     createSkillRunTool(
-      skills,
+      builtinSkills,
+      projectSkillsDir,
       auth,
       config.model,
       subagentScript,
@@ -207,10 +208,11 @@ async function serve(serveArgs: string[]): Promise<void> {
     ),
   );
   const slashRegistry = createSlashCommandRegistry();
-  slashRegistry.register(createSkillsSlashCommand(skills));
+  slashRegistry.register(createSkillsSlashCommand(builtinSkills, projectSkillsDir));
   slashRegistry.register(
     createRunSkillSlashCommand(
-      skills,
+      builtinSkills,
+      projectSkillsDir,
       auth,
       config.model,
       subagentScript,
@@ -301,7 +303,7 @@ async function serve(serveArgs: string[]): Promise<void> {
     count: toolBus.list().length,
     tools: toolBus.list().map((t) => t.name),
   });
-  logger.info('Skills loaded', { count: skills.length, skills: skills.map((s) => s.name) });
+  logger.info('Skills loaded', { count: builtinSkills.length, skills: builtinSkills.map((s) => s.name) });
 
   const shutdown = async (): Promise<void> => {
     process.off('SIGTERM', handleSignal);
@@ -349,17 +351,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Parse --workspace before resolving config so the workspace root is known.
-  const workspaceIdx = rawArgs.indexOf('--workspace');
-  const cliWorkspace =
-    workspaceIdx !== -1 ? resolve(rawArgs[workspaceIdx + 1] ?? '') : undefined;
-  // Remove --workspace and its value from the args passed to the rest of main.
-  const args =
-    workspaceIdx !== -1
-      ? [...rawArgs.slice(0, workspaceIdx), ...rawArgs.slice(workspaceIdx + 2)]
-      : rawArgs;
+  const args = rawArgs;
 
-  const config = resolveConfig(cliWorkspace);
+  const config = resolveConfig();
 
   const auth = resolveAuth();
   const client = createAnthropicClient(auth);
@@ -415,17 +409,18 @@ async function main(): Promise<void> {
   logger.debug('Subagent script resolved', { scriptPath: subagentScript, execPath: subagentExec });
 
   const projectSkillsDir = join(dataDir, 'skills');
-  const userSkillsDir = join(homedir(), '.bolt', 'skills');
-  const builtinSkillsDir = BUILTIN_SKILLS_DIR;
-  const skills = await loadSkills(
-    projectSkillsDir,
-    userSkillsDir,
-    (msg) => logger.warn(msg),
-    builtinSkillsDir,
+  const builtinSkills = await loadSkillsFromDir(BUILTIN_SKILLS_DIR, (msg: string) =>
+    logger.warn(msg),
   );
 
   const allTools = toolBus.list();
-  const systemPrompt = await assembleSystemPrompt(config, skills, allTools, logger, traceLogger);
+  const systemPrompt = await assembleSystemPrompt(
+    config,
+    builtinSkills,
+    allTools,
+    logger,
+    traceLogger,
+  );
 
   const estimatedTokens = estimateTokenCount(systemPrompt);
   if (estimatedTokens > config.agentPrompt.maxTokens) {
@@ -453,7 +448,8 @@ async function main(): Promise<void> {
   );
   toolBus.register(
     createSkillRunTool(
-      skills,
+      builtinSkills,
+      projectSkillsDir,
       auth,
       config.model,
       subagentScript,
@@ -464,10 +460,11 @@ async function main(): Promise<void> {
     ),
   );
   const slashRegistry = createSlashCommandRegistry();
-  slashRegistry.register(createSkillsSlashCommand(skills));
+  slashRegistry.register(createSkillsSlashCommand(builtinSkills, projectSkillsDir));
   slashRegistry.register(
     createRunSkillSlashCommand(
-      skills,
+      builtinSkills,
+      projectSkillsDir,
       auth,
       config.model,
       subagentScript,
@@ -511,7 +508,7 @@ async function main(): Promise<void> {
   let _cleanupWatcher: (() => void) | null = null;
   if (config.agentPrompt.watchForChanges && process.stdout.isTTY) {
     _cleanupWatcher = watchAgentPrompt(config, async () => {
-      const newPrompt = await assembleSystemPrompt(config, skills, toolBus.list(), logger);
+      const newPrompt = await assembleSystemPrompt(config, builtinSkills, toolBus.list(), logger);
       logger.info('System prompt reloaded after AGENT.md change');
       agent.updateSystemPrompt(newPrompt);
     });
@@ -548,7 +545,7 @@ async function main(): Promise<void> {
     count: toolBus.list().length,
     tools: toolBus.list().map((t) => t.name),
   });
-  logger.info('Skills loaded', { count: skills.length, skills: skills.map((s) => s.name) });
+  logger.info('Skills loaded', { count: builtinSkills.length, skills: builtinSkills.map((s) => s.name) });
 
   logger.info('bolt started', { model: config.model, auth: auth.mode, logLevel: config.logLevel });
 

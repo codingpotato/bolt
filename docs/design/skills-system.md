@@ -64,13 +64,14 @@ to research the topic before writing if needed.
 
 ## Skill Discovery
 
-bolt loads skills from three locations in priority order. A name collision at a higher-priority tier silently shadows the lower-priority definition.
+bolt loads skills from two locations. A name collision in the workspace tier silently shadows the built-in definition.
 
 | Priority | Location | Purpose |
 |----------|----------|---------|
-| 1 (highest) | `.bolt/skills/` | Project-local overrides — committed to the project repo; replaces any built-in with the same name |
-| 2 | `~/.bolt/skills/` | User-global skills shared across all projects |
-| 3 (lowest) | `BUILTIN_SKILLS_DIR` | Skills shipped with bolt — read-only, always available |
+| 1 (highest) | `<workspace>/.bolt/skills/` | Project-local skills — the agent can write new `.skill.md` files here at runtime and use them immediately |
+| 2 (lowest) | `BUILTIN_SKILLS_DIR` | Skills shipped with bolt — read-only, always available |
+
+**Workspace skills are loaded fresh on every `skill_run` call.** Built-in skills are loaded once at startup. This means the agent can create a skill with `file_write`, then call it in the same session without restarting.
 
 ### Built-in skill path resolution
 
@@ -216,8 +217,14 @@ For skills that run in a loop (e.g. `generate-image-prompt` called once per scen
 
 ## Adding a Custom Skill
 
-1. Create `.bolt/skills/<skill-name>.skill.md` using the file format above
+**Manually (human):**
+
+1. Create `<workspace>/.bolt/skills/<skill-name>.skill.md` using the file format above
 2. Run `/skills` inside a bolt session to verify it is discovered
 3. Invoke with `/run-skill <skill-name> --<arg> <value>`
 
-No code changes required.
+**By the agent at runtime:**
+
+The agent can create a workspace skill using `file_write` and immediately invoke it with `skill_run` — no restart required. Workspace skills are re-read from disk on every `skill_run` call, so a freshly written file is picked up automatically.
+
+No code changes required in either case.

@@ -1,8 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseSkillFile, loadSkills, type Skill } from './skill-loader';
+import { parseSkillFile, loadSkillsFromDir, type Skill } from './skill-loader';
 import { createSkillRunTool } from '../tools/skill-run';
+
+// Workspace skill dir used in createSkillRunTool calls — does not exist on
+// disk so loadSkillsFromDir returns [] without hitting the mock.
+const PROJECT_SKILLS_DIR = '/project/.bolt/skills';
 import type { AuthConfig } from '../auth/auth';
 import { createNoopLogger } from '../logger';
 import { NoopProgressReporter } from '../progress';
@@ -48,8 +52,8 @@ describe('built-in skills discoverability', () => {
     'plan-video-production',
   ];
 
-  it('loadSkills finds all 10 built-in skills when passed SKILLS_DIR as builtinSkillsDir', async () => {
-    const skills = await loadSkills('', '', () => {}, SKILLS_DIR);
+  it('loadSkillsFromDir finds all 10 built-in skills from SKILLS_DIR', async () => {
+    const skills = await loadSkillsFromDir(SKILLS_DIR);
     const names = skills.map((s) => s.name);
     for (const expected of EXPECTED_NAMES) {
       expect(names).toContain(expected);
@@ -57,7 +61,7 @@ describe('built-in skills discoverability', () => {
   });
 
   it('all built-in skills have non-empty system prompts', async () => {
-    const skills = await loadSkills('', '', () => {}, SKILLS_DIR);
+    const skills = await loadSkillsFromDir(SKILLS_DIR);
     for (const skill of skills.filter((s) => EXPECTED_NAMES.includes(s.name))) {
       expect(skill.systemPrompt.length, `${skill.name} has empty system prompt`).toBeGreaterThan(0);
     }
@@ -101,7 +105,7 @@ describe('write-blog-post skill', () => {
     const runner = vi
       .fn()
       .mockResolvedValue({ output: JSON.stringify({ post: '# Hello\n\nContent.' }) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
 
     await tool.execute({ name: 'write-blog-post', args: { topic: 'TypeScript' } }, makeCtx());
 
@@ -117,7 +121,7 @@ describe('write-blog-post skill', () => {
 
   it('returns the parsed post from sub-agent output', async () => {
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify({ post: '# My Post' }) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'write-blog-post', args: { topic: 'AI' } },
       makeCtx(),
@@ -165,7 +169,7 @@ describe('draft-social-post skill', () => {
     const runner = vi
       .fn()
       .mockResolvedValue({ output: JSON.stringify({ post: 'Check this out! 🚀' }) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'draft-social-post', args: { topic: 'AI trends', platform: 'twitter' } },
       makeCtx(),
@@ -221,7 +225,7 @@ describe('generate-video-script skill', () => {
       ],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(storyboard) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'generate-video-script', args: { topic: 'AI trends' } },
       makeCtx(),
@@ -269,7 +273,7 @@ describe('generate-image-prompt skill', () => {
     const runner = vi.fn().mockResolvedValue({
       output: JSON.stringify({ prompt: 'A dramatic sunset over mountains, cinematic lighting' }),
     });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'generate-image-prompt', args: { sceneDescription: 'sunset over mountains' } },
       makeCtx(),
@@ -316,7 +320,7 @@ describe('generate-video-prompt skill', () => {
     const runner = vi.fn().mockResolvedValue({
       output: JSON.stringify({ prompt: 'Slow dolly forward, camera moves toward the subject' }),
     });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'generate-video-prompt', args: { sceneDescription: 'person walking in forest' } },
       makeCtx(),
@@ -359,7 +363,7 @@ describe('summarize-url skill', () => {
       contentType: 'article',
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(summary) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'summarize-url', args: { url: 'https://example.com/typescript' } },
       makeCtx(),
@@ -405,7 +409,7 @@ describe('review-code skill', () => {
       approved: true,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       {
         name: 'review-code',
@@ -426,7 +430,7 @@ describe('review-code skill', () => {
       approved: false,
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(review) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'review-code', args: { path: 'src/db.ts' } },
       makeCtx(),
@@ -488,7 +492,7 @@ describe('analyze-trends skill', () => {
       ],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(report) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
 
     await tool.execute({ name: 'analyze-trends', args: { topic: 'AI coding tools' } }, makeCtx());
 
@@ -522,7 +526,7 @@ describe('analyze-trends skill', () => {
       ],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(report) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'analyze-trends', args: { platforms: ['tiktok', 'instagram'], timeRange: 'week' } },
       makeCtx(),
@@ -542,7 +546,7 @@ describe('analyze-trends skill', () => {
       topPosts: [],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(report) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute({ name: 'analyze-trends', args: {} }, makeCtx());
     expect(result.result).toBeDefined();
   });
@@ -618,7 +622,7 @@ describe('plan-video-production skill', () => {
       ],
     };
     const runner = vi.fn().mockResolvedValue({ output: JSON.stringify(output) });
-    const tool = createSkillRunTool([skill], AUTH, MODEL, SCRIPT, EXEC, runner, '');
+    const tool = createSkillRunTool([skill], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runner, '');
     const result = await tool.execute(
       { name: 'plan-video-production', args: { topic: 'AI coding trends' } },
       makeCtx(),

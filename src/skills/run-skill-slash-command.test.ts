@@ -4,11 +4,17 @@ import type { Skill } from './skill-loader';
 import type { SlashContext } from '../slash-commands/slash-commands';
 import type { AuthConfig } from '../auth/auth';
 
+vi.mock('./skill-loader', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./skill-loader')>();
+  return { ...actual, loadSkillsFromDir: vi.fn().mockResolvedValue([]) };
+});
+
 const AUTH: AuthConfig = { mode: 'api-key', credential: 'key' };
 const MODEL = 'claude-opus-4-6';
 const SCRIPT = '/path/to/subagent.js';
 const EXEC = process.execPath;
 const INHERITED_RULES = '## Safety Rules\n\nDo not harm.';
+const PROJECT_SKILLS_DIR = '/project/.bolt/skills';
 
 const BLOG_SKILL: Skill = {
   name: 'write-blog-post',
@@ -68,6 +74,7 @@ describe('createRunSkillSlashCommand', () => {
 
   const cmd = createRunSkillSlashCommand(
     [BLOG_SKILL, SIMPLE_SKILL],
+    PROJECT_SKILLS_DIR,
     AUTH,
     MODEL,
     SCRIPT,
@@ -102,7 +109,7 @@ describe('createRunSkillSlashCommand', () => {
     });
 
     it('shows "none" when skill map is empty', async () => {
-      const emptyCmd = createRunSkillSlashCommand([], AUTH, MODEL, SCRIPT, EXEC, runnerSpy, '/workspace', '');
+      const emptyCmd = createRunSkillSlashCommand([], PROJECT_SKILLS_DIR, AUTH, MODEL, SCRIPT, EXEC, runnerSpy, '/workspace', '');
       const { ctx, send } = makeCtx();
       await emptyCmd.execute([], ctx);
       expect(send.mock.calls[0]?.[0]).toContain('none');
@@ -197,6 +204,7 @@ describe('createRunSkillSlashCommand', () => {
     it('omits inheritedRules when empty string', async () => {
       const cmdNoRules = createRunSkillSlashCommand(
         [BLOG_SKILL],
+        PROJECT_SKILLS_DIR,
         AUTH,
         MODEL,
         SCRIPT,

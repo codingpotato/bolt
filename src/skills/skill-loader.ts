@@ -108,45 +108,23 @@ export function parseSkillFile(_filename: string, raw: string): Skill | null {
 }
 
 /**
- * Discover and load all `.skill.md` files from up to three directories.
- * Priority order (highest wins on name collision):
- *   1. projectSkillsDir  — project-local skills (.bolt/skills/)
- *   2. userSkillsDir     — user-global skills (~/.bolt/skills/)
- *   3. builtinSkillsDir  — skills shipped with bolt (src/skills/ or dist/skills/)
- *
+ * Discover and load all `.skill.md` files from a single directory.
  * Files that fail to parse are skipped with a warning.
+ * Returns an empty array if the directory does not exist.
  */
-export async function loadSkills(
-  projectSkillsDir: string,
-  userSkillsDir: string,
-  warn: (msg: string) => void = () => {},
-  builtinSkillsDir?: string,
-): Promise<Skill[]> {
-  const skillMap = new Map<string, Skill>();
-
-  // Load in ascending priority order — later loads overwrite on collision.
-  if (builtinSkillsDir !== undefined) {
-    await loadFromDir(builtinSkillsDir, skillMap, warn);
-  }
-  await loadFromDir(userSkillsDir, skillMap, warn);
-  await loadFromDir(projectSkillsDir, skillMap, warn);
-
-  return Array.from(skillMap.values());
-}
-
-async function loadFromDir(
+export async function loadSkillsFromDir(
   dir: string,
-  skillMap: Map<string, Skill>,
-  warn: (msg: string) => void,
-): Promise<void> {
+  warn: (msg: string) => void = () => {},
+): Promise<Skill[]> {
   let files: string[];
   try {
     files = (await readdir(dir)) as string[];
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw err;
   }
 
+  const skills: Skill[] = [];
   for (const file of files) {
     if (!file.endsWith('.skill.md')) continue;
 
@@ -165,6 +143,7 @@ async function loadFromDir(
       continue;
     }
 
-    skillMap.set(skill.name, skill);
+    skills.push(skill);
   }
+  return skills;
 }

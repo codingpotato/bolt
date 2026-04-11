@@ -597,12 +597,12 @@ function validate(config: Config): void {
   }
 }
 
-export function resolveConfig(workspaceOverride?: string): Config {
+export function resolveConfig(): Config {
   // #5: Resolve workspace root first (needed to resolve relative dataDir).
-  // Order: CLI --workspace arg > BOLT_WORKSPACE_ROOT env var > process.cwd()
+  // Order: BOLT_WORKSPACE_ROOT env var > process.cwd()
   // (config file workspace.root applied after loading)
   const envWorkspaceRoot = process.env['BOLT_WORKSPACE_ROOT'];
-  let workspaceRoot = workspaceOverride ?? envWorkspaceRoot ?? process.cwd();
+  let workspaceRoot = envWorkspaceRoot ?? process.cwd();
 
   // Resolve dataDir relative to workspace root (absolute paths used as-is).
   const rawDataDir = process.env['BOLT_DATA_DIR'] ?? '.bolt';
@@ -612,15 +612,14 @@ export function resolveConfig(workspaceOverride?: string): Config {
 
   // If config file specifies workspace.root, apply it and re-resolve dataDir
   // if it was relative (so dataDir stays relative to the final workspace root).
-  // A CLI override or env var takes precedence and prevents the config file
+  // BOLT_WORKSPACE_ROOT env var takes precedence and prevents the config file
   // from changing the workspace root or redirecting dataDir.
   if (
     typeof fileConfig.workspace === 'object' &&
     fileConfig.workspace !== null &&
     'root' in fileConfig.workspace &&
     typeof (fileConfig.workspace as Record<string, unknown>).root === 'string' &&
-    !envWorkspaceRoot &&
-    !workspaceOverride
+    !envWorkspaceRoot
   ) {
     workspaceRoot = (fileConfig.workspace as Record<string, unknown>).root as string;
     if (!isAbsolute(rawDataDir)) {
@@ -637,17 +636,10 @@ export function resolveConfig(workspaceOverride?: string): Config {
 
   const withEnv = applyEnvOverrides(merged);
 
-  // CLI --workspace takes highest priority — applyEnvOverrides may have
-  // re-applied BOLT_WORKSPACE_ROOT, so restore the override here.
-  if (workspaceOverride) {
-    withEnv.workspace.root = workspaceOverride;
-  }
-
   // Resolve agentPrompt.projectFile to an absolute path relative to the
   // workspace root. Without this, a relative default (.bolt/AGENT.md) would
   // be interpreted relative to process.cwd(), creating a stray .bolt folder
-  // whenever cwd differs from the workspace (e.g. --workspace flag or
-  // BOLT_WORKSPACE_ROOT env var).
+  // whenever cwd differs from the workspace (e.g. BOLT_WORKSPACE_ROOT env var).
   if (!isAbsolute(withEnv.agentPrompt.projectFile)) {
     withEnv.agentPrompt.projectFile = join(withEnv.workspace.root, withEnv.agentPrompt.projectFile);
   }

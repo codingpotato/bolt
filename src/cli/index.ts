@@ -342,13 +342,24 @@ async function serve(serveArgs: string[]): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const config = resolveConfig();
-  const args = process.argv.slice(2);
+  const rawArgs = process.argv.slice(2);
 
-  if (args[0] === 'serve') {
-    await serve(args.slice(1));
+  if (rawArgs[0] === 'serve') {
+    await serve(rawArgs.slice(1));
     return;
   }
+
+  // Parse --workspace before resolving config so the workspace root is known.
+  const workspaceIdx = rawArgs.indexOf('--workspace');
+  const cliWorkspace =
+    workspaceIdx !== -1 ? resolve(rawArgs[workspaceIdx + 1] ?? '') : undefined;
+  // Remove --workspace and its value from the args passed to the rest of main.
+  const args =
+    workspaceIdx !== -1
+      ? [...rawArgs.slice(0, workspaceIdx), ...rawArgs.slice(workspaceIdx + 2)]
+      : rawArgs;
+
+  const config = resolveConfig(cliWorkspace);
 
   const auth = resolveAuth();
   const client = createAnthropicClient(auth);
@@ -364,9 +375,6 @@ async function main(): Promise<void> {
 
   const verbose = args.includes('--verbose') || config.cli.verbose;
   const quiet = args.includes('--quiet') || !config.cli.progress;
-
-  const sessionFlagIndex = args.indexOf('--session');
-  const sessionId = sessionFlagIndex !== -1 ? args[sessionFlagIndex + 1] : undefined;
 
   const progress = new CliProgressReporter(process.stdout, verbose, quiet);
 
@@ -495,7 +503,7 @@ async function main(): Promise<void> {
     logger,
     traceLogger,
     sessionStore,
-    sessionId,
+    undefined,
     memoryManager,
     slashRegistry,
   );

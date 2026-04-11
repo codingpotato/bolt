@@ -98,7 +98,10 @@ export class CliProgressReporter implements ProgressReporter {
 
   onLlmCall(info: LlmCallInfo): void {
     if (!this.active) return;
-    // Replace the plain "Thinking…" line with context stats.
+    // LLM trace details (token stats) are only shown in verbose mode.
+    // In normal TTY mode the plain "Thinking…" line from onThinking() stays
+    // visible until the next tool call or final response.
+    if (!this.verbose) return;
     this.eraseThinking();
     this.out.write(
       `⟳ Thinking… [${info.messageCount} msgs · sys: ${fmt(info.systemTokens)} tok · ctx: ${fmt(info.ctxTokens)} tok · inj: ${fmt(info.injectedTokens)} tok]\n`,
@@ -108,6 +111,8 @@ export class CliProgressReporter implements ProgressReporter {
 
   onLlmResponse(info: LlmResponseInfo): void {
     if (!this.active) return;
+    // LLM trace details are only shown in verbose mode.
+    if (!this.verbose) return;
     const pct =
       info.windowCapacity > 0 ? ((info.inputTokens / info.windowCapacity) * 100).toFixed(1) : '?';
     const capacityK = info.windowCapacity > 0 ? `${Math.round(info.windowCapacity / 1000)}k` : '?';

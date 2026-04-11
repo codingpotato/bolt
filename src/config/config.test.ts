@@ -729,6 +729,27 @@ describe('resolveConfig', () => {
   });
 
   describe('Agent prompt env vars', () => {
+    it('default projectFile is absolute relative to workspace root', () => {
+      const config = resolveConfig();
+      expect(config.agentPrompt.projectFile).toBe(join(process.cwd(), '.bolt', 'AGENT.md'));
+    });
+
+    it('projectFile is absolute relative to BOLT_WORKSPACE_ROOT when set', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/test-ws';
+      const config = resolveConfig();
+      expect(config.agentPrompt.projectFile).toBe('/tmp/test-ws/.bolt/AGENT.md');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+    });
+
+    it('relative BOLT_AGENT_PROJECT_FILE is resolved relative to workspace root', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/test-ws';
+      process.env['BOLT_AGENT_PROJECT_FILE'] = 'custom/.bolt/AGENT.md';
+      const config = resolveConfig();
+      expect(config.agentPrompt.projectFile).toBe('/tmp/test-ws/custom/.bolt/AGENT.md');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+      delete process.env['BOLT_AGENT_PROJECT_FILE'];
+    });
+
     it('parses BOLT_AGENT_PROJECT_FILE', () => {
       process.env['BOLT_AGENT_PROJECT_FILE'] = '/custom/AGENT.md';
       const config = resolveConfig();
@@ -785,6 +806,38 @@ describe('resolveConfig', () => {
       const config = resolveConfig();
       expect(config.tasks.maxRetries).toBe(3);
       delete process.env['BOLT_TASKS_MAX_RETRIES'];
+    });
+  });
+
+  describe('workspaceOverride parameter', () => {
+    it('uses the provided workspace as workspace root', () => {
+      const config = resolveConfig('/tmp/override-ws');
+      expect(config.workspace.root).toBe('/tmp/override-ws');
+    });
+
+    it('resolves dataDir relative to the workspace override', () => {
+      const config = resolveConfig('/tmp/override-ws');
+      expect(config.dataDir).toBe('/tmp/override-ws/.bolt');
+    });
+
+    it('resolves projectFile relative to the workspace override', () => {
+      const config = resolveConfig('/tmp/override-ws');
+      expect(config.agentPrompt.projectFile).toBe('/tmp/override-ws/.bolt/AGENT.md');
+    });
+
+    it('workspaceOverride takes precedence over BOLT_WORKSPACE_ROOT', () => {
+      process.env['BOLT_WORKSPACE_ROOT'] = '/tmp/env-ws';
+      const config = resolveConfig('/tmp/override-ws');
+      expect(config.workspace.root).toBe('/tmp/override-ws');
+      expect(config.dataDir).toBe('/tmp/override-ws/.bolt');
+      delete process.env['BOLT_WORKSPACE_ROOT'];
+    });
+
+    it('workspaceOverride prevents config file from redirecting dataDir', () => {
+      mockConfigFile({ workspace: { root: '/tmp/config-ws' } });
+      const config = resolveConfig('/tmp/override-ws');
+      expect(config.workspace.root).toBe('/tmp/override-ws');
+      expect(config.dataDir).toBe('/tmp/override-ws/.bolt');
     });
   });
 

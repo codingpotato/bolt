@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { runSubagent } from './subagent-runner';
 import type { SubagentPayload } from './subagent-runner';
 import type { AuthConfig } from '../auth/auth';
-import { NoopProgressReporter } from '../progress';
+import type { ProgressReporter } from '../progress/progress';
+import { NoopProgressReporter } from '../progress/progress';
 
 vi.mock('node:child_process');
 
@@ -198,7 +199,13 @@ describe('runSubagent()', () => {
         child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
       }, 0);
 
-      await runSubagent(makePayload(), '/path/to/subagent.js', process.execPath, progress, 'my-skill');
+      await runSubagent(
+        makePayload(),
+        '/path/to/subagent.js',
+        process.execPath,
+        progress,
+        'my-skill',
+      );
       expect(thinkingSpy).toHaveBeenCalledWith('my-skill');
     });
 
@@ -211,11 +218,20 @@ describe('runSubagent()', () => {
       const toolCallSpy = vi.spyOn(progress, 'onSubagentToolCall');
 
       setTimeout(() => {
-        child.stderr.emit('data', Buffer.from('PROGRESS:{"event":"onToolCall","name":"bash","input":{"command":"ls"}}\n'));
+        child.stderr.emit(
+          'data',
+          Buffer.from('PROGRESS:{"event":"onToolCall","name":"bash","input":{"command":"ls"}}\n'),
+        );
         child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
       }, 0);
 
-      await runSubagent(makePayload(), '/path/to/subagent.js', process.execPath, progress, 'my-skill');
+      await runSubagent(
+        makePayload(),
+        '/path/to/subagent.js',
+        process.execPath,
+        progress,
+        'my-skill',
+      );
       expect(toolCallSpy).toHaveBeenCalledWith('my-skill', 'bash', { command: 'ls' });
     });
 
@@ -228,11 +244,22 @@ describe('runSubagent()', () => {
       const toolResultSpy = vi.spyOn(progress, 'onSubagentToolResult');
 
       setTimeout(() => {
-        child.stderr.emit('data', Buffer.from('PROGRESS:{"event":"onToolResult","name":"bash","success":true,"summary":"exit 0"}\n'));
+        child.stderr.emit(
+          'data',
+          Buffer.from(
+            'PROGRESS:{"event":"onToolResult","name":"bash","success":true,"summary":"exit 0"}\n',
+          ),
+        );
         child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
       }, 0);
 
-      await runSubagent(makePayload(), '/path/to/subagent.js', process.execPath, progress, 'my-skill');
+      await runSubagent(
+        makePayload(),
+        '/path/to/subagent.js',
+        process.execPath,
+        progress,
+        'my-skill',
+      );
       expect(toolResultSpy).toHaveBeenCalledWith('my-skill', 'bash', true, 'exit 0');
     });
 
@@ -245,11 +272,22 @@ describe('runSubagent()', () => {
       const retrySpy = vi.spyOn(progress, 'onSubagentRetry');
 
       setTimeout(() => {
-        child.stderr.emit('data', Buffer.from('PROGRESS:{"event":"onRetry","attempt":1,"maxAttempts":3,"reason":"ECONNREFUSED"}\n'));
+        child.stderr.emit(
+          'data',
+          Buffer.from(
+            'PROGRESS:{"event":"onRetry","attempt":1,"maxAttempts":3,"reason":"ECONNREFUSED"}\n',
+          ),
+        );
         child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
       }, 0);
 
-      await runSubagent(makePayload(), '/path/to/subagent.js', process.execPath, progress, 'my-skill');
+      await runSubagent(
+        makePayload(),
+        '/path/to/subagent.js',
+        process.execPath,
+        progress,
+        'my-skill',
+      );
       expect(retrySpy).toHaveBeenCalledWith('my-skill', 1, 3, 'ECONNREFUSED');
     });
 
@@ -266,7 +304,13 @@ describe('runSubagent()', () => {
         child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
       }, 0);
 
-      await runSubagent(makePayload(), '/path/to/subagent.js', process.execPath, progress, 'my-skill');
+      await runSubagent(
+        makePayload(),
+        '/path/to/subagent.js',
+        process.execPath,
+        progress,
+        'my-skill',
+      );
       expect(thinkingSpy).not.toHaveBeenCalled();
     });
 
@@ -281,7 +325,13 @@ describe('runSubagent()', () => {
       }, 0);
 
       await expect(
-        runSubagent(makePayload(), '/path/to/subagent.js', process.execPath, new NoopProgressReporter(), 'my-skill'),
+        runSubagent(
+          makePayload(),
+          '/path/to/subagent.js',
+          process.execPath,
+          new NoopProgressReporter(),
+          'my-skill',
+        ),
       ).rejects.toThrow('Fatal error occurred');
     });
 
@@ -302,6 +352,130 @@ describe('runSubagent()', () => {
       ).resolves.toEqual({ output: 'ok' });
     });
 
+    it('ignores unknown PROGRESS event types', async () => {
+      const { spawn } = await import('node:child_process');
+      const child = makeChildProcess(0);
+      vi.mocked(spawn).mockReturnValue(child as never);
+
+      const progress = new NoopProgressReporter();
+
+      setTimeout(() => {
+        child.stderr.emit('data', Buffer.from('PROGRESS:{"event":"onUnknown"}\n'));
+        child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
+      }, 0);
+
+      await expect(
+        runSubagent(makePayload(), '/path/to/subagent.js', process.execPath, progress, 'my-skill'),
+      ).resolves.toEqual({ output: 'ok' });
+    });
+
+    it('catches and logs errors from progress callbacks', async () => {
+      const { spawn } = await import('node:child_process');
+      const child = makeChildProcess(0);
+      vi.mocked(spawn).mockReturnValue(child as never);
+
+      class FailingProgressReporter implements ProgressReporter {
+        onSessionStart = vi.fn();
+        onThinking = vi.fn();
+        onLlmCall = vi.fn();
+        onLlmResponse = vi.fn();
+        onToolCall = vi.fn();
+        onToolResult = vi.fn();
+        onTaskStatusChange = vi.fn();
+        onContextInjection = vi.fn();
+        onMemoryCompaction = vi.fn();
+        onRetry = vi.fn();
+        onSubagentStart = vi.fn();
+        onSubagentEnd = vi.fn();
+        onSubagentError = vi.fn();
+        onSubagentThinking(_skill: string): void {
+          throw new Error('progress callback failed');
+        }
+        onSubagentToolCall = vi.fn();
+        onSubagentToolResult = vi.fn();
+        onSubagentRetry = vi.fn();
+      }
+      const progress = new FailingProgressReporter();
+
+      setTimeout(() => {
+        child.stderr.emit('data', Buffer.from('PROGRESS:{"event":"onThinking"}\n'));
+        child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
+      }, 0);
+
+      await expect(
+        runSubagent(makePayload(), '/path/to/subagent.js', process.execPath, progress, 'my-skill'),
+      ).resolves.toEqual({ output: 'ok' });
+    });
+
+    it('handles onToolCall with missing input gracefully', async () => {
+      const { spawn } = await import('node:child_process');
+      const child = makeChildProcess(0);
+      vi.mocked(spawn).mockReturnValue(child as never);
+
+      const progress = new NoopProgressReporter();
+      const toolCallSpy = vi.spyOn(progress, 'onSubagentToolCall');
+
+      setTimeout(() => {
+        child.stderr.emit('data', Buffer.from('PROGRESS:{"event":"onToolCall"}\n'));
+        child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
+      }, 0);
+
+      await runSubagent(
+        makePayload(),
+        '/path/to/subagent.js',
+        process.execPath,
+        progress,
+        'my-skill',
+      );
+      expect(toolCallSpy).toHaveBeenCalled();
+    });
+
+    it('handles onToolResult with missing properties gracefully', async () => {
+      const { spawn } = await import('node:child_process');
+      const child = makeChildProcess(0);
+      vi.mocked(spawn).mockReturnValue(child as never);
+
+      const progress = new NoopProgressReporter();
+      const toolResultSpy = vi.spyOn(progress, 'onSubagentToolResult');
+
+      setTimeout(() => {
+        child.stderr.emit('data', Buffer.from('PROGRESS:{"event":"onToolResult"}\n'));
+        child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
+      }, 0);
+
+      await runSubagent(
+        makePayload(),
+        '/path/to/subagent.js',
+        process.execPath,
+        progress,
+        'my-skill',
+      );
+      expect(toolResultSpy).toHaveBeenCalled();
+    });
+
+    it('handles onRetry with missing properties gracefully', async () => {
+      const { spawn } = await import('node:child_process');
+      const child = makeChildProcess(0);
+      vi.mocked(spawn).mockReturnValue(child as never);
+
+      const progress = new NoopProgressReporter();
+      const retrySpy = vi.spyOn(progress, 'onSubagentRetry');
+
+      setTimeout(() => {
+        child.stderr.emit('data', Buffer.from('PROGRESS:{"event":"onRetry"}\n'));
+        child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
+      }, 0);
+
+      await runSubagent(
+        makePayload(),
+        '/path/to/subagent.js',
+        process.execPath,
+        progress,
+        'my-skill',
+      );
+      expect(retrySpy).toHaveBeenCalled();
+    });
+
     it('handles stderr chunks that contain multiple lines', async () => {
       const { spawn } = await import('node:child_process');
       const child = makeChildProcess(0);
@@ -313,13 +487,22 @@ describe('runSubagent()', () => {
 
       setTimeout(() => {
         // Two PROGRESS lines in a single data event
-        child.stderr.emit('data', Buffer.from(
-          'PROGRESS:{"event":"onThinking"}\nPROGRESS:{"event":"onToolCall","name":"bash","input":{}}\n',
-        ));
+        child.stderr.emit(
+          'data',
+          Buffer.from(
+            'PROGRESS:{"event":"onThinking"}\nPROGRESS:{"event":"onToolCall","name":"bash","input":{}}\n',
+          ),
+        );
         child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
       }, 0);
 
-      await runSubagent(makePayload(), '/path/to/subagent.js', process.execPath, progress, 'my-skill');
+      await runSubagent(
+        makePayload(),
+        '/path/to/subagent.js',
+        process.execPath,
+        progress,
+        'my-skill',
+      );
       expect(thinkingSpy).toHaveBeenCalledOnce();
       expect(toolCallSpy).toHaveBeenCalledOnce();
     });
@@ -338,7 +521,13 @@ describe('runSubagent()', () => {
         child.stdout.emit('data', Buffer.from(JSON.stringify({ output: 'ok' })));
       }, 0);
 
-      await runSubagent(makePayload(), '/path/to/subagent.js', process.execPath, progress, 'my-skill');
+      await runSubagent(
+        makePayload(),
+        '/path/to/subagent.js',
+        process.execPath,
+        progress,
+        'my-skill',
+      );
       expect(thinkingSpy).toHaveBeenCalledWith('my-skill');
     });
   });

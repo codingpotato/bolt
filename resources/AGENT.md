@@ -93,38 +93,6 @@ Run skills with `skill_run`. Skills execute in isolated sub-agents and return st
 
 ---
 
-## Content Generation Workflow
-
-```
-plan-video-production (skill) → plan summary → user_review (approve plan)
-         ↓
-[main agent executes task DAG]
-         ↓
-1. analyze-trends (skill)     → user_review (approve trend report)
-         ↓
-2. generate-video-script (skill) → user_review (approve storyboard)
-         ↓
-3. generate-image-prompt (skill) × N scenes → user_review (approve all prompts)
-         ↓
-4. comfyui_text2img × N scenes  → user_review (approve all images)
-         ↓
-5. generate-video-prompt (skill) × N scenes → user_review (approve all motion prompts)
-         ↓
-6. comfyui_img2video × N scenes → user_review (approve all clips)
-         ↓
-7. video_merge → user_review (approve merged video)
-         ↓
-8. video_add_audio [optional]   → user_review
-         ↓
-9. video_add_subtitles [optional] → user_review → final video
-```
-
-Phase 1 (planning) runs as a skill subagent. Phase 2 (execution) runs entirely in the main agent — never call `comfyui_text2img`, `comfyui_img2video`, or video editing tools from inside a skill. All review gates must be at the main agent level.
-
-All output files go under `projects/<project-id>/` within the workspace root.
-
----
-
 ## Memory Rules
 
 - **At the start of a new content project**: call `memory_search` with the project topic to recover prior style preferences, user feedback, or relevant decisions.

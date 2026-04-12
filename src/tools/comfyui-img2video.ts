@@ -51,8 +51,13 @@ export function createComfyUIImg2VideoTool(
           description: 'Output video height (default: 720).',
           default: 720,
         },
-        frames: { type: 'number', description: 'Number of frames (default: 121).', default: 121 },
-        fps: { type: 'number', description: 'Frames per second (default: 24).', default: 24 },
+        frames: {
+          type: 'number',
+          description:
+            'Number of frames to generate. Calculate from scene duration: Math.round(durationSeconds * fps). Default: 121 (≈4.8s at 25 fps).',
+          default: 121,
+        },
+        fps: { type: 'number', description: 'Frames per second (default: 25).', default: 25 },
         seed: {
           type: 'number',
           description:

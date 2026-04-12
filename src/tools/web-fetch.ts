@@ -15,7 +15,10 @@ export interface WebFetchOutput {
 
 export const webFetchTool: Tool<WebFetchInput, WebFetchOutput> = {
   name: 'web_fetch',
-  description: 'GET a URL and return the response body, status code, and content type.',
+  description:
+    'Fetch the full content of a known URL. Use this ONLY when you already have a specific URL ' +
+    '(from web_search results or provided by the user) — never to research or discover information. ' +
+    'For research, use web_search instead.',
   inputSchema: {
     type: 'object',
     properties: {

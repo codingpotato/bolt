@@ -139,7 +139,7 @@ Respond with a single JSON object with these exact top-level fields:
       "description": "Alex stands in a bright studio looking directly at camera",
       "dialogue": "AI is changing how developers write code — here's what's trending right now.",
       "camera": "medium close-up, slight upward angle",
-      "duration": "8s",
+      "duration": 8,
       "imagePromptHint": "presenter in studio, direct to camera, bright background",
       "characterIds": ["host"],
       "transitionTo": "cut"

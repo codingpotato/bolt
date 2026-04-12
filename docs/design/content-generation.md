@@ -57,6 +57,10 @@ Output:
   tasks:           object[] — task list with IDs, titles, and dependencies
 ```
 
+**What the planner does NOT decide:**
+
+Resolution and character design are **not** decided during planning. The planner's job is purely structural: create the project directory and task DAG. Resolution and characters are creative decisions made by the `generate-video-script` skill, which has the context needed to make them correctly (targetPlatform, topic, trend data).
+
 **What the skill does:**
 
 1. Calls `content_project_create({ topic, title })` → creates `projects/<id>/` with `project.json` and `tasks.json`
@@ -193,27 +197,132 @@ This enables:
 
 ## Storyboard Schema
 
-The `generate-video-script` skill outputs a structured storyboard:
+The `generate-video-script` skill outputs the storyboard as `02-storyboard.json`. The storyboard is the **complete production design document** — it contains all creative and technical decisions needed by downstream generation steps. This is why resolution and characters live here, not in `project.json`.
 
 ```ts
 interface Storyboard {
   title: string;
   summary: string;
-  targetPlatform: string;        // e.g. "tiktok", "youtube-shorts", "reels"
+  /** Target platform: "tiktok" | "youtube-shorts" | "reels" | "youtube" | "linkedin" */
+  targetPlatform: string;
+  /**
+   * Target video resolution — derived from targetPlatform by the scriptwriting skill.
+   * ALL comfyui_text2img and comfyui_img2video calls in this project must use
+   * these exact dimensions. Reading this from the storyboard is the single source
+   * of truth; never hardcode or guess resolution elsewhere.
+   *
+   * Canonical values:
+   *   tiktok / reels / youtube-shorts → { width: 1080, height: 1920 }  (9:16 portrait)
+   *   youtube                         → { width: 1920, height: 1080 }  (16:9 landscape)
+   *   linkedin                        → { width: 1080, height: 1080 }  (1:1 square)
+   */
+  resolution: { width: number; height: number };
   estimatedDuration: string;     // e.g. "30s", "60s"
+  /**
+   * All characters who appear in the video.
+   * Empty array for narration-only or b-roll videos with no on-screen people.
+   * Each character is referenced by ID from Scene.characterIds.
+   */
+  characters: Character[];
   scenes: Scene[];
+}
+
+interface Character {
+  /** Short slug used to reference this character from scenes, e.g. "host", "guest-sarah" */
+  id: string;
+  /** Display name, e.g. "Sarah Chen" */
+  name: string;
+  /** Approximate age in years */
+  age: number;
+  /** e.g. "female", "male", "non-binary" */
+  gender: string;
+  /** Nationality or ethnic background, e.g. "Chinese-American", "British" */
+  nationality: string;
+  /**
+   * Overall physical appearance for image generation.
+   * Describe build, height, hair colour/length/style, distinguishing features.
+   * Example: "slender build, medium height, straight black hair to shoulders, warm smile"
+   */
+  appearance: string;
+  /**
+   * Detailed face description for consistent character rendering across all scenes.
+   * Must be specific enough that the image model renders the same face in every scene.
+   * Example: "oval face, high cheekbones, dark almond-shaped eyes, light freckles, small nose"
+   */
+  face: string;
+  /**
+   * Clothing and accessories for consistent visual identity across scenes.
+   * Example: "casual-smart: light blue blazer over white t-shirt, dark jeans, small gold earrings"
+   */
+  clothing: string;
+  /**
+   * Speaking accent for LTX-Video speech animation.
+   * The LTX-Video model uses this to animate lip sync and speech cadence.
+   * Be specific: language + regional variety.
+   * Examples: "American English", "British RP English", "Mandarin-accented English",
+   *            "Australian English", "French-accented English", "Japanese-accented English"
+   */
+  speakingAccent: string;
+  /** Role in the video, e.g. "main presenter", "expert guest", "interviewer" */
+  role: string;
 }
 
 interface Scene {
   sceneNumber: number;
-  description: string;           // what happens in this scene
-  dialogue?: string;             // voiceover or on-screen text
-  camera: string;                // camera movement/angle description
+  description: string;           // what happens visually in this scene
+  dialogue?: string;             // spoken text for this scene (used for LTX speech animation)
+  camera: string;                // camera movement/angle, e.g. "slow zoom in", "static wide shot"
   duration: string;              // e.g. "5s"
-  imagePromptHint: string;       // brief hint for image prompt generation
-  transitionTo?: string;         // transition to next scene (cut, fade, etc.)
+  imagePromptHint: string;       // brief hint for the generate-image-prompt skill
+  /**
+   * IDs of characters from Storyboard.characters who appear in this scene.
+   * Empty array for pure b-roll or narration-only scenes.
+   *
+   * The generate-image-prompt skill uses this list to inject character descriptions
+   * (face, appearance, clothing) into the image prompt to ensure visual consistency.
+   *
+   * The generate-video-prompt skill uses this list to inject speaking accent into the
+   * video prompt so LTX-Video animates the correct speech style.
+   */
+  characterIds: string[];
+  transitionTo?: string;         // transition to next scene, e.g. "cut", "fade to black"
 }
 ```
+
+### Character design guidelines
+
+The `generate-video-script` skill decides:
+1. **How many characters** the video needs (0–3 typical for short-form)
+2. **Who each character is** — age, gender, nationality, role
+3. **What they look like** — face, appearance, clothing (detailed enough for consistent image generation)
+4. **How they speak** — accent for LTX-Video speech animation
+5. **Which scenes they appear in** — `characterIds` in each scene
+
+Character descriptions must be **detailed and deterministic**. Vague descriptions ("a young woman") produce inconsistent results across scenes. Good descriptions anchor specific visual features ("oval face, high cheekbones, dark almond-shaped eyes") that the image model can reproduce reliably.
+
+### Character → prompt injection
+
+When `generate-image-prompt` runs for a scene with `characterIds: ["host", "guest-sarah"]`:
+
+1. Read storyboard → find Character objects for "host" and "guest-sarah"
+2. Construct a character block for each:
+   ```
+   Host (Alex, 32, male, American):
+   Face: square jaw, light stubble, hazel eyes, short wavy brown hair, straight nose
+   Wearing: navy crewneck sweater, dark chinos
+   ```
+3. Inject these descriptions into the image prompt before the scene visual description
+4. Result: consistent character appearance across all scenes regardless of generation order
+
+When `generate-video-prompt` runs for a scene with speaking characters:
+
+1. Read storyboard → find Character objects for characters in scene
+2. Include speaking accent in motion description:
+   ```
+   Alex speaking with American English accent, explaining AI coding tools,
+   natural hand gestures, subtle head movements while talking...
+   ```
+3. Include dialogue content from `scene.dialogue` to guide the speech animation
 
 ## Content Project Tools
 
@@ -237,6 +346,8 @@ Create a new content project directory and write the initial `project.json` mani
 ```
 
 Creates `<workspace>/projects/<project-id>/` with `scenes/` and `final/` subdirectories, writes the initial `project.json` manifest and an empty `tasks.json`, registers the project in `.bolt/projects.json`, and returns the project reference. If a project with the same ID already exists, appends `-2`, `-3`, etc. to avoid overwriting.
+
+**Note:** Resolution and characters are NOT set here. They are decided by the `generate-video-script` skill and stored in the storyboard (`02-storyboard.json`).
 
 ### `content_project_read`
 
@@ -324,6 +435,9 @@ interface ContentProject {
   createdAt: string;           // ISO 8601
   updatedAt: string;
   dir: string;                 // absolute path to project directory
+  // NOTE: resolution and characters are NOT stored here.
+  // They live in the storyboard (02-storyboard.json) which is the production design document.
+  // Read the storyboard to get resolution before calling comfyui_text2img / comfyui_img2video.
   artifacts: {
     trendReport?: Artifact;
     storyboard?: Artifact;
@@ -388,12 +502,24 @@ Image and video generation are handled by two built-in tools backed by the `Comf
 
 ### comfyui_text2img
 
+Before generating images, the agent must read the approved storyboard to get `resolution` and the scene's `characterIds`. The storyboard is the single source of truth for both.
+
 ```ts
-// Tool call
+// Step 1: read storyboard to get resolution and character info (once, reuse for all scenes)
+const project = content_project_read({ projectId })
+const storyboard = JSON.parse(file_read({ path: project.artifacts.storyboard.path }))
+// storyboard.resolution = { width: 1080, height: 1920 }
+// storyboard.characters = [{ id: "host", face: "...", clothing: "...", ... }]
+
+// Step 2: generate image prompt via skill (inject characters for the scene)
+// The generate-image-prompt skill reads the storyboard and injects character descriptions
+// for the characters listed in scene.characterIds
+
+// Step 3: generate image at the storyboard resolution
 comfyui_text2img({
-  prompt: "detailed image prompt...",
-  width?: 1024,
-  height?: 1024,
+  prompt: "detailed image prompt including character descriptions...",
+  width: storyboard.resolution.width,    // ← always from storyboard
+  height: storyboard.resolution.height,  // ← always from storyboard
   steps?: 20,
   seed?: 42,
   outputPath: "projects/ai-coding-trends-2026-03-24/scenes/scene-01/image.png"
@@ -412,11 +538,21 @@ The tool selects the least-loaded ComfyUI server, patches the `text2img` workflo
 
 ### comfyui_img2video
 
+The agent must pass the same `width` and `height` from `storyboard.resolution` that were used for image generation. This ensures the LTX-Video workflow receives the correct frame size and does not silently resize or crop the source image.
+
 ```ts
-// Tool call
+// Step 1: storyboard already loaded above (same read — do not re-read for every scene)
+
+// Step 2: generate video prompt via skill (inject character accents for the scene)
+// The generate-video-prompt skill reads the storyboard and adds speakingAccent
+// for each character in scene.characterIds
+
+// Step 3: generate video clip at the same resolution as the source image
 comfyui_img2video({
   imagePath: "projects/ai-coding-trends-2026-03-24/scenes/scene-01/image.png",
-  prompt: "slow zoom in, subtle parallax...",
+  prompt: "slow zoom in, Alex speaking with American English accent, natural hand gestures...",
+  width: storyboard.resolution.width,    // ← always from storyboard — must match source image
+  height: storyboard.resolution.height,  // ← always from storyboard — must match source image
   frames: 121,   // ≈5s at 24fps; default when omitted
   fps: 24,
   outputPath: "projects/ai-coding-trends-2026-03-24/scenes/scene-01/clip.mp4"
@@ -431,6 +567,8 @@ comfyui_img2video({
 ```
 
 The tool uploads the source image to the selected ComfyUI server (`POST /upload/image`), patches the `video_ltx2_3_i2v` workflow (LTX-Video 2.3 22B) with the server filename and parameters, queues it, polls for completion, and downloads the output clip. The workflow internally enhances the prompt via a Gemma-based `TextGenerateLTX2Prompt` node.
+
+**Why explicit resolution is required:** If `width`/`height` are omitted, the LTX-Video workflow defaults to 1280×720, which will not match the source image dimensions and causes silent center-crop distortion. Always read from `storyboard.resolution`.
 
 ## Tool Usage Summary
 

@@ -98,6 +98,7 @@ describe('createContentProjectTools', () => {
       expect(r1.projectId).not.toBe(r2.projectId);
       expect(r2.projectId).toMatch(/-2$/);
     });
+
   });
 
   describe('content_project_read', () => {

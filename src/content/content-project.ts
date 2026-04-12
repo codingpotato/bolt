@@ -3,14 +3,93 @@ import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 
 /**
- * Storyboard output from generate-video-script skill.
- * Represents a scene-by-scene breakdown for short-form video.
+ * Target video resolution.
+ * Stored in the storyboard and used for all image and video generation in the project.
+ */
+export interface VideoResolution {
+  width: number;
+  height: number;
+}
+
+/**
+ * A character who appears in the video.
+ * Defined once in the storyboard; referenced by ID from individual scenes.
+ *
+ * Character descriptions flow directly into image and video prompts:
+ * - face + appearance + clothing → image prompts (for consistent visual identity across scenes)
+ * - speakingAccent → video prompts (LTX-Video uses this for speech animation)
+ */
+export interface Character {
+  /**
+   * Unique identifier referenced from Scene.characterIds.
+   * Use short lowercase slugs, e.g. "host", "narrator", "guest-sarah".
+   */
+  id: string;
+  /** Display name, e.g. "Sarah Chen" */
+  name: string;
+  /** Approximate age in years */
+  age: number;
+  /** Gender, e.g. "female", "male", "non-binary" */
+  gender: string;
+  /** Nationality or ethnic background, e.g. "Chinese-American", "British" */
+  nationality: string;
+  /**
+   * Overall physical appearance for image generation.
+   * Describe build, height, hair colour/length/style, distinguishing features.
+   * Example: "slender build, medium height, straight black hair to shoulders"
+   */
+  appearance: string;
+  /**
+   * Detailed face description for consistent character rendering across scenes.
+   * Example: "oval face, high cheekbones, dark almond-shaped eyes, light freckles, warm smile"
+   */
+  face: string;
+  /**
+   * Clothing and style for consistent rendering across scenes.
+   * Example: "casual-smart: light blue blazer over white t-shirt, dark jeans"
+   */
+  clothing: string;
+  /**
+   * Speaking accent for LTX-Video speech animation.
+   * Include language and regional accent clearly.
+   * Example: "American English", "British RP", "Mandarin-accented English", "Australian English"
+   */
+  speakingAccent: string;
+  /**
+   * Role in the video, e.g. "main presenter", "expert guest", "interviewer", "background passerby"
+   */
+  role: string;
+}
+
+/**
+ * Storyboard output from the generate-video-script skill.
+ * This is the complete production design document for a video project.
+ * It contains all creative and technical decisions that downstream generation steps need:
+ * - resolution (for comfyui_text2img and comfyui_img2video)
+ * - characters (for image and video prompt generation)
+ * - scenes (with character assignments)
  */
 export interface Storyboard {
   title: string;
   summary: string;
+  /** Target platform determines resolution and format constraints. */
   targetPlatform: string;
+  /**
+   * Target video resolution derived from targetPlatform.
+   * All image and video generation in this project must use these exact dimensions.
+   *
+   * Canonical values by platform:
+   *   tiktok / reels / youtube-shorts → { width: 1080, height: 1920 }  (9:16 portrait)
+   *   youtube                         → { width: 1920, height: 1080 }  (16:9 landscape)
+   *   linkedin                        → { width: 1080, height: 1080 }  (1:1 square)
+   */
+  resolution: VideoResolution;
   estimatedDuration: string;
+  /**
+   * All characters who appear in this video.
+   * May be empty for narration-only or b-roll videos with no on-screen people.
+   */
+  characters: Character[];
   scenes: Scene[];
 }
 
@@ -19,11 +98,24 @@ export interface Storyboard {
  */
 export interface Scene {
   sceneNumber: number;
+  /** What happens visually in this scene */
   description: string;
+  /** Spoken dialogue or voiceover text for this scene */
   dialogue?: string;
+  /** Camera movement or angle, e.g. "slow zoom in", "static wide shot" */
   camera: string;
+  /** Approximate scene duration, e.g. "5s", "8s" */
   duration: string;
+  /** Brief hint for the generate-image-prompt skill */
   imagePromptHint: string;
+  /**
+   * IDs of characters from Storyboard.characters who appear in this scene.
+   * Empty array for scenes with no on-screen characters (e.g. pure b-roll).
+   * The generate-image-prompt and generate-video-prompt skills use this list to
+   * inject character descriptions (face, clothing, accent) into the generated prompts.
+   */
+  characterIds: string[];
+  /** Transition effect to the next scene, e.g. "cut", "fade to black" */
   transitionTo?: string;
 }
 
@@ -64,8 +156,12 @@ export interface PostProductionArtifacts {
 }
 
 /**
- * Content project manifest.
+ * Content project manifest (project.json).
  * Written by the agent at project creation and updated after every step.
+ *
+ * This is the OPERATIONAL manifest: it tracks artifact file locations and statuses.
+ * Creative and technical production design (resolution, characters) live in the
+ * storyboard (02-storyboard.json), which is referenced via artifacts.storyboard.
  */
 export interface ContentProject {
   /** Slug, e.g. "ai-coding-trends-2026-03-24" */

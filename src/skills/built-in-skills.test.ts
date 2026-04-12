@@ -213,6 +213,9 @@ describe('generate-video-script skill', () => {
     const storyboard = {
       title: 'The Future of AI',
       summary: 'A short video about AI trends.',
+      targetPlatform: 'tiktok',
+      resolution: { width: 1080, height: 1920 },
+      characters: [],
       scenes: [
         {
           description: 'Opening shot of city skyline',
@@ -220,6 +223,7 @@ describe('generate-video-script skill', () => {
           camera: 'wide shot',
           duration: 5,
           imagePromptHint: 'futuristic city skyline at dusk',
+          characterIds: [],
           transitionTo: 'fade',
         },
       ],
@@ -252,13 +256,9 @@ describe('generate-image-prompt skill', () => {
     expect(skill.inputSchema.required).toContain('sceneDescription');
   });
 
-  it('targetModel is optional', () => {
-    expect(skill.inputSchema.required).not.toContain('targetModel');
-  });
-
-  it('targetModel enum includes sdxl, flux, dalle', () => {
-    const prop = skill.inputSchema.properties?.['targetModel'];
-    expect(prop?.enum).toEqual(expect.arrayContaining(['sdxl', 'flux', 'dalle']));
+  it('characters and resolution are optional inputs', () => {
+    expect(skill.inputSchema.required).not.toContain('characters');
+    expect(skill.inputSchema.required).not.toContain('resolution');
   });
 
   it('requires prompt in output', () => {

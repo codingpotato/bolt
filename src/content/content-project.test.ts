@@ -55,6 +55,7 @@ describe('ContentProjectManager', () => {
       expect(project.artifacts.scenes).toEqual([]);
     });
 
+
     it('creates a tasks.json file with empty tasks and counter 0', async () => {
       const project = await manager.createProject('Task File Test');
       const tasksPath = join(project.dir, 'tasks.json');
@@ -288,7 +289,9 @@ describe('ContentProjectManager', () => {
         title: 'Test Video',
         summary: 'A test video',
         targetPlatform: 'tiktok',
+        resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
+        characters: [],
         scenes: [
           {
             sceneNumber: 1,
@@ -296,6 +299,7 @@ describe('ContentProjectManager', () => {
             camera: 'wide shot',
             duration: '5s',
             imagePromptHint: 'test hint',
+            characterIds: [],
           },
           {
             sceneNumber: 2,
@@ -303,6 +307,7 @@ describe('ContentProjectManager', () => {
             camera: 'close-up',
             duration: '5s',
             imagePromptHint: 'test hint 2',
+            characterIds: [],
           },
         ],
       };

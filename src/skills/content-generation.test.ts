@@ -52,28 +52,33 @@ function makeCtx(): ToolContext {
 describe('generate-video-script scene fields', () => {
   const skill = loadSkill('generate-video-script.skill.md');
 
-  it('system prompt documents all 6 required scene fields', () => {
+  it('system prompt documents all 7 required scene fields', () => {
     const prompt = skill.systemPrompt;
     expect(prompt).toContain('description');
     expect(prompt).toContain('dialogue');
     expect(prompt).toContain('camera');
     expect(prompt).toContain('duration');
     expect(prompt).toContain('imagePromptHint');
+    expect(prompt).toContain('characterIds');
     expect(prompt).toContain('transitionTo');
   });
 
-  it('returns a scene with all 6 required fields intact', async () => {
+  it('returns a scene with all 7 required fields intact', async () => {
     const scene = {
       description: 'Developer staring at terminal as code streams across the screen',
       dialogue: 'AI is writing code faster than any human ever could.',
       camera: 'close-up on screen, slow zoom out',
       duration: 8,
       imagePromptHint: 'programmer at glowing terminal, cinematic lighting',
+      characterIds: [],
       transitionTo: 'cut',
     };
     const storyboard = {
       title: 'The Rise of AI Coding',
       summary: 'How AI tools are transforming software development.',
+      targetPlatform: 'tiktok',
+      resolution: { width: 1080, height: 1920 },
+      characters: [],
       scenes: [scene],
     };
 
@@ -91,6 +96,7 @@ describe('generate-video-script scene fields', () => {
     expect(s?.camera).toBe(scene.camera);
     expect(s?.duration).toBe(scene.duration);
     expect(s?.imagePromptHint).toBe(scene.imagePromptHint);
+    expect(s?.characterIds).toEqual([]);
     expect(s?.transitionTo).toBe(scene.transitionTo);
   });
 
@@ -102,6 +108,7 @@ describe('generate-video-script scene fields', () => {
         camera: 'static wide shot',
         duration: 3,
         imagePromptHint: 'bold title card, modern sans-serif font',
+        characterIds: [],
         transitionTo: 'cut',
       },
       {
@@ -110,6 +117,7 @@ describe('generate-video-script scene fields', () => {
         camera: 'screen capture with subtle zoom',
         duration: 10,
         imagePromptHint: 'VS Code with Copilot suggestion overlay',
+        characterIds: [],
         transitionTo: 'fade',
       },
       {
@@ -118,12 +126,16 @@ describe('generate-video-script scene fields', () => {
         camera: 'medium shot, handheld',
         duration: 5,
         imagePromptHint: 'happy developer at desk, warm lighting',
+        characterIds: [],
         transitionTo: 'end',
       },
     ];
     const storyboard = {
       title: 'Top 5 AI Developer Tools',
       summary: 'A quick tour of the best AI coding assistants.',
+      targetPlatform: 'tiktok',
+      resolution: { width: 1080, height: 1920 },
+      characters: [],
       scenes,
     };
 
@@ -144,6 +156,7 @@ describe('generate-video-script scene fields', () => {
       expect(got?.camera).toBe(want?.camera);
       expect(got?.duration).toBe(want?.duration);
       expect(got?.imagePromptHint).toBe(want?.imagePromptHint);
+      expect(got?.characterIds).toEqual([]);
       expect(got?.transitionTo).toBe(want?.transitionTo);
     }
   });

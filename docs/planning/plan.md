@@ -982,8 +982,8 @@ Acceptance Criteria:
 - [x] write-blog-post produces well-structured Markdown given topic + tone
 - [x] draft-social-post produces platform-appropriate copy (Twitter, LinkedIn, Xiaohongshu, etc.)
 - [x] generate-video-script produces a structured Storyboard (title, summary, scenes[])
-- [x] Each scene includes: description, dialogue, camera, duration, imagePromptHint, transitionTo
-- [x] generate-image-prompt creates prompts optimised for target model (SDXL, Flux, etc.)
+- [x] Each scene includes: description, dialogue, camera, duration, imagePromptHint, characterIds, transitionTo
+- [x] generate-image-prompt creates prompts optimised for the Z-SNR image turbo model (4-component structure: subject, environment, style, composition)
 - [x] generate-video-prompt creates motion prompts for image-to-video generation
 - [x] Skills can optionally use web_search and web_fetch to research before writing
 - [x] Skills can be chained: summarize-url output feeds into write-blog-post

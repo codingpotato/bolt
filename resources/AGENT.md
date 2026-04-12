@@ -62,11 +62,11 @@ After plan approval, execute the task DAG yourself. For each task:
 | Task | What to do |
 |------|-----------|
 | `analyzeTrends` | `skill_run({ name: "analyze-trends", args: { topic, platforms: [targetPlatform], timeRange: "week" } })` → write result to `projects/<id>/01-trend-report.md` |
-| `generateScript` | Read trend report → `skill_run({ name: "generate-video-script", args: { topic: "<topic + trend angles>", durationSeconds: 60 } })` → write storyboard to `projects/<id>/02-storyboard.json` |
-| `generateImagePrompts` | For each scene: `skill_run({ name: "generate-image-prompt", args: { sceneDescription: scene.description + " " + scene.imagePromptHint } })` → write to `projects/<id>/scenes/scene-<NN>/prompt.md` |
-| `generateImages` | For each scene: read approved prompt → `comfyui_text2img({ prompt, outputPath: "projects/<id>/scenes/scene-<NN>/image.png" })` |
-| `generateVideoPrompts` | For each scene: `skill_run({ name: "generate-video-prompt", args: { sceneDescription: scene.description } })` → write to `projects/<id>/scenes/scene-<NN>/video-prompt.md` |
-| `generateVideos` | For each scene: read approved video prompt + image → `comfyui_img2video({ imagePath, prompt, outputPath: "projects/<id>/scenes/scene-<NN>/clip.mp4" })` |
+| `generateScript` | Read trend report → `skill_run({ name: "generate-video-script", args: { topic: "<topic + trend angles>", targetPlatform: "<targetPlatform>", durationSeconds: 60 } })` → write full storyboard JSON (including `resolution` and `characters`) to `projects/<id>/02-storyboard.json` |
+| `generateImagePrompts` | Read storyboard JSON. For each scene: look up character objects for `scene.characterIds` from `storyboard.characters` → `skill_run({ name: "generate-image-prompt", args: { sceneDescription: scene.description + " " + scene.imagePromptHint, characters: sceneCharacters, resolution: storyboard.resolution } })` → write to `projects/<id>/scenes/scene-<NN>/prompt.md` |
+| `generateImages` | Read storyboard JSON for `resolution`. For each scene: read approved prompt → `comfyui_text2img({ prompt, width: storyboard.resolution.width, height: storyboard.resolution.height, outputPath: "projects/<id>/scenes/scene-<NN>/image.png" })` |
+| `generateVideoPrompts` | Read storyboard JSON. For each scene: look up character objects for `scene.characterIds` from `storyboard.characters` → `skill_run({ name: "generate-video-prompt", args: { sceneDescription: scene.description, dialogue: scene.dialogue ?? "", characters: sceneCharacters } })` → write to `projects/<id>/scenes/scene-<NN>/video-prompt.md` |
+| `generateVideos` | Read storyboard JSON for `resolution`. For each scene: read approved video prompt + image → `comfyui_img2video({ imagePath, prompt, width: storyboard.resolution.width, height: storyboard.resolution.height, outputPath: "projects/<id>/scenes/scene-<NN>/clip.mp4" })` |
 | `mergeClips` | `video_merge({ clips: [...], outputPath: "projects/<id>/final/raw.mp4" })` |
 | `addAudio` | `video_add_audio({ videoPath: "final/raw.mp4", audioPath, outputPath: "projects/<id>/final/audio.mp4", mode: "mix" })` |
 | `addSubtitles` | Generate SRT from storyboard dialogue → `video_add_subtitles({ videoPath, subtitlesPath, outputPath: "projects/<id>/final/video.mp4" })` |
@@ -78,10 +78,16 @@ After plan approval, execute the task DAG yourself. For each task:
 
 **Critical review gates (never skip):**
 - Approve trend report before writing script
-- Approve storyboard before generating image prompts
+- Approve storyboard (verify characters, resolution, and scene assignments look correct) before generating image prompts
 - Approve all image prompts before generating any image
 - Approve all images before generating video prompts
 - Approve all video prompts before generating any video clip
+
+**Resolution and characters — how to use them:**
+- `storyboard.resolution` is the ONLY source for `width` and `height` — always read from the storyboard, never guess or use defaults
+- `storyboard.characters` is the complete character roster — look up by `scene.characterIds` to get the objects for each scene
+- Pass the looked-up character objects to `generate-image-prompt` and `generate-video-prompt` — these skills inject face/clothing into image prompts and speaking accent into video prompts
+- `comfyui_text2img` and `comfyui_img2video` must always receive explicit `width` and `height`; omitting them causes the workflow to silently use 1280×720 which will not match the source image
 
 **Use todos for per-scene sub-steps:** Create all scene todos upfront before touching any scene, then work through them one by one.
 

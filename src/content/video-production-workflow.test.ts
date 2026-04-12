@@ -241,7 +241,9 @@ describe('Video Production Workflow (S10-3)', () => {
         title: 'Test Video',
         summary: 'A test video',
         targetPlatform: 'tiktok',
+        resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
+        characters: [],
         scenes: [
           {
             sceneNumber: 1,
@@ -249,6 +251,7 @@ describe('Video Production Workflow (S10-3)', () => {
             camera: 'wide shot',
             duration: '5s',
             imagePromptHint: 'test hint',
+            characterIds: [],
           },
           {
             sceneNumber: 2,
@@ -256,6 +259,7 @@ describe('Video Production Workflow (S10-3)', () => {
             camera: 'close-up',
             duration: '5s',
             imagePromptHint: 'test hint 2',
+            characterIds: [],
           },
         ],
       };
@@ -277,7 +281,9 @@ describe('Video Production Workflow (S10-3)', () => {
         title: 'Test',
         summary: 'Test',
         targetPlatform: 'tiktok',
+        resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
+        characters: [],
         scenes: [
           {
             sceneNumber: 1,
@@ -285,6 +291,7 @@ describe('Video Production Workflow (S10-3)', () => {
             camera: 'wide',
             duration: '5s',
             imagePromptHint: 'test',
+            characterIds: [],
           },
         ],
       });
@@ -311,7 +318,9 @@ describe('Video Production Workflow (S10-3)', () => {
         title: 'Test',
         summary: 'Test',
         targetPlatform: 'tiktok',
+        resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
+        characters: [],
         scenes: [
           {
             sceneNumber: 1,
@@ -319,6 +328,7 @@ describe('Video Production Workflow (S10-3)', () => {
             camera: 'wide',
             duration: '5s',
             imagePromptHint: 'test',
+            characterIds: [],
           },
         ],
       });
@@ -365,7 +375,9 @@ describe('Video Production Workflow (S10-3)', () => {
         title: 'Test',
         summary: 'Test',
         targetPlatform: 'tiktok',
+        resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
+        characters: [],
         scenes: [
           {
             sceneNumber: 1,
@@ -373,6 +385,7 @@ describe('Video Production Workflow (S10-3)', () => {
             camera: 'wide',
             duration: '5s',
             imagePromptHint: 'hint1',
+            characterIds: [],
           },
           {
             sceneNumber: 2,
@@ -380,6 +393,7 @@ describe('Video Production Workflow (S10-3)', () => {
             camera: 'wide',
             duration: '5s',
             imagePromptHint: 'hint2',
+            characterIds: [],
           },
         ],
       };
@@ -523,7 +537,9 @@ describe('Video Production Workflow (S10-3)', () => {
         title: 'AI Trends',
         summary: 'Overview of AI trends',
         targetPlatform: 'tiktok',
+        resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
+        characters: [],
         scenes: [
           {
             sceneNumber: 1,
@@ -531,6 +547,7 @@ describe('Video Production Workflow (S10-3)', () => {
             camera: 'wide',
             duration: '5s',
             imagePromptHint: 'tech background',
+            characterIds: [],
           },
           {
             sceneNumber: 2,
@@ -538,6 +555,7 @@ describe('Video Production Workflow (S10-3)', () => {
             camera: 'close-up',
             duration: '5s',
             imagePromptHint: 'speaker',
+            characterIds: [],
           },
         ],
       };
@@ -671,7 +689,9 @@ describe('Post-production workflow (S10-8)', () => {
       title: 'Test Video',
       summary: 'A test video for post-production',
       targetPlatform: 'tiktok',
+      resolution: { width: 1080, height: 1920 },
       estimatedDuration: '30s',
+      characters: [],
       scenes: [
         {
           sceneNumber: 1,
@@ -679,6 +699,7 @@ describe('Post-production workflow (S10-8)', () => {
           camera: 'wide',
           duration: '10s',
           imagePromptHint: 'hint1',
+          characterIds: [],
         },
         {
           sceneNumber: 2,
@@ -686,6 +707,7 @@ describe('Post-production workflow (S10-8)', () => {
           camera: 'medium',
           duration: '10s',
           imagePromptHint: 'hint2',
+          characterIds: [],
         },
         {
           sceneNumber: 3,
@@ -693,6 +715,7 @@ describe('Post-production workflow (S10-8)', () => {
           camera: 'close-up',
           duration: '10s',
           imagePromptHint: 'hint3',
+          characterIds: [],
         },
       ],
     };
@@ -1286,7 +1309,9 @@ describe('S13-2: Main-agent execution from plan-video-production output', () => 
       title: 'AI Coding Trends',
       summary: 'Overview',
       targetPlatform: 'tiktok',
+      resolution: { width: 1080, height: 1920 },
       estimatedDuration: '60s',
+      characters: [],
       scenes: [
         {
           sceneNumber: 1,
@@ -1294,6 +1319,7 @@ describe('S13-2: Main-agent execution from plan-video-production output', () => 
           camera: 'wide',
           duration: '5s',
           imagePromptHint: 'tech',
+          characterIds: [],
         },
         {
           sceneNumber: 2,
@@ -1301,6 +1327,7 @@ describe('S13-2: Main-agent execution from plan-video-production output', () => 
           camera: 'close-up',
           duration: '5s',
           imagePromptHint: 'code',
+          characterIds: [],
         },
       ],
     };

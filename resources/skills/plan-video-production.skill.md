@@ -95,7 +95,7 @@ Create these tasks (use the exact titles below):
 
 5. `task_create({ title: "Generate video prompts", description: "Read 02-storyboard.json. For each scene, look up character objects by scene.characterIds from storyboard.characters, then call generate-video-prompt with sceneDescription, scene.dialogue, and those character objects. Write each prompt to projects/<id>/scenes/scene-<NN>/video-prompt.md.", dependsOn: [<generateImages id>], requiresApproval: true, projectId })`
 
-6. `task_create({ title: "Generate video clips", description: "Read 02-storyboard.json for resolution. For each scene: read approved video prompt and image path, then call comfyui_img2video with width: storyboard.resolution.width and height: storyboard.resolution.height. Save to projects/<id>/scenes/scene-<NN>/clip.mp4.", dependsOn: [<generateVideoPrompts id>], requiresApproval: true, projectId })`
+6. `task_create({ title: "Generate video clips", description: "Read 02-storyboard.json for resolution. For each scene: read approved video prompt and image path, then call comfyui_img2video with width: storyboard.resolution.width, height: storyboard.resolution.height, fps: 25, frames: Math.round(parseFloat(scene.duration) * 25). Save to projects/<id>/scenes/scene-<NN>/clip.mp4.", dependsOn: [<generateVideoPrompts id>], requiresApproval: true, projectId })`
 
 7. `task_create({ title: "Merge clips", description: "Concatenate all approved scene clips into projects/<id>/final/raw.mp4 using video_merge.", dependsOn: [<generateVideos id>], requiresApproval: true, projectId })`
 

@@ -235,8 +235,8 @@ interface Img2VideoInput {
   negativePrompt?: string; // default: workflow's built-in negative (→ node 267:247.text)
   width?: number; // default 1280 (→ node 267:257.value)
   height?: number; // default 720  (→ node 267:258.value)
-  frames?: number; // default 121  (→ node 267:225.value; ≈5s at 24fps)
-  fps?: number; // default 24   (→ node 267:260.value)
+  frames?: number; // default 121  (→ node 267:225.value; ≈4.8s at 25fps). Calculate: Math.round(durationSeconds * fps)
+  fps?: number; // default 25   (→ node 267:260.value)
   seed?: number; // patches both RandomNoise nodes 267:216 and 267:237
   outputPath: string; // workspace-relative path for the output clip
 }

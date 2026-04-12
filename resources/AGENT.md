@@ -25,7 +25,7 @@ A catalog of available tools with name and one-line descriptions is appended to 
 
 - All file paths are confined to the workspace root. Paths outside the workspace are rejected.
 - Dangerous shell patterns (`rm -r`, `sudo`, pipe-to-shell, `dd`, etc.) require explicit user confirmation. In non-interactive mode they are auto-denied.
-- Use `web_search` with `timeRange: "week"` or `"day"` for freshness when doing trend research.
+- Use `web_search` for all research and discovery. Never call `web_fetch` to find or explore information — only call it when you already have a specific URL to read (e.g. a link returned by `web_search` or supplied by the user). Use `timeRange: "week"` or `"day"` on `web_search` for trend research freshness.
 - Always use `user_review` before calling `comfyui_text2img` or `comfyui_img2video`. Never generate images or videos without user sign-off on the prompts.
 - `comfyui_text2img` has no `negativePrompt` — the workflow uses `ConditioningZeroOut`. Do not pass one.
 - `comfyui_img2video` uses `frames` (not `duration`) and accepts a natural-language `prompt` — the workflow runs it through a Gemma-based enhancer, so write descriptive scene/motion text, not engineered prompt syntax.
@@ -66,7 +66,7 @@ After plan approval, execute the task DAG yourself. For each task:
 | `generateImagePrompts` | Read storyboard JSON. For each scene: look up character objects for `scene.characterIds` from `storyboard.characters` → `skill_run({ name: "generate-image-prompt", args: { sceneDescription: scene.description + " " + scene.imagePromptHint, characters: sceneCharacters, resolution: storyboard.resolution } })` → write to `projects/<id>/scenes/scene-<NN>/prompt.md` |
 | `generateImages` | Read storyboard JSON for `resolution`. For each scene: read approved prompt → `comfyui_text2img({ prompt, width: storyboard.resolution.width, height: storyboard.resolution.height, outputPath: "projects/<id>/scenes/scene-<NN>/image.png" })` |
 | `generateVideoPrompts` | Read storyboard JSON. For each scene: look up character objects for `scene.characterIds` from `storyboard.characters` → `skill_run({ name: "generate-video-prompt", args: { sceneDescription: scene.description, dialogue: scene.dialogue ?? "", characters: sceneCharacters } })` → write to `projects/<id>/scenes/scene-<NN>/video-prompt.md` |
-| `generateVideos` | Read storyboard JSON for `resolution`. For each scene: read approved video prompt + image → `comfyui_img2video({ imagePath, prompt, width: storyboard.resolution.width, height: storyboard.resolution.height, outputPath: "projects/<id>/scenes/scene-<NN>/clip.mp4" })` |
+| `generateVideos` | Read storyboard JSON for `resolution`. For each scene: read approved video prompt + image → `comfyui_img2video({ imagePath, prompt, width: storyboard.resolution.width, height: storyboard.resolution.height, fps: 25, frames: Math.round(parseFloat(scene.duration) * 25), outputPath: "projects/<id>/scenes/scene-<NN>/clip.mp4" })` |
 | `mergeClips` | `video_merge({ clips: [...], outputPath: "projects/<id>/final/raw.mp4" })` |
 | `addAudio` | `video_add_audio({ videoPath: "final/raw.mp4", audioPath, outputPath: "projects/<id>/final/audio.mp4", mode: "mix" })` |
 | `addSubtitles` | Generate SRT from storyboard dialogue → `video_add_subtitles({ videoPath, subtitlesPath, outputPath: "projects/<id>/final/video.mp4" })` |

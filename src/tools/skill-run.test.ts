@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createSkillRunTool, buildSkillPrompt } from './skill-run';
+import { createSkillRunTool, buildSkillPrompt, extractJsonObject } from './skill-run';
 import { ToolError } from './tool';
 import type { ToolContext } from './tool';
 import type { Skill } from '../skills/skill-loader';
@@ -413,6 +413,39 @@ describe('skill_run tool', () => {
       };
       const prompt = buildSkillPrompt('s', {}, schema);
       expect(prompt).toContain('"result"');
+    });
+  });
+
+  describe('extractJsonObject', () => {
+    it('parses clean JSON directly', () => {
+      expect(extractJsonObject('{"a":1}')).toEqual({ a: 1 });
+    });
+
+    it('strips markdown json fences', () => {
+      expect(extractJsonObject('```json\n{"a":1}\n```')).toEqual({ a: 1 });
+    });
+
+    it('strips plain markdown fences', () => {
+      expect(extractJsonObject('```\n{"a":1}\n```')).toEqual({ a: 1 });
+    });
+
+    it('extracts JSON from prose prefix — the reported bug scenario', () => {
+      const output =
+        'Now I have created the project structure. Let me return the JSON output with the project details and tasks:\n{"projectId":"abc","tasks":[]}';
+      expect(extractJsonObject(output)).toEqual({ projectId: 'abc', tasks: [] });
+    });
+
+    it('extracts JSON when prose follows the object', () => {
+      const output = 'Here is the result: {"x":42} Great, done!';
+      expect(extractJsonObject(output)).toEqual({ x: 42 });
+    });
+
+    it('returns undefined for plain prose with no JSON object', () => {
+      expect(extractJsonObject('sorry, I cannot do that')).toBeUndefined();
+    });
+
+    it('returns undefined for an empty string', () => {
+      expect(extractJsonObject('')).toBeUndefined();
     });
   });
 });

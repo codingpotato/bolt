@@ -53,6 +53,49 @@ function resolveAllowedTools(
 }
 
 /**
+ * Attempts to extract a JSON object from a string that may contain surrounding
+ * prose or markdown fences.  Returns the parsed value, or undefined if no
+ * valid JSON object can be found.
+ *
+ * Extraction order:
+ *   1. Direct parse (clean output from a well-behaved agent)
+ *   2. Strip ```json / ``` fences then parse
+ *   3. Slice from the first '{' to the last '}' then parse
+ */
+export function extractJsonObject(raw: string): unknown {
+  // 1. Try direct parse first.
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // fall through
+  }
+
+  // 2. Strip optional markdown code fences.
+  const fenceStripped = raw
+    .replace(/^```(?:json)?\s*\n?/m, '')
+    .replace(/\n?```\s*$/m, '')
+    .trim();
+  try {
+    return JSON.parse(fenceStripped);
+  } catch {
+    // fall through
+  }
+
+  // 3. Extract the substring from the first '{' to the last '}'.
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try {
+      return JSON.parse(raw.slice(start, end + 1));
+    } catch {
+      // fall through
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Builds the initial user message sent to the skill's isolated agent.
  * The agent is instructed to produce a JSON object matching the output schema.
  */
@@ -176,11 +219,10 @@ export function createSkillRunTool(
         throw new ToolError(`skill "${input.name}" failed: ${message}`, true);
       }
 
-      // Parse the agent's response as JSON.
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(subagentOutput);
-      } catch {
+      // Parse the agent's response as JSON.  The agent may include prose or
+      // markdown fences around the JSON object, so use the lenient extractor.
+      const parsed = extractJsonObject(subagentOutput);
+      if (parsed === undefined) {
         throw new ToolError(
           `skill "${input.name}" produced non-JSON output: ${subagentOutput.slice(0, 200)}`,
         );

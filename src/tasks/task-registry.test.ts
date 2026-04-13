@@ -400,5 +400,155 @@ describe('TaskRegistry', () => {
       const tasks = registry.list();
       expect(tasks.some((t) => t.id === 'task-3')).toBe(false);
     });
+
+    it('auto-discovers projects from workspace/projects/ directory', async () => {
+      const workspaceRoot = '/workspace';
+      const projectsDir = join(workspaceRoot, 'projects');
+      const discoveredProjectDir = join(projectsDir, 'discovered-proj');
+      const discoveredTasksPath = join(discoveredProjectDir, 'tasks.json');
+
+      const discoveredTasksContent = JSON.stringify({
+        tasks: [
+          {
+            id: 'task-10',
+            title: 'discovered task',
+            description: 'desc',
+            status: 'pending',
+            dependsOn: [],
+            requiresApproval: false,
+            subtaskIds: [],
+            sessionIds: [],
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+        counter: 10,
+      });
+
+      // Mock existsSync for discovered project tasks
+      vi.mocked(fs.existsSync).mockImplementation((p) => {
+        const ps = String(p);
+        return ps === TASKS_PATH || ps === discoveredTasksPath;
+      });
+
+      vi.mocked(fs.readFileSync).mockImplementation((p) => {
+        if (String(p) === TASKS_PATH) return emptyTasksJson();
+        if (String(p) === discoveredTasksPath) return discoveredTasksContent;
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
+      // Empty projects index (no registered projects)
+      vi.mocked(fsPromises.readFile).mockImplementation(async (p) => {
+        if (String(p) === PROJECTS_INDEX_PATH) {
+          return JSON.stringify([]) as never;
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
+      // Mock readdir to return the discovered project directory
+      vi.mocked(fsPromises.readdir).mockImplementation(async (p) => {
+        if (String(p) === projectsDir) {
+          return [{ name: 'discovered-proj', isDirectory: () => true } as never];
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
+      const registry = new TaskRegistry(DATA_DIR, workspaceRoot);
+      await registry.loadActiveProjects();
+
+      // The discovered project task should be included in list()
+      const tasks = registry.list();
+      expect(tasks.some((t) => t.id === 'task-10')).toBe(true);
+
+      // Counter should be synced to max of all task IDs seen
+      const nextId = await registry.create('new task', 'desc');
+      expect(nextId).toBe('task-11');
+    });
+
+    it('skips workspace projects with no active tasks', async () => {
+      const workspaceRoot = '/workspace';
+      const projectsDir = join(workspaceRoot, 'projects');
+      const inactiveProjectDir = join(projectsDir, 'inactive-proj');
+      const inactiveTasksPath = join(inactiveProjectDir, 'tasks.json');
+
+      const inactiveTasksContent = JSON.stringify({
+        tasks: [
+          {
+            id: 'task-20',
+            title: 'completed task',
+            description: 'desc',
+            status: 'completed',
+            dependsOn: [],
+            requiresApproval: false,
+            subtaskIds: [],
+            sessionIds: [],
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+        counter: 20,
+      });
+
+      vi.mocked(fs.existsSync).mockImplementation((p) => {
+        const ps = String(p);
+        return ps === TASKS_PATH || ps === inactiveTasksPath;
+      });
+
+      vi.mocked(fs.readFileSync).mockImplementation((p) => {
+        if (String(p) === TASKS_PATH) return emptyTasksJson();
+        if (String(p) === inactiveTasksPath) return inactiveTasksContent;
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
+      vi.mocked(fsPromises.readFile).mockImplementation(async (p) => {
+        if (String(p) === PROJECTS_INDEX_PATH) {
+          return JSON.stringify([]) as never;
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
+      vi.mocked(fsPromises.readdir).mockImplementation(async (p) => {
+        if (String(p) === projectsDir) {
+          return [{ name: 'inactive-proj', isDirectory: () => true } as never];
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
+      const registry = new TaskRegistry(DATA_DIR, workspaceRoot);
+      await registry.loadActiveProjects();
+
+      // Inactive tasks should NOT be loaded
+      const tasks = registry.list();
+      expect(tasks.some((t) => t.id === 'task-20')).toBe(false);
+    });
+
+    it('handles missing workspace/projects/ directory gracefully', async () => {
+      const workspaceRoot = '/workspace';
+
+      vi.mocked(fs.existsSync).mockImplementation((p) => {
+        return String(p) === TASKS_PATH;
+      });
+
+      vi.mocked(fs.readFileSync).mockImplementation((p) => {
+        if (String(p) === TASKS_PATH) return emptyTasksJson();
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
+      vi.mocked(fsPromises.readFile).mockImplementation(async (p) => {
+        if (String(p) === PROJECTS_INDEX_PATH) {
+          return JSON.stringify([]) as never;
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
+
+      vi.mocked(fsPromises.readdir).mockImplementation(async (_p) => {
+        throw Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' });
+      });
+
+      const registry = new TaskRegistry(DATA_DIR, workspaceRoot);
+
+      // Should not throw even if workspace/projects/ doesn't exist
+      await expect(registry.loadActiveProjects()).resolves.not.toThrow();
+    });
   });
 });

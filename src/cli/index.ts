@@ -121,7 +121,7 @@ async function serve(serveArgs: string[]): Promise<void> {
   const traceLogger = config.logTrace ? createTraceLogger(cwd) : createNoopTraceLogger();
 
   const todoStore = new TodoStore();
-  const taskRegistry = new TaskRegistry(dataDir);
+  const taskRegistry = new TaskRegistry(dataDir, cwd);
   await taskRegistry.loadActiveProjects();
 
   const sessionsDir = join(dataDir, config.memory.sessionPath);
@@ -373,7 +373,7 @@ async function main(): Promise<void> {
   const progress = new CliProgressReporter(process.stdout, verbose, quiet);
 
   const todoStore = new TodoStore();
-  const taskRegistry = new TaskRegistry(dataDir);
+  const taskRegistry = new TaskRegistry(dataDir, cwd);
   await taskRegistry.loadActiveProjects();
 
   const sessionsDir = join(dataDir, config.memory.sessionPath);

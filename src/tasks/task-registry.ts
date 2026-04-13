@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TaskStore, type Task, type TaskStatus } from './task-store';
@@ -30,16 +30,19 @@ export class TaskRegistry {
   private counter: number;
   private readonly projectsIndexPath: string;
   private readonly corruptedDir: string;
+  private readonly workspaceRoot: string | undefined;
 
-  constructor(dataDir: string) {
+  constructor(dataDir: string, workspaceRoot?: string) {
     this.corruptedDir = join(dataDir, 'corrupted');
     this.globalStore = new TaskStore(join(dataDir, 'tasks.json'), this.corruptedDir);
     this.counter = this.globalStore.getCounter();
     this.projectsIndexPath = join(dataDir, 'projects.json');
+    this.workspaceRoot = workspaceRoot;
   }
 
   /**
    * Load TaskStore instances for all active projects listed in .bolt/projects.json.
+   * Also auto-discovers projects from workspace/projects/ directory if workspaceRoot is set.
    * Call once at startup after constructing the registry.
    */
   async loadActiveProjects(): Promise<void> {
@@ -54,6 +57,50 @@ export class TaskRegistry {
           const num = parseInt(task.id.replace('task-', ''), 10);
           if (!isNaN(num) && num > this.counter) this.counter = num;
         }
+      }
+    }
+
+    // Auto-discover projects from workspace/projects/ directory
+    if (this.workspaceRoot) {
+      await this.discoverWorkspaceProjects();
+    }
+  }
+
+  /**
+   * Auto-discover projects from workspace/projects/ directory.
+   * This handles projects that were created manually or before the registration mechanism existed.
+   */
+  private async discoverWorkspaceProjects(): Promise<void> {
+    if (!this.workspaceRoot) return;
+    const projectsDir = join(this.workspaceRoot, 'projects');
+    try {
+      const entries = await readdir(projectsDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+
+        const projectDir = join(projectsDir, entry.name);
+        const tasksPath = join(projectDir, 'tasks.json');
+
+        // Check if this project has active tasks
+        if (!this.hasActiveTasksInFile(tasksPath)) continue;
+
+        // Skip if already registered
+        if (this.projectStores.has(entry.name)) continue;
+
+        // Load the project store
+        const store = new TaskStore(tasksPath, this.corruptedDir);
+        this.projectStores.set(entry.name, store);
+
+        // Sync counter
+        for (const task of store.list()) {
+          const num = parseInt(task.id.replace('task-', ''), 10);
+          if (!isNaN(num) && num > this.counter) this.counter = num;
+        }
+      }
+    } catch (err) {
+      // Directory doesn't exist or can't be read - that's ok
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw err;
       }
     }
   }

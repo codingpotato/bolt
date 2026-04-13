@@ -316,6 +316,14 @@ export class ContentProjectManager {
     artifactPath: string,
     status: ArtifactStatus,
   ): Promise<boolean> {
+    // Ensure artifacts structure exists (handles old/incompatible project.json files)
+    if (!project.artifacts) {
+      project.artifacts = { scenes: [] };
+    }
+    if (!project.artifacts.scenes) {
+      project.artifacts.scenes = [];
+    }
+
     const updateArtifact = (artifact: Artifact | undefined): boolean => {
       if (!artifact) return false;
       if (artifact.path !== artifactPath) return false;

@@ -21,7 +21,7 @@ export interface ComfyUITTSInput {
   outputPath?: string;
 }
 
-export interface ComfyUTTSTOutput {
+export interface ComfyUITTSOutput {
   outputPath: string;
   durationMs: number;
 }
@@ -29,7 +29,7 @@ export interface ComfyUTTSTOutput {
 export function createComfyUITTS(
   pool: ComfyUIPool | null,
   timeoutMs: number,
-): Tool<ComfyUITTSInput, ComfyUTTSTOutput> {
+): Tool<ComfyUITTSInput, ComfyUITTSOutput> {
   return {
     name: 'comfyui_tts',
     description:
@@ -117,7 +117,7 @@ export function createComfyUITTS(
       required: ['text'],
     },
 
-    async execute(input: ComfyUITTSInput, ctx: ToolContext): Promise<ComfyUTTSTOutput> {
+    async execute(input: ComfyUITTSInput, ctx: ToolContext): Promise<ComfyUITTSOutput> {
       if (!pool) {
         throw new ToolError(
           'No ComfyUI servers configured — add servers to config.comfyui.servers',

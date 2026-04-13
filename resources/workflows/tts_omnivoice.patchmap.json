@@ -1,0 +1,18 @@
+{
+  "outputNode": "2",
+  "params": {
+    "text": [{ "nodeId": "1", "field": "text" }],
+    "voiceInstruct": [{ "nodeId": "1", "field": "voice_instruct" }],
+    "steps": [{ "nodeId": "1", "field": "steps" }],
+    "guidanceScale": [{ "nodeId": "1", "field": "guidance_scale" }],
+    "tShift": [{ "nodeId": "1", "field": "t_shift" }],
+    "speed": [{ "nodeId": "1", "field": "speed" }],
+    "duration": [{ "nodeId": "1", "field": "duration" }],
+    "positionTemperature": [{ "nodeId": "1", "field": "position_temperature" }],
+    "classTemperature": [{ "nodeId": "1", "field": "class_temperature" }],
+    "layerPenaltyFactor": [{ "nodeId": "1", "field": "layer_penalty_factor" }],
+    "denoise": [{ "nodeId": "1", "field": "denoise" }],
+    "postprocessOutput": [{ "nodeId": "1", "field": "postprocess_output" }],
+    "keepModelLoaded": [{ "nodeId": "1", "field": "keep_model_loaded" }]
+  }
+}

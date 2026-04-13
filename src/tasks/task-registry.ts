@@ -157,7 +157,13 @@ export class TaskRegistry {
     id: string,
     changes: { status: TaskStatus; result?: string; error?: string; sessionId?: string },
   ): Promise<void> {
-    const store = this.findStore(id);
+    let store = this.findStore(id);
+    if (!store) {
+      // A subagent may have registered new projects after our startup scan —
+      // re-read projects.json and workspace directory before giving up.
+      await this.loadActiveProjects();
+      store = this.findStore(id);
+    }
     if (!store) throw new Error(`task not found: ${id}`);
     await store.update(id, changes);
   }

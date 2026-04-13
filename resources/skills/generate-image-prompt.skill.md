@@ -9,8 +9,53 @@ input:
     description: The scene description from the storyboard (scene.description + " " + scene.imagePromptHint)
   characters:
     type: array
-    description: "Array of character objects from the storyboard for characters appearing in this scene (look up storyboard.characters by scene.characterIds). Each object has: id, name, age, gender, nationality, appearance, face, clothing, speakingAccent, role. Pass an empty array [] for b-roll scenes with no on-screen people."
+    description: "Array of character objects from the storyboard for characters appearing in this scene (look up storyboard.characters by scene.characterIds). Pass an empty array [] for b-roll scenes with no on-screen people."
     default: []
+    items:
+      type: object
+      description: "A character who appears in this scene"
+      properties:
+        id:
+          type: string
+          description: "Unique identifier, e.g. 'host', 'narrator', 'guest-sarah'"
+        name:
+          type: string
+          description: "Display name, e.g. 'Sarah Chen'"
+        age:
+          type: integer
+          description: "Approximate age in years, e.g. 28"
+        gender:
+          type: string
+          description: "Gender, e.g. 'female', 'male', 'non-binary'"
+        nationality:
+          type: string
+          description: "Nationality or ethnic background, e.g. 'Chinese-American', 'British'"
+        appearance:
+          type: string
+          description: "Overall physical appearance for image generation"
+        face:
+          type: string
+          description: "Detailed face description for consistent character rendering"
+        clothing:
+          type: string
+          description: "Clothing and style for consistent rendering"
+        speakingAccent:
+          type: string
+          description: "Speaking accent for LTX-Video speech animation"
+        role:
+          type: string
+          description: "Role in the video, e.g. 'main presenter', 'expert guest'"
+      required:
+        - id
+        - name
+        - age
+        - gender
+        - nationality
+        - appearance
+        - face
+        - clothing
+        - speakingAccent
+        - role
   resolution:
     type: object
     description: "The storyboard resolution: { width: number, height: number }. Used to specify orientation in the prompt."

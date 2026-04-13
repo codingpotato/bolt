@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, rm, readFile } from 'node:fs/promises';
+import { mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   generateProjectId,
@@ -279,6 +279,31 @@ describe('ContentProjectManager', () => {
       const result = await manager.updateArtifactStatus(project, 'non-existent.md', 'approved');
 
       expect(result).toBe(false);
+    });
+
+    it('handles project with missing artifacts property', async () => {
+      // Simulate an old/incompatible project.json without artifacts
+      const project = await manager.createProject('Test Topic');
+      const manifestPath = join(project.dir, 'project.json');
+      // Write a manifest without artifacts to simulate old/incompatible file
+      const minimalManifest = {
+        id: project.id,
+        title: project.title,
+        topic: project.topic,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+        dir: project.dir,
+      };
+      await writeFile(manifestPath, JSON.stringify(minimalManifest, null, 2), 'utf-8');
+
+      const read = await manager.readProject(project.id);
+      // Should not throw when updating artifact status on project with missing artifacts
+      const result = await manager.updateArtifactStatus(read!, '01-trend-report.md', 'draft');
+
+      expect(result).toBe(false);
+      // Should have initialized artifacts structure
+      expect(read?.artifacts).toBeDefined();
+      expect(read?.artifacts?.scenes).toEqual([]);
     });
   });
 

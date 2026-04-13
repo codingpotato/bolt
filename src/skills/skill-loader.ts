@@ -52,6 +52,22 @@ function fieldMapToJsonSchema(fields: Record<string, unknown>): JSONSchema {
     if (typeof def['description'] === 'string') prop['description'] = def['description'];
     if (Array.isArray(def['enum'])) prop['enum'] = def['enum'];
 
+    // Handle array items schema
+    if (isRecord(def['items'])) {
+      const itemsSchema: JSONSchema = {};
+      if (typeof def['items']?.['type'] === 'string') itemsSchema['type'] = def['items']['type'];
+      if (typeof def['items']?.['description'] === 'string') {
+        itemsSchema['description'] = def['items']['description'];
+      }
+      if (isRecord(def['items']?.['properties'])) {
+        itemsSchema['properties'] = def['items']['properties'] as Record<string, JSONSchema>;
+      }
+      if (Array.isArray(def['items']?.['required'])) {
+        itemsSchema['required'] = def['items']['required'] as string[];
+      }
+      prop['items'] = itemsSchema;
+    }
+
     properties[key] = prop;
 
     if (!('default' in def)) {

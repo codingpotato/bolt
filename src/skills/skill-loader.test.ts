@@ -336,6 +336,58 @@ body`;
     const skill = parseSkillFile('bad.skill.md', raw);
     expect(skill).toBeNull();
   });
+
+  it('parses array items schema with properties and required fields', () => {
+    const raw = `---
+name: my-skill
+description: test
+input:
+  characters:
+    type: array
+    description: List of characters
+    default: []
+    items:
+      type: object
+      description: A character
+      properties:
+        id:
+          type: string
+          description: Character ID
+        name:
+          type: string
+          description: Character name
+        age:
+          type: integer
+          description: Age in years
+      required:
+        - id
+        - name
+        - age
+output:
+  r:
+    type: string
+---
+body`;
+
+    const skill = parseSkillFile('my-skill.skill.md', raw);
+    const charactersProp = skill?.inputSchema.properties?.['characters'];
+    expect(charactersProp).toMatchObject({
+      type: 'array',
+      description: 'List of characters',
+      items: {
+        type: 'object',
+        description: 'A character',
+        properties: {
+          id: { type: 'string', description: 'Character ID' },
+          name: { type: 'string', description: 'Character name' },
+          age: { type: 'integer', description: 'Age in years' },
+        },
+        required: ['id', 'name', 'age'],
+      },
+    });
+    // characters should not be required since it has a default
+    expect(skill?.inputSchema.required).toBeUndefined();
+  });
 });
 
 // ── loadSkillsFromDir ─────────────────────────────────────────────────────────

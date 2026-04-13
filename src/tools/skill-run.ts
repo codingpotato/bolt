@@ -130,6 +130,7 @@ export function createSkillRunTool(
   runner: SubagentRunner,
   inheritedRules: string,
   logger: Logger = createNoopLogger(),
+  dataDir?: string,
 ): Tool<SkillRunInput, SkillRunOutput> {
   // Builtins are loaded once at startup and never change.
   const builtinMap = new Map<string, Skill>(builtinSkills.map((s) => [s.name, s]));
@@ -190,6 +191,7 @@ export function createSkillRunTool(
         authConfig,
         model,
         workspaceRoot: ctx.cwd,
+        ...(dataDir !== undefined ? { dataDir } : {}),
         systemPrompt: skill.systemPrompt,
         ...(effectiveTools !== undefined ? { allowedTools: effectiveTools } : {}),
         ...(inheritedRules.length > 0 ? { inheritedRules } : {}),

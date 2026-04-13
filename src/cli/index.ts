@@ -205,6 +205,7 @@ async function serve(serveArgs: string[]): Promise<void> {
       runSubagent,
       inheritedRules,
       logger,
+      dataDir,
     ),
   );
   const slashRegistry = createSlashCommandRegistry();
@@ -457,6 +458,7 @@ async function main(): Promise<void> {
       runSubagent,
       inheritedRules,
       logger,
+      dataDir,
     ),
   );
   const slashRegistry = createSlashCommandRegistry();

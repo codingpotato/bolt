@@ -11,6 +11,13 @@ export interface SubagentPayload {
   model: string;
   /** Workspace root to use — must be passed from the parent's ctx.cwd. */
   workspaceRoot: string;
+  /**
+   * Absolute path to the workspace data directory (e.g. <workspace>/.bolt).
+   * When set, the sub-agent registers task and content-project tools backed by
+   * this directory so that projects.json and per-project tasks.json are written
+   * to the real workspace, not a throwaway temp dir.
+   */
+  dataDir?: string;
   allowedTools?: string[];
   /** Optional system prompt override — used by skill_run to inject the skill's system prompt. */
   systemPrompt?: string;

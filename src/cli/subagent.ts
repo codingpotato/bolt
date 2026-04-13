@@ -27,6 +27,9 @@ import { createAnthropicClient } from '../auth/auth';
 import { AgentCore } from '../agent/agent';
 import { TodoStore } from '../todo/todo-store';
 import { createTodoTools } from '../todo/todo-tools';
+import { TaskRegistry } from '../tasks/task-registry';
+import { createTaskTools } from '../tasks/task-tools';
+import { createContentProjectTools } from '../tools/content-project-tools';
 import { StderrProgressReporter } from '../progress';
 import { loadAgentPrompt } from '../agent-prompt/agent-prompt';
 import type { SubagentPayload, SubagentResult } from '../subagent/subagent-runner';
@@ -67,13 +70,15 @@ async function main(): Promise<void> {
 
   const payload = JSON.parse(raw) as SubagentPayload;
 
-  // Use a per-run temp dir so this sub-agent has no access to the parent's data.
-  const dataDir = join(tmpdir(), `bolt-subagent-${randomUUID()}`);
+  // Agent-local state (audit log, logger) lives in a per-run temp dir so it is
+  // fully isolated from the parent.  Shared workspace state (tasks, projects)
+  // uses the real data dir when the parent passes it.
+  const agentDataDir = join(tmpdir(), `bolt-subagent-${randomUUID()}`);
   const cwd = payload.workspaceRoot;
 
   const client = createAnthropicClient(payload.authConfig);
-  const log = createAuditLogger(dataDir);
-  const logger = createLogger('warn', join(dataDir, 'bolt.log'));
+  const log = createAuditLogger(agentDataDir);
+  const logger = createLogger('warn', join(agentDataDir, 'bolt.log'));
 
   const toolBus = new ToolBus(logger);
   const todoStore = new TodoStore();
@@ -89,10 +94,20 @@ async function main(): Promise<void> {
   toolBus.register(webFetchTool);
   for (const tool of createTodoTools(todoStore)) toolBus.register(tool);
 
+  // If the parent passed the real workspace data dir, register task and content-project
+  // tools backed by that dir so the skill can call content_project_create and task_create
+  // and have the results land in the real .bolt/projects.json / tasks.json files.
+  if (payload.dataDir) {
+    const taskRegistry = new TaskRegistry(payload.dataDir, cwd);
+    await taskRegistry.loadActiveProjects();
+    for (const tool of createTaskTools(taskRegistry)) toolBus.register(tool);
+    for (const tool of createContentProjectTools(taskRegistry)) toolBus.register(tool);
+  }
+
   // Build a minimal config for the sub-agent.
   const config = {
     model: payload.model,
-    dataDir,
+    dataDir: agentDataDir,
     logLevel: 'warn' as const,
     logTrace: false,
     workspace: { root: cwd },

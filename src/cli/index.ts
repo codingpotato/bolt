@@ -48,6 +48,7 @@ import { WebChannel } from '../channels/web-channel';
 import { ComfyUIPool } from '../comfyui/comfyui-pool';
 import { createComfyUIText2ImgTool } from '../tools/comfyui-text2img';
 import { createComfyUIImg2VideoTool } from '../tools/comfyui-img2video';
+import { createComfyUITTS } from '../tools/comfyui-tts';
 import { createVideoMergeTool } from '../tools/video-merge';
 import { createVideoAddAudioTool } from '../tools/video-add-audio';
 import { createVideoAddSubtitlesTool } from '../tools/video-add-subtitles';
@@ -286,6 +287,7 @@ async function serve(serveArgs: string[]): Promise<void> {
   }
   toolBus.register(createComfyUIText2ImgTool(comfyuiPool, config.comfyui.timeoutMs));
   toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
+  toolBus.register(createComfyUITTS(comfyuiPool, config.comfyui.timeoutMs));
 
   const ffmpegPath = await FfmpegRunner.detect(config.ffmpeg.path);
   if (ffmpegPath) {
@@ -529,6 +531,7 @@ async function main(): Promise<void> {
   }
   toolBus.register(createComfyUIText2ImgTool(comfyuiPool, config.comfyui.timeoutMs));
   toolBus.register(createComfyUIImg2VideoTool(comfyuiPool, config.comfyui.timeoutMs));
+  toolBus.register(createComfyUITTS(comfyuiPool, config.comfyui.timeoutMs));
 
   const ffmpegPath = await FfmpegRunner.detect(config.ffmpeg.path);
   if (ffmpegPath) {

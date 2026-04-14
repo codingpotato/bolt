@@ -62,12 +62,105 @@ export interface Character {
 }
 
 /**
+ * Voice design profile for OmniVoice TTS narration via comfyui_tts.
+ * Applied to every scene where audioSource === "narration".
+ * One narrator voice per video — stored in Storyboard.narrator.
+ *
+ * At synthesis time, attributes are assembled into a voiceInstruct string and a speed value:
+ *   voiceInstruct = "<gender>, <age>, <pitch> pitch, <accent>[, <style>]"
+ *   speed         = narratorToSpeed(narrator.pace)
+ *
+ * See docs/design/tts-narration.md for the full selection guide.
+ */
+export interface NarrationVoice {
+  /** Narrator archetype for scriptwriting guidance, e.g. "documentary narrator" */
+  persona: string;
+  /** Voice gender. Maps to the first voiceInstruct term. */
+  gender: 'male' | 'female';
+  /** Vocal age group. Maps to the second voiceInstruct term. */
+  age: 'child' | 'young' | 'middle-aged' | 'elderly';
+  /**
+   * Pitch register. Maps to the "<x> pitch" voiceInstruct term.
+   *   very-low → "very low pitch"
+   *   low      → "low pitch"
+   *   medium   → "medium pitch"
+   *   high     → "high pitch"
+   *   very-high→ "very high pitch"
+   */
+  pitch: 'very-low' | 'low' | 'medium' | 'high' | 'very-high';
+  /**
+   * Regional accent — passed verbatim as the accent voiceInstruct term.
+   * Examples: "american accent", "british accent", "australian accent",
+   *           "indian accent", "mandarin accent", "french accent"
+   * For Chinese dialects: "四川话", "广东话", "东北话"
+   */
+  accent: string;
+  /**
+   * Speaking pace — maps to comfyui_tts `speed` parameter:
+   *   slow      → 0.8
+   *   medium    → 1.0
+   *   fast      → 1.2
+   *   very-fast → 1.4
+   */
+  pace: 'slow' | 'medium' | 'fast' | 'very-fast';
+  /**
+   * Vocal style modifier — appended to voiceInstruct when set.
+   * "whisper" is the only OmniVoice style currently supported.
+   */
+  style?: 'whisper';
+  /**
+   * Diffusion quality steps for comfyui_tts. Default: 32.
+   * 16 = faster generation, 64 = best quality.
+   */
+  steps?: number;
+  /**
+   * Classifier-free guidance scale for comfyui_tts. Default: 2.0.
+   * Higher = more faithful to voiceInstruct, less variation.
+   */
+  guidanceScale?: number;
+}
+
+const PITCH_LABELS: Record<NarrationVoice['pitch'], string> = {
+  'very-low': 'very low pitch',
+  low: 'low pitch',
+  medium: 'medium pitch',
+  high: 'high pitch',
+  'very-high': 'very high pitch',
+};
+
+const SPEED_VALUES: Record<NarrationVoice['pace'], number> = {
+  slow: 0.8,
+  medium: 1.0,
+  fast: 1.2,
+  'very-fast': 1.4,
+};
+
+/**
+ * Derive the voiceInstruct string for comfyui_tts from a NarrationVoice profile.
+ * Format: "<gender>, <age>, <pitch> pitch, <accent>[, <style>]"
+ * Example: "female, young, high pitch, british accent, whisper"
+ */
+export function narratorToVoiceInstruct(narrator: NarrationVoice): string {
+  const parts = [narrator.gender, narrator.age, PITCH_LABELS[narrator.pitch], narrator.accent];
+  if (narrator.style) parts.push(narrator.style);
+  return parts.join(', ');
+}
+
+/**
+ * Derive the speed parameter for comfyui_tts from a NarrationVoice pace.
+ */
+export function narratorToSpeed(narrator: NarrationVoice): number {
+  return SPEED_VALUES[narrator.pace];
+}
+
+/**
  * Storyboard output from the generate-video-script skill.
  * This is the complete production design document for a video project.
  * It contains all creative and technical decisions that downstream generation steps need:
  * - resolution (for comfyui_text2img and comfyui_img2video)
  * - characters (for image and video prompt generation)
- * - scenes (with character assignments)
+ * - narrator (for OmniVoice TTS narration synthesis)
+ * - scenes (with character assignments and audioSource per scene)
  */
 export interface Storyboard {
   title: string;
@@ -90,6 +183,12 @@ export interface Storyboard {
    * May be empty for narration-only or b-roll videos with no on-screen people.
    */
   characters: Character[];
+  /**
+   * Narrator voice design profile for comfyui_tts (OmniVoice model).
+   * Applies to every narration scene. Use narratorToVoiceInstruct() and
+   * narratorToSpeed() to derive the comfyui_tts call parameters.
+   */
+  narrator: NarrationVoice;
   scenes: Scene[];
 }
 
@@ -100,8 +199,31 @@ export interface Scene {
   sceneNumber: number;
   /** What happens visually in this scene */
   description: string;
-  /** Spoken dialogue or voiceover text for this scene */
+  /**
+   * Primary audio source for this scene. Required on every scene.
+   *
+   * "character-speech": character speaks on camera → LTX-Video generates lip-synced clip with
+   *   baked audio. Set `dialogue`, leave `narration` empty.
+   *
+   * "narration": off-screen narrator voices this scene → LTX-Video generates a silent clip;
+   *   OmniVoice TTS synthesizes narration.wav which is mixed in. Set `narration`, leave `dialogue` empty.
+   *
+   * "silent": no speech or narration → LTX-Video generates a silent clip for background music.
+   *   Both `dialogue` and `narration` must be empty.
+   */
+  audioSource: 'character-speech' | 'narration' | 'silent';
+  /**
+   * Dialogue spoken by a character on camera.
+   * Only set when audioSource === "character-speech".
+   * Injected into the LTX-Video prompt to animate lip sync.
+   */
   dialogue?: string;
+  /**
+   * Narration voiceover text for off-screen narrator.
+   * Only set when audioSource === "narration".
+   * Sent to OmniVoice TTS using Storyboard.narrator voice profile.
+   */
+  narration?: string;
   /** Camera movement or angle, e.g. "slow zoom in", "static wide shot" */
   camera: string;
   /** Approximate scene duration, e.g. "5s", "8s" */
@@ -113,6 +235,8 @@ export interface Scene {
    * Empty array for scenes with no on-screen characters (e.g. pure b-roll).
    * The generate-image-prompt and generate-video-prompt skills use this list to
    * inject character descriptions (face, clothing, accent) into the generated prompts.
+   * For narration scenes, characters may appear visually (pose/motion) but their
+   * speakingAccent is not used — the video prompt must not include speech animation.
    */
   characterIds: string[];
   /** Transition effect to the next scene, e.g. "cut", "fade to black" */
@@ -142,7 +266,12 @@ export interface SceneArtifacts {
   imagePrompt?: Artifact;
   image?: Artifact;
   videoPrompt?: Artifact;
+  /** LTX-Video clip — silent for narration/silent scenes */
   clip?: Artifact;
+  /** comfyui_tts output audio — narration scenes only (scenes/scene-<NN>/narration.wav) */
+  narrationAudio?: Artifact;
+  /** clip.mp4 + narration audio mixed — narration scenes only (scenes/scene-<NN>/narrated.mp4) */
+  narratedClip?: Artifact;
 }
 
 /**
@@ -352,7 +481,9 @@ export class ContentProjectManager {
         updateArtifact(scene.imagePrompt) ||
         updateArtifact(scene.image) ||
         updateArtifact(scene.videoPrompt) ||
-        updateArtifact(scene.clip)
+        updateArtifact(scene.clip) ||
+        updateArtifact(scene.narrationAudio) ||
+        updateArtifact(scene.narratedClip)
       ) {
         await this.writeManifest(project);
         return true;

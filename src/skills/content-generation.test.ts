@@ -66,6 +66,7 @@ describe('generate-video-script scene fields', () => {
   it('returns a scene with all 7 required fields intact', async () => {
     const scene = {
       description: 'Developer staring at terminal as code streams across the screen',
+      audioSource: 'character-speech',
       dialogue: 'AI is writing code faster than any human ever could.',
       camera: 'close-up on screen, slow zoom out',
       duration: 8,
@@ -79,6 +80,14 @@ describe('generate-video-script scene fields', () => {
       targetPlatform: 'tiktok',
       resolution: { width: 1080, height: 1920 },
       characters: [],
+      narrator: {
+        persona: 'energetic social media host',
+        gender: 'female',
+        age: 'young',
+        pitch: 'high',
+        accent: 'american accent',
+        pace: 'very-fast',
+      },
       scenes: [scene],
     };
 
@@ -104,7 +113,8 @@ describe('generate-video-script scene fields', () => {
     const scenes = [
       {
         description: 'Opening title card',
-        dialogue: 'Five tools every developer should know.',
+        audioSource: 'narration',
+        narration: 'Five tools every developer should know.',
         camera: 'static wide shot',
         duration: 3,
         imagePromptHint: 'bold title card, modern sans-serif font',
@@ -113,6 +123,7 @@ describe('generate-video-script scene fields', () => {
       },
       {
         description: 'Screen recording of AI autocomplete in action',
+        audioSource: 'character-speech',
         dialogue: 'GitHub Copilot completes entire functions from a comment.',
         camera: 'screen capture with subtle zoom',
         duration: 10,
@@ -122,6 +133,7 @@ describe('generate-video-script scene fields', () => {
       },
       {
         description: 'Developer smiling at screen, thumbs up',
+        audioSource: 'character-speech',
         dialogue: 'Your future self will thank you.',
         camera: 'medium shot, handheld',
         duration: 5,
@@ -136,6 +148,14 @@ describe('generate-video-script scene fields', () => {
       targetPlatform: 'tiktok',
       resolution: { width: 1080, height: 1920 },
       characters: [],
+      narrator: {
+        persona: 'energetic social media host',
+        gender: 'female',
+        age: 'young',
+        pitch: 'high',
+        accent: 'american accent',
+        pace: 'very-fast',
+      },
       scenes,
     };
 

@@ -97,15 +97,17 @@ Create these tasks (use the exact titles below):
 
 6. `task_create({ title: "Generate video clips", description: "Read 02-storyboard.json for resolution. For each scene: read approved video prompt and image path, then call comfyui_img2video with width: storyboard.resolution.width, height: storyboard.resolution.height, fps: 25, frames: Math.round(parseFloat(scene.duration) * 25). Save to projects/<id>/scenes/scene-<NN>/clip.mp4.", dependsOn: [<generateVideoPrompts id>], requiresApproval: true, projectId })`
 
-7. `task_create({ title: "Merge clips", description: "Concatenate all approved scene clips into projects/<id>/final/raw.mp4 using video_merge.", dependsOn: [<generateVideos id>], requiresApproval: true, projectId })`
+7. `task_create({ title: "Synthesize narration", description: "Read 02-storyboard.json. For each scene where audioSource === 'narration' and narration text is non-empty: (1) call comfyui_tts with scene.narration, voiceInstruct=narratorToVoiceInstruct(storyboard.narrator), speed=narratorToSpeed(storyboard.narrator), writing to scenes/scene-<NN>/narration.wav; (2) call video_add_audio with mode 'replace' to mix narration.wav into clip.mp4, writing narrated.mp4. Update narrationAudio and narratedClip artifacts in project.json. Skip scenes where audioSource is 'character-speech' or 'silent'.", dependsOn: [<generateVideos id>], requiresApproval: true, projectId })`
+
+8. `task_create({ title: "Merge clips", description: "Concatenate all approved scene clips into projects/<id>/final/raw.mp4 using video_merge. For each scene: use narrated.mp4 if available and approved (narration scenes), otherwise use clip.mp4 (character-speech and silent scenes).", dependsOn: [<synthesizeNarration id>], requiresApproval: true, projectId })`
 
 **Conditional tasks — only create if applicable:**
 
 - If `audioFile` is non-empty:
-  8. `task_create({ title: "Add audio", description: "Mix background audio into the merged video. Output to projects/<id>/final/audio.mp4.", dependsOn: [<mergeClips id>], requiresApproval: true, projectId })`
+  9. `task_create({ title: "Add audio", description: "Mix background audio into the merged video. Output to projects/<id>/final/audio.mp4.", dependsOn: [<mergeClips id>], requiresApproval: true, projectId })`
 
-- If storyboard dialogue is expected (always create — the main agent will skip it if there is no dialogue):
-  9. `task_create({ title: "Add subtitles", description: "Generate SRT from storyboard dialogue and embed into final video. Output to projects/<id>/final/video.mp4.", dependsOn: [<addAudio id or mergeClips id>], requiresApproval: true, projectId })`
+- Always create (the main agent will skip it if there is no dialogue or narration):
+  10. `task_create({ title: "Add subtitles", description: "Generate a .ass subtitle file at projects/<id>/scenes/subtitles.ass using the Subtitle Layout Calculation algorithm from docs/design/video-editing.md: for each scene compute font size from text length and resolution, apply safe margins (5% horizontal, 12% bottom for portrait / 8% for landscape). Character-speech entries use scene.duration for timing; narration entries use TTS durationMs. Split entries exceeding the 2-line-at-minimum-font-size limit at word boundaries. Then call video_add_subtitles(mode:'hard') to burn subtitles into final video. Output to projects/<id>/final/video.mp4.", dependsOn: [<addAudio id or mergeClips id>], requiresApproval: true, projectId })`
 
 ### Step 3: Build the plan summary
 
@@ -120,21 +122,22 @@ Audio:    <audioFile or "none">
 Project:  <projectId>
 
 Steps — each requires your approval before the next begins:
-  Step 1 — Trend Research         → approve trend report
-  Step 2 — Script & Storyboard    → approve script and all scenes
-  Step 3 — Image Prompts          → approve all image prompts
-  Step 4 — Generate Images        → approve all generated images
-  Step 5 — Video Motion Prompts   → approve all motion prompts
-  Step 6 — Generate Video Clips   → approve all video clips
-  Step 7 — Merge Clips            → approve merged video
-  Step 8 — Add Audio              → approve audio mix  [only if audioFile provided]
-  Step 9 — Add Subtitles          → approve final video [only if dialogue in script]
+  Step 1  — Trend Research         → approve trend report
+  Step 2  — Script & Storyboard    → approve script and all scenes
+  Step 3  — Image Prompts          → approve all image prompts
+  Step 4  — Generate Images        → approve all generated images
+  Step 5  — Video Motion Prompts   → approve all motion prompts
+  Step 6  — Generate Video Clips   → approve all video clips
+  Step 7  — Synthesize Narration   → approve narrated clips (TTS voiceover)
+  Step 8  — Merge Clips            → approve merged video
+  Step 9  — Add Audio              → approve audio mix  [only if audioFile provided]
+  Step 10 — Add Subtitles          → approve final video
 
 ⚠  No generation step starts until you explicitly approve the previous step.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Include Step 8 in the summary only if `audioFile` is non-empty.
+Include Step 9 in the summary only if `audioFile` is non-empty.
 
 ### Step 4: Return the result
 
@@ -152,13 +155,14 @@ Respond with a JSON object:
     { "id": "<task id>", "title": "Generate images", "step": 4 },
     { "id": "<task id>", "title": "Generate video prompts", "step": 5 },
     { "id": "<task id>", "title": "Generate video clips", "step": 6 },
-    { "id": "<task id>", "title": "Merge clips", "step": 7 },
-    { "id": "<task id>", "title": "Add audio", "step": 8 },
-    { "id": "<task id>", "title": "Add subtitles", "step": 9 }
+    { "id": "<task id>", "title": "Synthesize narration", "step": 7 },
+    { "id": "<task id>", "title": "Merge clips", "step": 8 },
+    { "id": "<task id>", "title": "Add audio", "step": 9 },
+    { "id": "<task id>", "title": "Add subtitles", "step": 10 }
   ]
 }
 ```
 
-Include only the tasks that were actually created (omit step 8 if no audioFile).
+Include only the tasks that were actually created (omit step 9 if no audioFile).
 
 Output ONLY the JSON object — no prose, no markdown fences.

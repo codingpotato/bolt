@@ -186,7 +186,7 @@ describe('videoAddSubtitlesTool', () => {
     expect(vfArg).toContain('PrimaryColour=&H000000FF&');
   });
 
-  it('does not apply force_style for ASS files in hard mode', async () => {
+  it('uses ass= filter (not subtitles=) for ASS files in hard mode', async () => {
     const input: VideoAddSubtitlesInput = {
       videoPath: 'video.mp4',
       subtitlesPath: 'subs.ass',
@@ -196,9 +196,11 @@ describe('videoAddSubtitlesTool', () => {
     await tool.execute(input, ctx);
 
     const callArgs = mockRunner.run.mock.calls[0]![0] as string[];
-    const vfArg = callArgs.find((a: string) => a.includes('subtitles='));
-    expect(vfArg).toBeDefined();
-    expect(vfArg).not.toContain('force_style');
+    const assArg = callArgs.find((a: string) => a.startsWith('ass='));
+    const subtitlesArg = callArgs.find((a: string) => a.startsWith('subtitles='));
+    expect(assArg).toBeDefined();
+    expect(assArg).toBe('ass=subs.ass');
+    expect(subtitlesArg).toBeUndefined();
   });
 
   it('throws ToolError for unsupported subtitle formats', async () => {

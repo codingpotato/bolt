@@ -172,13 +172,22 @@ User: "Make a short video about AI coding trends"
   [MAIN AGENT]  6. comfyui_img2video × N ← tool called directly by main agent
                → user_review (show all clips) → approve/redo
 
-  [MAIN AGENT]  7. video_merge → final/raw.mp4
+  [MAIN AGENT]  7. synthesizeNarration — for each narration scene:
+                     comfyui_tts(scene.narration, voiceInstruct=narratorToVoiceInstruct(narrator),
+                                 speed=narratorToSpeed(narrator)) → narration.wav
+                     video_add_audio(clip.mp4 + narration.wav, mode:"replace") → narrated.mp4
+               → user_review (show narrated clips) → approve/redo
+
+  [MAIN AGENT]  8. video_merge → final/raw.mp4
+                     (uses narrated.mp4 for narration scenes, clip.mp4 for character-speech/silent)
                → user_review → approve/redo
 
-  [MAIN AGENT]  8. video_add_audio (optional) → final/audio.mp4
+  [MAIN AGENT]  9. video_add_audio (optional) → final/audio.mp4
                → user_review → approve/redo
 
-  [MAIN AGENT]  9. video_add_subtitles (optional) → final/video.mp4
+  [MAIN AGENT]  10. video_add_subtitles (optional) → final/video.mp4
+                    (ASS timing: character-speech scenes use scene.duration;
+                     narration scenes use comfyui_tts durationMs)
                → user_review → approve
 
                ▼
@@ -224,6 +233,14 @@ interface Storyboard {
    * Each character is referenced by ID from Scene.characterIds.
    */
   characters: Character[];
+  /**
+   * Narrator voice design profile for OmniVoice TTS.
+   * Applies to every scene where audioSource === "narration".
+   * One consistent narrator voice throughout the entire video.
+   * See docs/design/tts-narration.md for the full NarrationVoice interface and
+   * platform/content-type persona selection guide.
+   */
+  narrator: NarrationVoice;
   scenes: Scene[];
 }
 
@@ -270,7 +287,43 @@ interface Character {
 interface Scene {
   sceneNumber: number;
   description: string;           // what happens visually in this scene
-  dialogue?: string;             // spoken text for this scene (used for LTX speech animation)
+  /**
+   * The primary audio source for this scene. Must be set on every scene — no omission.
+   *
+   * "character-speech": a character speaks on camera.
+   *   - `dialogue` must be set; `narration` must be empty.
+   *   - LTX 2.3 generates a speech-animated clip (lip sync + baked audio).
+   *   - speakingAccent from each character in characterIds is injected into the video prompt.
+   *   - synthesizeNarration step skips this scene.
+   *
+   * "narration": an off-screen narrator voices this scene over b-roll or poses.
+   *   - `narration` must be set; `dialogue` must be empty.
+   *   - LTX 2.3 generates a motion-only (silent) clip.
+   *   - synthesizeNarration calls comfyui_tts with storyboard.narrator profile.
+   *   - narration.wav is mixed into the clip → narrated.mp4.
+   *
+   * "silent": no speech or narration — clip has no dialogue, pure visuals.
+   *   - Both `dialogue` and `narration` must be empty.
+   *   - Both LTX 2.3 animation and synthesizeNarration skip dialogue injection.
+   *   - Background music (if any) is added post-merge by video_add_audio.
+   *
+   * Never set both `dialogue` and `narration` on the same scene.
+   * If a character speaks AND there is narration, split into two consecutive scenes.
+   */
+  audioSource: "character-speech" | "narration" | "silent";
+  /**
+   * Dialogue spoken by a character — used ONLY when audioSource === "character-speech".
+   * Injected into the LTX 2.3 video prompt to animate lip sync and speech.
+   * Must be empty (or omitted) when audioSource is "narration" or "silent".
+   */
+  dialogue?: string;
+  /**
+   * Narration voiceover text — used ONLY when audioSource === "narration".
+   * Sent to OmniVoice TTS (using storyboard.narrator voice profile) to generate
+   * scenes/scene-<NN>/narration.wav, which is then mixed into the scene clip.
+   * Must be empty (or omitted) when audioSource is "character-speech" or "silent".
+   */
+  narration?: string;
   camera: string;                // camera movement/angle, e.g. "slow zoom in", "static wide shot"
   duration: string;              // e.g. "5s"
   imagePromptHint: string;       // brief hint for the generate-image-prompt skill
@@ -281,8 +334,12 @@ interface Scene {
    * The generate-image-prompt skill uses this list to inject character descriptions
    * (face, appearance, clothing) into the image prompt to ensure visual consistency.
    *
-   * The generate-video-prompt skill uses this list to inject speaking accent into the
-   * video prompt so LTX-Video animates the correct speech style.
+   * For character-speech scenes: generate-video-prompt injects speaking accent
+   * so LTX-Video animates the correct speech style.
+   *
+   * For narration scenes: characters may still appear in characterIds (showing them
+   * in a pose or walking), but NO speech animation is triggered — LTX 2.3 generates
+   * a motion-only clip and the narrator's voice is added separately via TTS.
    */
   characterIds: string[];
   transitionTo?: string;         // transition to next scene, e.g. "cut", "fade to black"
@@ -297,6 +354,14 @@ The `generate-video-script` skill decides:
 3. **What they look like** — face, appearance, clothing (detailed enough for consistent image generation)
 4. **How they speak** — accent for LTX-Video speech animation
 5. **Which scenes they appear in** — `characterIds` in each scene
+6. **Narrator voice design** — `storyboard.narrator` attributes (persona, gender, age, pitch, accent, pace, optional style) — see `docs/design/tts-narration.md` for the full interface and selection guide
+
+**`audioSource` assignment is mandatory for every scene.** The skill must assign one of `"character-speech"`, `"narration"`, or `"silent"` to every scene. This field drives the entire audio generation pipeline:
+- `"character-speech"` → LTX 2.3 speech animation + baked audio; TTS skipped
+- `"narration"` → silent LTX clip + OmniVoice TTS narration mixed in
+- `"silent"` → silent LTX clip; background music (if any) added at post-production
+
+A character with a rich `speakingAccent` is wasted in a narration scene — their accent only affects LTX 2.3 animation, which is only activated for `"character-speech"` scenes.
 
 Character descriptions must be **detailed and deterministic**. Vague descriptions ("a young woman") produce inconsistent results across scenes. Good descriptions anchor specific visual features ("oval face, high cheekbones, dark almond-shaped eyes") that the image model can reproduce reliably.
 
@@ -407,7 +472,7 @@ Every video production run is a **content project** — a self-contained directo
       02-storyboard.json        ← structured storyboard from generate-video-script
       audio/                    ← user-supplied audio files (optional)
       scenes/
-        subtitles.srt           ← auto-generated from storyboard dialogue (optional)
+        subtitles.ass           ← auto-generated from storyboard dialogue/narration (optional)
         scene-01/
           prompt.md             ← image prompt for scene 1
           image.png             ← generated image for scene 1
@@ -457,11 +522,13 @@ interface SceneArtifacts {
   imagePrompt?: Artifact;      // scenes/scene-01/prompt.md
   image?: Artifact;            // scenes/scene-01/image.png
   videoPrompt?: Artifact;      // scenes/scene-01/video-prompt.md
-  clip?: Artifact;             // scenes/scene-01/clip.mp4
+  clip?: Artifact;             // scenes/scene-01/clip.mp4         (LTX 2.3 output; silent for narration scenes)
+  narrationAudio?: Artifact;   // scenes/scene-01/narration.wav    (OmniVoice TTS via comfyui_tts; narration scenes only)
+  narratedClip?: Artifact;     // scenes/scene-01/narrated.mp4     (clip + narration audio mixed; narration scenes only)
 }
 
 interface PostProductionArtifacts {
-  subtitles?: Artifact;        // scenes/subtitles.srt  (auto-generated from storyboard)
+  subtitles?: Artifact;        // scenes/subtitles.ass  (ASS with calculated font size and margins)
   rawVideo?: Artifact;         // final/raw.mp4  (merged clips, no extra audio/subs)
   audioVideo?: Artifact;       // final/audio.mp4 (merged + audio track)
   finalVideo?: Artifact;       // final/video.mp4 (last completed post-production step)
@@ -489,10 +556,12 @@ Example: the `generate-images` task reads the manifest to find all approved `ima
 | Image prompt | `scenes/scene-<NN>/prompt.md` | Zero-padded scene number |
 | Generated image | `scenes/scene-<NN>/image.png` | PNG from ComfyUI |
 | Video prompt | `scenes/scene-<NN>/video-prompt.md` | Motion prompt for img2video |
-| Video clip | `scenes/scene-<NN>/clip.mp4` | MP4 from ComfyUI |
-| Auto subtitles | `scenes/subtitles.srt` | SRT generated from storyboard dialogue |
+| Video clip | `scenes/scene-<NN>/clip.mp4` | MP4 from LTX 2.3; silent for narration/silent scenes |
+| Narration audio | `scenes/scene-<NN>/narration.wav` | comfyui_tts (OmniVoice) output; narration scenes only |
+| Narrated clip | `scenes/scene-<NN>/narrated.mp4` | clip.mp4 + narration.wav mixed; narration scenes only |
+| Auto subtitles | `scenes/subtitles.ass` | ASS with calculated font size; dialogue timing from scene.duration, narration timing from comfyui_tts durationMs |
 | User audio | `audio/<filename>` | Copied from user-supplied path |
-| Merged raw video | `final/raw.mp4` | Clips concatenated, no extra audio/subs |
+| Merged raw video | `final/raw.mp4` | Clips concatenated (uses narrated.mp4 where available) |
 | Video + audio | `final/audio.mp4` | After `video_add_audio` step |
 | Final video | `final/video.mp4` | Last completed post-production step |
 
@@ -583,13 +652,14 @@ The tool uploads the source image to the selected ComfyUI server (`POST /upload/
 | `file_write` | Save artifact content (trend report, storyboard, prompts) to the project directory |
 | `user_review` | Present drafts/storyboards/prompts/media for user approval |
 | `comfyui_text2img` | Generate an image from a prompt via ComfyUI; writes output to the scene directory |
-| `comfyui_img2video` | Generate a video clip from an image + motion prompt via ComfyUI; writes output to the scene directory |
+| `comfyui_img2video` | Generate a video clip from an image + motion prompt via ComfyUI (LTX 2.3); writes output to the scene directory |
+| `comfyui_tts` | Synthesize narration audio via OmniVoice on ComfyUI; text from scene.narration, voiceInstruct derived from storyboard.narrator; writes `.wav` to scene directory |
 | `skill_run` | Invoke content generation skills (analyze-trends, generate-video-script, etc.) |
 | `task_create` | Set up the task DAG; first task result stores `{ projectId, manifestPath }` |
 | `task_update` | Track progress; task result JSON references project ID and manifest path |
-| `video_merge` | Concatenate approved scene clips into `final/raw.mp4` |
-| `video_add_audio` | Mix background music or voiceover into the merged video |
-| `video_add_subtitles` | Embed SRT subtitle track (soft or hard) into the final video |
+| `video_merge` | Concatenate approved scene clips into `final/raw.mp4`; uses `narrated.mp4` for narration scenes |
+| `video_add_audio` | (1) synthesizeNarration: mix TTS narration into each narration scene clip; (2) post-merge: mix background music |
+| `video_add_subtitles` | Embed SRT subtitle track (soft or hard); timing sourced from scene.duration (dialogue) and TTS durationMs (narration) |
 
 ## Chaining Example
 

@@ -437,6 +437,99 @@ export class ContentProjectManager {
   }
 
   /**
+   * Add a new artifact to the project manifest.
+   * Returns true if the artifact was added, false if an artifact with the same path already exists.
+   * @param project The content project to update
+   * @param artifactPath Path relative to project directory, e.g. "01-trend-report.md"
+   * @param status Initial status (defaults to 'pending')
+   * @param artifactType Type of artifact: 'trendReport', 'storyboard', or 'scene'
+   * @param sceneNumber Required when artifactType is 'scene'; the scene number (1-based)
+   * @param sceneArtifactType Required when artifactType is 'scene'; one of: 'imagePrompt', 'image', 'videoPrompt', 'clip', 'narrationAudio', 'narratedClip'
+   */
+  async addArtifact(
+    project: ContentProject,
+    artifactPath: string,
+    status: ArtifactStatus = 'pending',
+    artifactType: 'trendReport' | 'storyboard' | 'scene' = 'trendReport',
+    sceneNumber?: number,
+    sceneArtifactType?: 'imagePrompt' | 'image' | 'videoPrompt' | 'clip' | 'narrationAudio' | 'narratedClip',
+  ): Promise<boolean> {
+    // Ensure artifacts structure exists
+    if (!project.artifacts) {
+      project.artifacts = { scenes: [] };
+    }
+    if (!project.artifacts.scenes) {
+      project.artifacts.scenes = [];
+    }
+
+    // Check if artifact already exists
+    if (await this.findArtifact(project, artifactPath)) {
+      return false;
+    }
+
+    const newArtifact: Artifact = {
+      path: artifactPath,
+      status,
+    };
+
+    if (artifactType === 'trendReport') {
+      project.artifacts.trendReport = newArtifact;
+    } else if (artifactType === 'storyboard') {
+      project.artifacts.storyboard = newArtifact;
+    } else if (artifactType === 'scene' && sceneNumber !== undefined && sceneArtifactType) {
+      let scene = project.artifacts.scenes.find((s) => s.sceneNumber === sceneNumber);
+      if (!scene) {
+        scene = { sceneNumber };
+        project.artifacts.scenes.push(scene);
+      }
+      scene[sceneArtifactType] = newArtifact;
+    } else {
+      return false;
+    }
+
+    await this.writeManifest(project);
+    return true;
+  }
+
+  /**
+   * Find an artifact by path in the project manifest.
+   * Returns the artifact if found, undefined otherwise.
+   */
+  private findArtifact(project: ContentProject, artifactPath: string): Artifact | undefined {
+    if (project.artifacts.trendReport?.path === artifactPath) {
+      return project.artifacts.trendReport;
+    }
+    if (project.artifacts.storyboard?.path === artifactPath) {
+      return project.artifacts.storyboard;
+    }
+    for (const scene of project.artifacts.scenes || []) {
+      const artifacts = [
+        scene.imagePrompt,
+        scene.image,
+        scene.videoPrompt,
+        scene.clip,
+        scene.narrationAudio,
+        scene.narratedClip,
+      ];
+      for (const artifact of artifacts) {
+        if (artifact?.path === artifactPath) {
+          return artifact;
+        }
+      }
+    }
+    const pp = project.artifacts.postProduction;
+    if (pp) {
+      const ppArtifacts = [pp.subtitles, pp.rawVideo, pp.audioVideo, pp.finalVideo];
+      for (const artifact of ppArtifacts) {
+        if (artifact?.path === artifactPath) {
+          return artifact;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Update an artifact's status in the project manifest.
    * Returns true if an artifact was found and updated, false if no matching artifact was found.
    */

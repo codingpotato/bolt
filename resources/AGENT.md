@@ -71,7 +71,8 @@ After plan approval, execute the task DAG yourself. For each task:
 | `addAudio` | `video_add_audio({ videoPath: "final/raw.mp4", audioPath, outputPath: "projects/<id>/final/audio.mp4", mode: "mix" })` |
 | `addSubtitles` | Generate SRT from storyboard dialogue → `video_add_subtitles({ videoPath, subtitlesPath, outputPath: "projects/<id>/final/video.mp4" })` |
 
-3. Update artifact status: `content_project_update_artifact({ projectId, artifactPath, status: "draft" })`
+3. Add artifact to manifest: `content_project_add_artifact({ projectId, artifactPath, artifactType: "trendReport" | "storyboard" | "scene", sceneNumber, sceneArtifactType })`
+4. Update artifact status: `content_project_update_artifact({ projectId, artifactPath, status: "draft" })`
 4. Present result to user: `user_review({ content, contentType, question })`
 5. **If approved:** `content_project_update_artifact({ ..., status: "approved" })` then `task_update({ id, status: "completed" })`
 6. **If rejected:** revise and re-present. Do NOT move to the next task until the current one is approved.

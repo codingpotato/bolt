@@ -33,6 +33,19 @@ interface ContentProjectUpdateArtifactOutput {
   updated: boolean;
 }
 
+interface ContentProjectAddArtifactInput {
+  projectId: string;
+  artifactPath: string;
+  status?: ArtifactStatus;
+  artifactType: 'trendReport' | 'storyboard' | 'scene';
+  sceneNumber?: number;
+  sceneArtifactType?: 'imagePrompt' | 'image' | 'videoPrompt' | 'clip' | 'narrationAudio' | 'narratedClip';
+}
+
+interface ContentProjectAddArtifactOutput {
+  added: boolean;
+}
+
 export function createContentProjectTools(registry: TaskRegistry): Tool[] {
   const create: Tool<ContentProjectCreateInput, ContentProjectCreateOutput> = {
     name: 'content_project_create',
@@ -143,5 +156,65 @@ export function createContentProjectTools(registry: TaskRegistry): Tool[] {
     },
   };
 
-  return [create, read, updateArtifact];
+  const addArtifact: Tool<ContentProjectAddArtifactInput, ContentProjectAddArtifactOutput> = {
+    name: 'content_project_add_artifact',
+    description:
+      "Add a new artifact to the project manifest. Returns { added: false } if an artifact with the same path already exists. For scene artifacts, provide sceneNumber (1-based) and sceneArtifactType (imagePrompt, image, videoPrompt, clip, narrationAudio, or narratedClip).",
+    sequential: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: {
+          type: 'string',
+          description: 'Project ID of the content project.',
+        },
+        artifactPath: {
+          type: 'string',
+          description:
+            "Path relative to the project directory, e.g. \"01-trend-report.md\" or \"scenes/scene-01/image.png\".",
+        },
+        status: {
+          type: 'string',
+          enum: ['pending', 'draft', 'approved', 'failed'],
+          description: 'Initial status for the artifact (defaults to pending).',
+        },
+        artifactType: {
+          type: 'string',
+          enum: ['trendReport', 'storyboard', 'scene'],
+          description: 'Type of artifact: trendReport, storyboard, or scene.',
+        },
+        sceneNumber: {
+          type: 'integer',
+          description: 'Scene number (1-based) when artifactType is scene.',
+        },
+        sceneArtifactType: {
+          type: 'string',
+          enum: ['imagePrompt', 'image', 'videoPrompt', 'clip', 'narrationAudio', 'narratedClip'],
+          description: 'Scene artifact type when artifactType is scene.',
+        },
+      },
+      required: ['projectId', 'artifactPath', 'artifactType'],
+    },
+    async execute(
+      input: ContentProjectAddArtifactInput,
+      ctx: ToolContext,
+    ): Promise<ContentProjectAddArtifactOutput> {
+      const manager = new ContentProjectManager(ctx.cwd);
+      const project = await manager.readProject(input.projectId);
+      if (!project) {
+        throw new ToolError(`Content project "${input.projectId}" not found`, false);
+      }
+      const added = await manager.addArtifact(
+        project,
+        input.artifactPath,
+        input.status,
+        input.artifactType,
+        input.sceneNumber,
+        input.sceneArtifactType,
+      );
+      return { added };
+    },
+  };
+
+  return [create, read, updateArtifact, addArtifact];
 }

@@ -1,15 +1,34 @@
 ---
 name: generate-video-prompt
-description: Create a motion and animation prompt for LTX-Video 2.3 image-to-video generation, injecting character speaking accents and dialogue for realistic speech animation
+description: Create a motion and animation prompt for LTX-Video 2.3 image-to-video generation. For character-speech scenes injects speaking accent and dialogue for lip-sync animation; for narration and silent scenes generates a motion-only prompt with no speech.
 when: Use once per scene during the generateVideoPrompts task, after the scene image has been approved. Pass the scene fields AND the character objects for characters who appear in this scene.
-when_not: Do not use to generate the video itself (use comfyui_img2video for that). Do not call before the scene image exists. Do not omit character data when the scene has speaking characters — LTX-Video uses the accent information for speech animation.
+when_not: Do not use to generate the video itself (use comfyui_img2video for that). Do not call before the scene image exists. Do not inject dialogue or speakingAccent for narration or silent scenes — LTX-Video must not animate speech for those scenes.
 input:
   sceneDescription:
     type: string
     description: The scene description from the storyboard (scene.description)
+  audioSource:
+    type: string
+    enum: [character-speech, narration, silent]
+    description: >
+      The audio source for this scene from the storyboard (scene.audioSource).
+      "character-speech": inject dialogue + speakingAccent → LTX-Video animates lip sync and speech.
+      "narration": motion-only prompt → LTX-Video generates a silent b-roll/pose clip; OmniVoice TTS provides audio separately.
+      "silent": motion-only prompt → LTX-Video generates a clean silent clip for background music.
+    default: "character-speech"
   dialogue:
     type: string
-    description: "The spoken dialogue or voiceover text from the storyboard (scene.dialogue). Pass empty string if the scene has no dialogue."
+    description: >
+      Spoken dialogue text from the storyboard (scene.dialogue).
+      Only relevant when audioSource is "character-speech".
+      Pass empty string for narration and silent scenes.
+    default: ""
+  narration:
+    type: string
+    description: >
+      Narration voiceover text from the storyboard (scene.narration).
+      Present for context only — do NOT include narration text in the video prompt.
+      OmniVoice TTS handles narration audio; LTX-Video must not attempt to animate it.
     default: ""
   characters:
     type: array
@@ -145,7 +164,9 @@ For b-roll scenes with no characters, this is the longest section — describe w
 
 ### 4. Define character performance (if characters are present)
 
-**If the scene has dialogue** (`dialogue` is non-empty):
+**First: check `audioSource` — it controls everything in this section.**
+
+#### `audioSource === "character-speech"` (lip sync + speech animation)
 
 Place dialogue text in **quotation marks**. For multi-sentence dialogue, break it into short phrases with acting directions between each segment:
 
@@ -155,16 +176,20 @@ Place dialogue text in **quotation marks**. For multi-sentence dialogue, break i
 
 The `speakingAccent` field drives LTX-Video's speech animation engine — always include it verbatim. Do not paraphrase: write `"American English"` not `"American"`, `"British RP English"` not `"British"`.
 
-**If the scene has no dialogue** but characters are present:
+#### `audioSource === "narration"` or `"silent"` (motion-only — NO speech animation)
 
-Describe physical performance — what the character does with their body, hands, and face:
-- "Alex nods slowly, lips pressed together, then breaks into a slight open smile as she turns toward the screen"
-- "He steps back from the monitor, arms crossing loosely, weight shifting to one foot as he considers the output"
+**Never inject `dialogue`, `speakingAccent`, or any spoken-word content into the prompt for these scenes.**
+Narration audio is generated separately by OmniVoice TTS; the video clip must be silent. If the LTX-Video model sees speech-animation cues in the prompt, it will generate mismatched lip movement that conflicts with the separately synthesized narration voice.
 
-**Never use abstract emotion labels.** Replace every abstract label with its observable physical equivalent:
-- ✗ "looking nervous" → ✓ "eyes briefly darting to the side, jaw tightening, a small swallow before speaking"
-- ✗ "feeling excited" → ✓ "leaning forward, hands clasped together, a quick sharp exhale and a widening of the eyes"
-- ✗ "appears confident" → ✓ "shoulders back, chin level, steady eye contact, measured pace of speech"
+For characters present in narration or silent scenes, describe only **pose, gesture, and expression** — NOT speech:
+- "Alex stands with arms loosely at her sides, gaze directed off-frame toward the window, a slow blink and slight relaxation of the shoulders"
+- "He turns from the monitor toward camera, lips closed in a neutral expression, one hand resting on the desk"
+- "Both speakers face each other across the table, postures attentive; neither speaks"
+
+**Never use abstract emotion labels** in any scene. Replace every abstract label with its observable physical equivalent:
+- ✗ "looking nervous" → ✓ "eyes briefly darting to the side, jaw tightening, a small swallow"
+- ✗ "feeling excited" → ✓ "leaning forward, hands clasped, a quick sharp exhale and a widening of the eyes"
+- ✗ "appears confident" → ✓ "shoulders back, chin level, steady eye contact, measured breathing"
 
 ### 5. Camera movement
 
@@ -198,14 +223,21 @@ For speaking scenes, match acoustic environment to the setting and match voice q
 
 Respond with a JSON object containing a single field "prompt" whose value is the full motion prompt as a plain string (no line breaks within the string value).
 
-Example — speaking character scene (Alex, American English accent, explaining to camera):
+Example — `audioSource: "character-speech"` (Alex, American English, explaining to camera):
 ```json
 {
   "prompt": "Slow dolly in from a medium shot, arriving at a medium close-up by the end of the clip. Soft studio light holds steady; a faint lens flare traces the frame as the camera moves. Alex glances down briefly at her notes, then raises her eyes to camera with a composed breath and straightens her posture. Speaking with American English accent: 'AI is changing how we build software.' She pauses, a slight tilt of her head, chin dropping a fraction as she lets the statement land. Then: 'Here are the five tools I use every single day.' Her right hand rises naturally, index finger extended to mark the count, eyes maintaining steady contact with the lens. Camera settles at close-up, holding on her face through the final beat. Clear, confident vocal presence with warm studio acoustics and minimal reverb. Faint ambient studio hum beneath the silence between phrases."
 }
 ```
 
-Example — b-roll scene (no characters):
+Example — `audioSource: "narration"` (Alex on screen, narrator speaks over her — motion only, no speech animation):
+```json
+{
+  "prompt": "Static medium shot, camera holding completely still. Warm afternoon light falls across the frame; dust motes drift slowly through the beam near the window. Alex stands beside her desk with arms loosely at her sides, gaze directed slightly off-camera toward the monitor. She turns her head slowly toward the lens over the first two seconds, lips closed, a quiet blink settling her focus. Her posture opens fractionally — weight shifting onto one foot, shoulder relaxing — as though the thought just resolved. She holds this composed gaze for the remainder of the clip, breathing slowly, no speech. Room tone: low office hum, faint ventilation, the quiet texture of an attentive silence."
+}
+```
+
+Example — `audioSource: "silent"` b-roll (no characters):
 ```json
 {
   "prompt": "Wide establishing shot slowly pushing forward through a dim open-plan office. Rows of monitors glow with code editors; the blue-white light pulses faintly as screens refresh. A ceiling fan rotates overhead, its shadow sweeping a slow arc across the ceiling tiles. Camera drifts at eye level between desks, foreground elements sliding through frame, bokeh highlights blurring and sharpening as depth shifts. No characters present — the space feels inhabited but empty. Ambient sound: steady hum of server fans, the occasional soft click of a mechanical keyboard growing slightly louder as the camera moves deeper into the room, fluorescent light buzz just at the edge of hearing."

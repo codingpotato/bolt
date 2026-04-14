@@ -36,9 +36,12 @@ output:
   characters:
     type: array
     description: All characters who appear in the video. Each has id, name, age, gender, nationality, appearance, face, clothing, speakingAccent, role.
+  narrator:
+    type: object
+    description: "OmniVoice TTS voice design profile for all narration scenes. Fields: persona, gender, age, pitch, accent, pace, and optional style/steps/guidanceScale. See docs/design/tts-narration.md for the full NarrationVoice interface."
   scenes:
     type: array
-    description: Ordered list of scene objects, each with sceneNumber, description, dialogue, camera, duration, imagePromptHint, characterIds, and transitionTo
+    description: "Ordered list of scene objects, each with sceneNumber, description, audioSource ('character-speech' | 'narration' | 'silent'), dialogue (character-speech only), narration (narration only), camera, duration, imagePromptHint, characterIds, and transitionTo"
 allowedTools:
   - web_fetch
   - web_search
@@ -66,7 +69,38 @@ This resolution must appear in the output `resolution` field. It is the ONLY sou
 
 ---
 
-## Step 2: Design characters
+## Step 2: Design narrator voice
+
+Decide the narrator voice profile for all narration scenes in this video. This is stored in `narrator` and is used by OmniVoice TTS (`comfyui_tts`) for every scene where `audioSource === "narration"`.
+
+Choose attributes that match the platform and content style. All fields map directly to OmniVoice TTS parameters via `narratorToVoiceInstruct()` and `narratorToSpeed()`:
+
+| Platform | Recommended persona | `gender` | `age` | `pitch` | `pace` | `accent` example |
+|---|---|---|---|---|---|---|
+| tiktok | "energetic social media host" | `"female"` | `"young"` | `"high"` | `"very-fast"` | `"american accent"` |
+| reels | "warm lifestyle presenter" | `"female"` | `"young"` | `"high"` | `"fast"` | `"american accent"` |
+| youtube-shorts | "engaging explainer" | `"female"` | `"young"` | `"medium"` | `"fast"` | `"american accent"` |
+| youtube | "documentary narrator" | `"male"` | `"middle-aged"` | `"low"` | `"medium"` | `"american accent"` |
+| linkedin | "authoritative thought leader" | `"male"` | `"middle-aged"` | `"medium"` | `"medium"` | `"american accent"` |
+
+**Allowed values per field:**
+- `gender`: `"male"` | `"female"`
+- `age`: `"child"` | `"young"` | `"middle-aged"` | `"elderly"`
+- `pitch`: `"very-low"` | `"low"` | `"medium"` | `"high"` | `"very-high"`
+- `pace`: `"slow"` | `"medium"` | `"fast"` | `"very-fast"`
+- `accent`: OmniVoice accent string, e.g. `"american accent"`, `"british accent"`, `"australian accent"`, `"mandarin accent"`, `"四川话"`, `"广东话"`
+- `style` (optional): `"whisper"` only — omit when not needed
+
+Match `accent` to the intended audience — e.g. a Chinese-audience TikTok should use `"mandarin accent"` or a dialect string.
+
+**`narrator.accent` vs `character.speakingAccent`:** These are separate concerns.
+- `narrator.accent` controls the OmniVoice TTS synthesized voiceover — it is what the audience hears in narration scenes.
+- `character.speakingAccent` controls how LTX-Video 2.3 animates a character's lips and facial motion — it is a visual animation hint, not synthesized audio.
+Both should be set deliberately and consistently with the content's target audience.
+
+---
+
+## Step 3: Design characters
 
 Decide how many on-screen characters the video needs. For most short-form content:
 - **0 characters**: pure b-roll or screen-capture style (no people on screen)
@@ -91,24 +125,30 @@ Character descriptions must be **detailed and deterministic**. Vague description
 
 ---
 
-## Step 3: Write scenes
+## Step 4: Write scenes
 
 Each scene object must have these fields:
 
 - **sceneNumber** (integer): 1-indexed scene number
 - **description** (string): What is happening visually in this scene
-- **dialogue** (string): Spoken dialogue or voiceover text; empty string if none
+- **audioSource** (string, REQUIRED): `"character-speech"` | `"narration"` | `"silent"` — must be set on EVERY scene, no exceptions.
+  - `"character-speech"`: a character speaks on camera; LTX-Video animates lip sync; set `dialogue`, leave `narration` empty.
+  - `"narration"`: off-screen narrator voices this scene; OmniVoice TTS generates audio; set `narration`, leave `dialogue` empty.
+  - `"silent"`: no speech or narration; pure visual scene; both `dialogue` and `narration` must be empty.
+  - **Never set both `dialogue` and `narration` on the same scene.** If a character speaks AND there is narration, split into two scenes.
+- **dialogue** (string): Character's spoken words — ONLY for `audioSource === "character-speech"`. Must be empty for other types.
+- **narration** (string): Voiceover text — ONLY for `audioSource === "narration"`. Must be empty for other types.
 - **camera** (string): Camera direction, e.g. `"slow zoom in"`, `"static wide shot"`, `"close-up on face"`
 - **duration** (number): Approximate duration of this scene in seconds
 - **imagePromptHint** (string): A brief hint for the image prompt generation skill — describe the key visual element
-- **characterIds** (array of strings): IDs of characters from the `characters` array who appear in this scene. Use `[]` for pure b-roll scenes with no on-screen people.
+- **characterIds** (array of strings): IDs of characters from the `characters` array who appear in this scene. Use `[]` for pure b-roll scenes with no on-screen people. Characters can appear in narration scenes (as poses/motion) but their `speakingAccent` is not used — narration scenes do NOT trigger speech animation.
 - **transitionTo** (string): Transition to the next scene — `"cut"` | `"fade"` | `"dissolve"` | `"wipe"` | `"end"` (last scene only)
 
 Ensure scene durations sum to approximately the target durationSeconds.
 
 ---
 
-## Output format
+## Step 5: Output format
 
 Respond with a single JSON object with these exact top-level fields:
 
@@ -133,13 +173,35 @@ Respond with a single JSON object with these exact top-level fields:
       "role": "main presenter"
     }
   ],
+  "narrator": {
+    "persona": "energetic social media host",
+    "gender": "female",
+    "age": "young",
+    "pitch": "high",
+    "accent": "american accent",
+    "pace": "very-fast"
+  },
   "scenes": [
     {
       "sceneNumber": 1,
-      "description": "Alex stands in a bright studio looking directly at camera",
-      "dialogue": "AI is changing how developers write code — here's what's trending right now.",
+      "description": "B-roll of code scrolling on a screen, fast cuts",
+      "audioSource": "narration",
+      "narration": "AI is changing how developers write code — here's what's trending right now.",
+      "dialogue": "",
+      "camera": "extreme close-up, fast zoom out",
+      "duration": 4,
+      "imagePromptHint": "code on monitor, dark room, glowing screen",
+      "characterIds": [],
+      "transitionTo": "cut"
+    },
+    {
+      "sceneNumber": 2,
+      "description": "Alex stands in a bright studio looking directly at camera and speaks",
+      "audioSource": "character-speech",
+      "dialogue": "Let me show you the three tools every AI developer needs this week.",
+      "narration": "",
       "camera": "medium close-up, slight upward angle",
-      "duration": 8,
+      "duration": 6,
       "imagePromptHint": "presenter in studio, direct to camera, bright background",
       "characterIds": ["host"],
       "transitionTo": "cut"

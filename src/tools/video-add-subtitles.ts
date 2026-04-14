@@ -220,10 +220,11 @@ export function createVideoAddSubtitlesTool(
         } else {
           // hard mode: burn subtitles into frames
           const abgr = cssHexToAbgr(fontColor);
-          // For ASS files, don't apply force_style (they carry own styles)
+          // ASS files: use the dedicated `ass` filter which renders ASS styles faithfully.
+          // SRT/VTT: use the `subtitles` filter with force_style for font size and colour.
           const filterArg =
             ext === '.ass'
-              ? `subtitles=${effectiveSubPath}`
+              ? `ass=${effectiveSubPath}`
               : `subtitles=${effectiveSubPath}:force_style='FontSize=${fontSize},PrimaryColour=&H${abgr}&'`;
           args = ['-i', input.videoPath, '-vf', filterArg, '-c:a', 'copy', input.outputPath];
         }

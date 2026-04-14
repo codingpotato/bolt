@@ -25,6 +25,7 @@ Read these docs before making decisions in the relevant area:
 | Skills System      | `docs/design/skills-system.md`      | Skill definition, discovery, invocation, and chaining                                                   |
 | Code Workflows     | `docs/design/code-workflows.md`     | Writing code, running tests, code review                                                                |
 | Content Generation | `docs/design/content-generation.md` | Trend analysis, social posts, video production pipeline, MCP integration                                |
+| TTS Narration      | `docs/design/tts-narration.md`      | OmniVoice TTS, NarrationVoice interface, character speech vs narration distinction, omnivoice_tts tool  |
 | Video Editing      | `docs/design/video-editing.md`      | FFmpeg Runner, video_merge / video_add_audio / video_add_subtitles tools, post-production workflow      |
 | ComfyUI Client     | `docs/design/comfyui-client.md`     | ComfyUIPool, server pool load balancing, workflow templates, comfyui_text2img / comfyui_img2video tools |
 | Configuration      | `docs/design/configuration.md`      | All config keys, env vars, `.bolt/config.json` schema                                                   |

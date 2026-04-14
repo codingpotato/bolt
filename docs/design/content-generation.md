@@ -186,8 +186,8 @@ User: "Make a short video about AI coding trends"
                → user_review → approve/redo
 
   [MAIN AGENT]  10. video_add_subtitles (optional) → final/video.mp4
-                    (SRT timing: character-speech scenes use scene.duration;
-                     narration scenes use omnivoice_tts durationMs)
+                    (ASS timing: character-speech scenes use scene.duration;
+                     narration scenes use comfyui_tts durationMs)
                → user_review → approve
 
                ▼
@@ -299,8 +299,8 @@ interface Scene {
    * "narration": an off-screen narrator voices this scene over b-roll or poses.
    *   - `narration` must be set; `dialogue` must be empty.
    *   - LTX 2.3 generates a motion-only (silent) clip.
-   *   - synthesizeNarration calls omnivoice_tts with storyboard.narrator profile.
-   *   - narration.mp3 is mixed into the clip → narrated.mp4.
+   *   - synthesizeNarration calls comfyui_tts with storyboard.narrator profile.
+   *   - narration.wav is mixed into the clip → narrated.mp4.
    *
    * "silent": no speech or narration — clip has no dialogue, pure visuals.
    *   - Both `dialogue` and `narration` must be empty.
@@ -320,7 +320,7 @@ interface Scene {
   /**
    * Narration voiceover text — used ONLY when audioSource === "narration".
    * Sent to OmniVoice TTS (using storyboard.narrator voice profile) to generate
-   * scenes/scene-<NN>/narration.mp3, which is then mixed into the scene clip.
+   * scenes/scene-<NN>/narration.wav, which is then mixed into the scene clip.
    * Must be empty (or omitted) when audioSource is "character-speech" or "silent".
    */
   narration?: string;
@@ -354,7 +354,7 @@ The `generate-video-script` skill decides:
 3. **What they look like** — face, appearance, clothing (detailed enough for consistent image generation)
 4. **How they speak** — accent for LTX-Video speech animation
 5. **Which scenes they appear in** — `characterIds` in each scene
-6. **Narrator voice design** — `storyboard.narrator` attributes (persona, accent, tone, pace, pitch, style, emotion) — see `docs/design/tts-narration.md` for the full interface and selection guide
+6. **Narrator voice design** — `storyboard.narrator` attributes (persona, gender, age, pitch, accent, pace, optional style) — see `docs/design/tts-narration.md` for the full interface and selection guide
 
 **`audioSource` assignment is mandatory for every scene.** The skill must assign one of `"character-speech"`, `"narration"`, or `"silent"` to every scene. This field drives the entire audio generation pipeline:
 - `"character-speech"` → LTX 2.3 speech animation + baked audio; TTS skipped
@@ -472,7 +472,7 @@ Every video production run is a **content project** — a self-contained directo
       02-storyboard.json        ← structured storyboard from generate-video-script
       audio/                    ← user-supplied audio files (optional)
       scenes/
-        subtitles.srt           ← auto-generated from storyboard dialogue (optional)
+        subtitles.ass           ← auto-generated from storyboard dialogue/narration (optional)
         scene-01/
           prompt.md             ← image prompt for scene 1
           image.png             ← generated image for scene 1
@@ -523,12 +523,12 @@ interface SceneArtifacts {
   image?: Artifact;            // scenes/scene-01/image.png
   videoPrompt?: Artifact;      // scenes/scene-01/video-prompt.md
   clip?: Artifact;             // scenes/scene-01/clip.mp4         (LTX 2.3 output; silent for narration scenes)
-  narrationAudio?: Artifact;   // scenes/scene-01/narration.mp3    (OmniVoice TTS; narration scenes only)
+  narrationAudio?: Artifact;   // scenes/scene-01/narration.wav    (OmniVoice TTS via comfyui_tts; narration scenes only)
   narratedClip?: Artifact;     // scenes/scene-01/narrated.mp4     (clip + narration audio mixed; narration scenes only)
 }
 
 interface PostProductionArtifacts {
-  subtitles?: Artifact;        // scenes/subtitles.srt  (auto-generated from storyboard)
+  subtitles?: Artifact;        // scenes/subtitles.ass  (ASS with calculated font size and margins)
   rawVideo?: Artifact;         // final/raw.mp4  (merged clips, no extra audio/subs)
   audioVideo?: Artifact;       // final/audio.mp4 (merged + audio track)
   finalVideo?: Artifact;       // final/video.mp4 (last completed post-production step)
@@ -559,7 +559,7 @@ Example: the `generate-images` task reads the manifest to find all approved `ima
 | Video clip | `scenes/scene-<NN>/clip.mp4` | MP4 from LTX 2.3; silent for narration/silent scenes |
 | Narration audio | `scenes/scene-<NN>/narration.wav` | comfyui_tts (OmniVoice) output; narration scenes only |
 | Narrated clip | `scenes/scene-<NN>/narrated.mp4` | clip.mp4 + narration.wav mixed; narration scenes only |
-| Auto subtitles | `scenes/subtitles.srt` | SRT from dialogue (scene.duration) + narration (TTS durationMs) |
+| Auto subtitles | `scenes/subtitles.ass` | ASS with calculated font size; dialogue timing from scene.duration, narration timing from comfyui_tts durationMs |
 | User audio | `audio/<filename>` | Copied from user-supplied path |
 | Merged raw video | `final/raw.mp4` | Clips concatenated (uses narrated.mp4 where available) |
 | Video + audio | `final/audio.mp4` | After `video_add_audio` step |

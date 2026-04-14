@@ -206,7 +206,7 @@ export interface Scene {
    *   baked audio. Set `dialogue`, leave `narration` empty.
    *
    * "narration": off-screen narrator voices this scene → LTX-Video generates a silent clip;
-   *   OmniVoice TTS synthesizes narration.mp3 which is mixed in. Set `narration`, leave `dialogue` empty.
+   *   OmniVoice TTS synthesizes narration.wav which is mixed in. Set `narration`, leave `dialogue` empty.
    *
    * "silent": no speech or narration → LTX-Video generates a silent clip for background music.
    *   Both `dialogue` and `narration` must be empty.

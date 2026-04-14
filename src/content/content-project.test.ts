@@ -4,9 +4,84 @@ import { join } from 'node:path';
 import {
   generateProjectId,
   ContentProjectManager,
+  narratorToVoiceInstruct,
+  narratorToSpeed,
   type ContentProject,
+  type NarrationVoice,
   type Storyboard,
 } from './content-project';
+
+describe('narratorToVoiceInstruct', () => {
+  const base: NarrationVoice = {
+    persona: 'test narrator',
+    gender: 'female',
+    age: 'young',
+    pitch: 'high',
+    accent: 'american accent',
+    pace: 'fast',
+  };
+
+  it('builds the voiceInstruct string from all required fields', () => {
+    expect(narratorToVoiceInstruct(base)).toBe('female, young, high pitch, american accent');
+  });
+
+  it('appends style when set', () => {
+    expect(narratorToVoiceInstruct({ ...base, style: 'whisper' })).toBe(
+      'female, young, high pitch, american accent, whisper',
+    );
+  });
+
+  it('omits style when not set', () => {
+    expect(narratorToVoiceInstruct({ ...base, style: undefined })).toBe(
+      'female, young, high pitch, american accent',
+    );
+  });
+
+  it('maps all pitch values to the correct label', () => {
+    expect(narratorToVoiceInstruct({ ...base, pitch: 'very-low' })).toContain('very low pitch');
+    expect(narratorToVoiceInstruct({ ...base, pitch: 'low' })).toContain('low pitch');
+    expect(narratorToVoiceInstruct({ ...base, pitch: 'medium' })).toContain('medium pitch');
+    expect(narratorToVoiceInstruct({ ...base, pitch: 'high' })).toContain('high pitch');
+    expect(narratorToVoiceInstruct({ ...base, pitch: 'very-high' })).toContain('very high pitch');
+  });
+
+  it('passes accent verbatim including dialect strings', () => {
+    expect(narratorToVoiceInstruct({ ...base, accent: '四川话' })).toBe(
+      'female, young, high pitch, 四川话',
+    );
+  });
+
+  it('uses male gender', () => {
+    expect(narratorToVoiceInstruct({ ...base, gender: 'male' })).toMatch(/^male,/);
+  });
+});
+
+describe('narratorToSpeed', () => {
+  const base: NarrationVoice = {
+    persona: 'test',
+    gender: 'male',
+    age: 'middle-aged',
+    pitch: 'medium',
+    accent: 'british accent',
+    pace: 'medium',
+  };
+
+  it('maps slow to 0.8', () => {
+    expect(narratorToSpeed({ ...base, pace: 'slow' })).toBe(0.8);
+  });
+
+  it('maps medium to 1.0', () => {
+    expect(narratorToSpeed({ ...base, pace: 'medium' })).toBe(1.0);
+  });
+
+  it('maps fast to 1.2', () => {
+    expect(narratorToSpeed({ ...base, pace: 'fast' })).toBe(1.2);
+  });
+
+  it('maps very-fast to 1.4', () => {
+    expect(narratorToSpeed({ ...base, pace: 'very-fast' })).toBe(1.4);
+  });
+});
 
 describe('generateProjectId', () => {
   it('generates a slug from topic with date suffix', () => {
@@ -317,10 +392,19 @@ describe('ContentProjectManager', () => {
         resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
         characters: [],
+        narrator: {
+          persona: 'test narrator',
+          gender: 'female',
+          age: 'young',
+          pitch: 'high',
+          accent: 'american accent',
+          pace: 'fast',
+        },
         scenes: [
           {
             sceneNumber: 1,
             description: 'Scene 1',
+            audioSource: 'silent',
             camera: 'wide shot',
             duration: '5s',
             imagePromptHint: 'test hint',
@@ -329,6 +413,7 @@ describe('ContentProjectManager', () => {
           {
             sceneNumber: 2,
             description: 'Scene 2',
+            audioSource: 'silent',
             camera: 'close-up',
             duration: '5s',
             imagePromptHint: 'test hint 2',

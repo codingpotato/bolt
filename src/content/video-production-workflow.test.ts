@@ -244,10 +244,19 @@ describe('Video Production Workflow (S10-3)', () => {
         resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
         characters: [],
+        narrator: {
+          persona: 'test narrator',
+          gender: 'female',
+          age: 'young',
+          pitch: 'medium',
+          accent: 'american accent',
+          pace: 'medium',
+        },
         scenes: [
           {
             sceneNumber: 1,
             description: 'Opening scene',
+            audioSource: 'silent',
             camera: 'wide shot',
             duration: '5s',
             imagePromptHint: 'test hint',
@@ -256,6 +265,7 @@ describe('Video Production Workflow (S10-3)', () => {
           {
             sceneNumber: 2,
             description: 'Closing scene',
+            audioSource: 'silent',
             camera: 'close-up',
             duration: '5s',
             imagePromptHint: 'test hint 2',
@@ -284,10 +294,19 @@ describe('Video Production Workflow (S10-3)', () => {
         resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
         characters: [],
+        narrator: {
+          persona: 'test narrator',
+          gender: 'female',
+          age: 'young',
+          pitch: 'medium',
+          accent: 'american accent',
+          pace: 'medium',
+        },
         scenes: [
           {
             sceneNumber: 1,
             description: 'Test',
+            audioSource: 'silent',
             camera: 'wide',
             duration: '5s',
             imagePromptHint: 'test',
@@ -321,10 +340,19 @@ describe('Video Production Workflow (S10-3)', () => {
         resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
         characters: [],
+        narrator: {
+          persona: 'test narrator',
+          gender: 'female',
+          age: 'young',
+          pitch: 'medium',
+          accent: 'american accent',
+          pace: 'medium',
+        },
         scenes: [
           {
             sceneNumber: 1,
             description: 'Test',
+            audioSource: 'silent',
             camera: 'wide',
             duration: '5s',
             imagePromptHint: 'test',
@@ -378,10 +406,19 @@ describe('Video Production Workflow (S10-3)', () => {
         resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
         characters: [],
+        narrator: {
+          persona: 'test narrator',
+          gender: 'female',
+          age: 'young',
+          pitch: 'medium',
+          accent: 'american accent',
+          pace: 'medium',
+        },
         scenes: [
           {
             sceneNumber: 1,
             description: 'Scene 1',
+            audioSource: 'silent',
             camera: 'wide',
             duration: '5s',
             imagePromptHint: 'hint1',
@@ -390,6 +427,7 @@ describe('Video Production Workflow (S10-3)', () => {
           {
             sceneNumber: 2,
             description: 'Scene 2',
+            audioSource: 'silent',
             camera: 'wide',
             duration: '5s',
             imagePromptHint: 'hint2',
@@ -540,10 +578,19 @@ describe('Video Production Workflow (S10-3)', () => {
         resolution: { width: 1080, height: 1920 },
         estimatedDuration: '60s',
         characters: [],
+        narrator: {
+          persona: 'test narrator',
+          gender: 'female',
+          age: 'young',
+          pitch: 'medium',
+          accent: 'american accent',
+          pace: 'medium',
+        },
         scenes: [
           {
             sceneNumber: 1,
             description: 'Intro',
+            audioSource: 'silent',
             camera: 'wide',
             duration: '5s',
             imagePromptHint: 'tech background',
@@ -552,6 +599,7 @@ describe('Video Production Workflow (S10-3)', () => {
           {
             sceneNumber: 2,
             description: 'Conclusion',
+            audioSource: 'silent',
             camera: 'close-up',
             duration: '5s',
             imagePromptHint: 'speaker',
@@ -692,10 +740,19 @@ describe('Post-production workflow (S10-8)', () => {
       resolution: { width: 1080, height: 1920 },
       estimatedDuration: '30s',
       characters: [],
-      scenes: [
+      narrator: {
+          persona: 'test narrator',
+          gender: 'female',
+          age: 'young',
+          pitch: 'medium',
+          accent: 'american accent',
+          pace: 'medium',
+        },
+        scenes: [
         {
           sceneNumber: 1,
           description: 'Scene 1',
+          audioSource: 'silent',
           camera: 'wide',
           duration: '10s',
           imagePromptHint: 'hint1',
@@ -704,6 +761,7 @@ describe('Post-production workflow (S10-8)', () => {
         {
           sceneNumber: 2,
           description: 'Scene 2',
+          audioSource: 'silent',
           camera: 'medium',
           duration: '10s',
           imagePromptHint: 'hint2',
@@ -712,6 +770,7 @@ describe('Post-production workflow (S10-8)', () => {
         {
           sceneNumber: 3,
           description: 'Scene 3',
+          audioSource: 'silent',
           camera: 'close-up',
           duration: '10s',
           imagePromptHint: 'hint3',
@@ -1312,10 +1371,19 @@ describe('S13-2: Main-agent execution from plan-video-production output', () => 
       resolution: { width: 1080, height: 1920 },
       estimatedDuration: '60s',
       characters: [],
-      scenes: [
+      narrator: {
+          persona: 'test narrator',
+          gender: 'female',
+          age: 'young',
+          pitch: 'medium',
+          accent: 'american accent',
+          pace: 'medium',
+        },
+        scenes: [
         {
           sceneNumber: 1,
           description: 'Intro scene',
+          audioSource: 'silent',
           camera: 'wide',
           duration: '5s',
           imagePromptHint: 'tech',
@@ -1324,6 +1392,7 @@ describe('S13-2: Main-agent execution from plan-video-production output', () => 
         {
           sceneNumber: 2,
           description: 'Demo scene',
+          audioSource: 'silent',
           camera: 'close-up',
           duration: '5s',
           imagePromptHint: 'code',

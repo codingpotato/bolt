@@ -216,9 +216,18 @@ describe('generate-video-script skill', () => {
       targetPlatform: 'tiktok',
       resolution: { width: 1080, height: 1920 },
       characters: [],
+      narrator: {
+        persona: 'energetic social media host',
+        gender: 'female',
+        age: 'young',
+        pitch: 'high',
+        accent: 'american accent',
+        pace: 'very-fast',
+      },
       scenes: [
         {
           description: 'Opening shot of city skyline',
+          audioSource: 'character-speech',
           dialogue: 'AI is changing everything.',
           camera: 'wide shot',
           duration: 5,
